@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime and generated outputs
+.cache/
+cache/
+tmp/
+temp/
+logs/
+output/
+outputs/
+artifacts/
+work/
+*.log
+
+# Paper inputs and extracted assets (never commit)
+*.pdf
+*.PDF
+images/
+renders/
+corpus/
+gold/
+
+# Backend/runtime binaries and archives
+*.jar
+*.class
+*.so
+*.dll
+*.dylib
+*.exe
+*.bin
+*.whl
+*.deb
+*.rpm
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+
+# JavaScript/package caches
+node_modules/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+token*

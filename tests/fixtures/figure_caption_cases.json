@@ -1,0 +1,95 @@
+{
+  "annotation_version": "paper2md-phase3-figure-caption-gold-v1",
+  "coordinate_system": "top-left/pdf-point/y-down",
+  "frozen_before_implementation": true,
+  "cases": [
+    {
+      "case_id": "FC-001-single-caption",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 80, "y": 100, "width": 300, "height": 200}},
+        {"id": "cap-1", "kind": "text", "page": 0, "bbox": {"x": 80, "y": 315, "width": 320, "height": 14}, "text": "Figure 1. A single image."}
+      ],
+      "expected": {"group_count": 1, "groups": [["img-1"]], "caption_statuses": ["matched"]}
+    },
+    {
+      "case_id": "FC-002-multipanel",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "panel-a", "kind": "image", "page": 0, "bbox": {"x": 60, "y": 100, "width": 140, "height": 120}},
+        {"id": "panel-b", "kind": "image", "page": 0, "bbox": {"x": 202, "y": 100, "width": 140, "height": 120}},
+        {"id": "panel-c", "kind": "image", "page": 0, "bbox": {"x": 60, "y": 222, "width": 282, "height": 100}},
+        {"id": "cap-1", "kind": "text", "page": 0, "bbox": {"x": 60, "y": 335, "width": 420, "height": 14}, "text": "Fig. 2. Three deterministic panels."}
+      ],
+      "expected": {"group_count": 1, "groups": [["panel-a", "panel-b", "panel-c"]], "caption_statuses": ["matched"]}
+    },
+    {
+      "case_id": "FC-003-adjacent-figures",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 60, "y": 80, "width": 220, "height": 130}},
+        {"id": "cap-1", "kind": "text", "page": 0, "bbox": {"x": 60, "y": 215, "width": 250, "height": 14}, "text": "Figure 1. Upper figure."},
+        {"id": "img-2", "kind": "image", "page": 0, "bbox": {"x": 60, "y": 300, "width": 220, "height": 130}},
+        {"id": "cap-2", "kind": "text", "page": 0, "bbox": {"x": 60, "y": 435, "width": 250, "height": 14}, "text": "Figure 2. Lower figure."}
+      ],
+      "expected": {"group_count": 2, "groups": [["img-1"], ["img-2"]], "caption_statuses": ["matched", "matched"]}
+    },
+    {
+      "case_id": "FC-004-two-column-captions",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "left-image", "kind": "image", "page": 0, "bbox": {"x": 40, "y": 100, "width": 230, "height": 160}},
+        {"id": "left-caption", "kind": "text", "page": 0, "bbox": {"x": 40, "y": 270, "width": 230, "height": 14}, "text": "Figure 3. Left column."},
+        {"id": "right-image", "kind": "image", "page": 0, "bbox": {"x": 330, "y": 100, "width": 230, "height": 160}},
+        {"id": "right-caption", "kind": "text", "page": 0, "bbox": {"x": 330, "y": 270, "width": 230, "height": 14}, "text": "Figure 4. Right column."}
+      ],
+      "expected": {"group_count": 2, "groups": [["left-image"], ["right-image"]], "caption_statuses": ["matched", "matched"]}
+    },
+    {
+      "case_id": "FC-005-ambiguous-caption",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 160, "y": 100, "width": 280, "height": 180}},
+        {"id": "cap-a", "kind": "text", "page": 0, "bbox": {"x": 120, "y": 292, "width": 210, "height": 14}, "text": "Figure 5. Candidate A."},
+        {"id": "cap-b", "kind": "text", "page": 0, "bbox": {"x": 330, "y": 292, "width": 210, "height": 14}, "text": "Fig. 5. Candidate B."}
+      ],
+      "expected": {"group_count": 1, "groups": [["img-1"]], "caption_statuses": ["ambiguous"]}
+    },
+    {
+      "case_id": "FC-006-no-caption",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 100, "y": 120, "width": 360, "height": 260}}
+      ],
+      "expected": {"group_count": 1, "groups": [["img-1"]], "caption_statuses": ["none"]}
+    },
+    {
+      "case_id": "FC-007-cross-page-rejection",
+      "pages": [
+        {"page_index": 0, "width": 600, "height": 800},
+        {"page_index": 1, "width": 600, "height": 800}
+      ],
+      "objects": [
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 80, "y": 600, "width": 420, "height": 160}},
+        {"id": "cap-1", "kind": "text", "page": 1, "bbox": {"x": 80, "y": 40, "width": 420, "height": 14}, "text": "Figure 6. Must not cross pages."}
+      ],
+      "expected": {"group_count": 1, "groups": [["img-1"]], "caption_statuses": ["none"], "rejection_reason": "cross_page_pairing_forbidden"}
+    },
+    {
+      "case_id": "FC-008-caption-local-order",
+      "pages": [{"page_index": 0, "width": 600, "height": 800}],
+      "objects": [
+        {"id": "body-before", "kind": "text", "page": 0, "bbox": {"x": 60, "y": 60, "width": 480, "height": 14}, "text": "Body before the figure."},
+        {"id": "img-1", "kind": "image", "page": 0, "bbox": {"x": 80, "y": 120, "width": 400, "height": 180}},
+        {"id": "cap-1", "kind": "text", "page": 0, "bbox": {"x": 80, "y": 310, "width": 400, "height": 14}, "text": "Figure 7. Caption stays adjacent."},
+        {"id": "body-after", "kind": "text", "page": 0, "bbox": {"x": 60, "y": 360, "width": 480, "height": 14}, "text": "Body after the caption."}
+      ],
+      "expected": {
+        "group_count": 1,
+        "groups": [["img-1"]],
+        "caption_statuses": ["matched"],
+        "markdown_order": ["body-before", "figure", "cap-1", "body-after"]
+      }
+    }
+  ]
+}
