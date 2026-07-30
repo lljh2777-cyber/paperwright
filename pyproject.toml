@@ -8,7 +8,10 @@ version = "0.2.0a0"
 description = "Local-first, provenance-aware scientific PDF reconstruction"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "pypdfium2==5.3.0",
+  "Pillow==12.2.0",
+]
 
 [project.scripts]
 paper2md = "paper2md.cli:main"

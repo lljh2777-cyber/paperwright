@@ -1,0 +1,202 @@
+{
+  "base_commit": "8f8061baf96a5c1bfef423ebc88ef7b5516d1cac",
+  "check_count": 7,
+  "checks": [
+    {
+      "check_id": "fixture_check",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/generate_fixtures.py",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:57.842467Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:57.799648Z",
+      "stderr": {
+        "path": "stage_b/logs/fixture_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/fixture_check.stdout.txt",
+        "sha256": "c06234adcaf9481bffecef34aaf387c78bfc50a1f09999c9393cda05285755e6",
+        "size_bytes": 20
+      }
+    },
+    {
+      "check_id": "unit_tests",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.115199Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:57.842800Z",
+      "stderr": {
+        "path": "stage_b/logs/unit_tests.stderr.txt",
+        "sha256": "75b1896deee9d1e66994ddd0b924d041f4d5e223f42060bed2957c8b5431dad5",
+        "size_bytes": 4190
+      },
+      "stdout": {
+        "path": "stage_b/logs/unit_tests.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "content_smoke",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/run_stage_b_smoke.py"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.222774Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:58.115533Z",
+      "stderr": {
+        "path": "stage_b/logs/content_smoke.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/content_smoke.stdout.txt",
+        "sha256": "2bf89f153a9f27406ecfee7bb75a60aadb35df86ba2ee3fe7142f8e8e96bb58f",
+        "size_bytes": 3283
+      }
+    },
+    {
+      "check_id": "cli_version",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "paper2md",
+        "--version"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.280035Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:58.223129Z",
+      "stderr": {
+        "path": "stage_b/logs/cli_version.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/cli_version.stdout.txt",
+        "sha256": "d9dfe4f999a179861cbb8bcec3ac4d66cfb11aa183001848035cc7d82e3f4021",
+        "size_bytes": 17
+      }
+    },
+    {
+      "check_id": "compileall",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "tools"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.314038Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:58.280356Z",
+      "stderr": {
+        "path": "stage_b/logs/compileall.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/compileall.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "git_diff_check",
+      "command_argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.317394Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:58.314355Z",
+      "stderr": {
+        "path": "stage_b/logs/git_diff_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/git_diff_check.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "repo_policy",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_repo_policy.py",
+        "--root",
+        "."
+      ],
+      "ended_at_utc": "2026-07-30T01:09:58.349429Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T01:09:58.317570Z",
+      "stderr": {
+        "path": "stage_b/logs/repo_policy.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_b/logs/repo_policy.stdout.txt",
+        "sha256": "22a1fb269fc2b4321774e8eab964d93f9d210a3d5af6654ab116b56a324b8edd",
+        "size_bytes": 292
+      }
+    }
+  ],
+  "environment": {
+    "implementation": "CPython",
+    "platform": "Linux-6.12.13-x86_64-with-glibc2.39",
+    "python": "3.12.13 (main, Mar  3 2026, 14:59:34) [Clang 21.1.4 ]",
+    "runtime": {
+      "libpdfium_candidate_count": 1,
+      "libpdfium_sha256": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+      "pdfium": "145.0.7616.0",
+      "pillow": "12.2.0",
+      "pypdfium2": "5.3.0"
+    }
+  },
+  "exploratory_runs": [
+    {
+      "command": "PYTHONPATH=src:tests python -m unittest discover -s tests -v",
+      "exact_utc": "not_recorded_before_stage_b_runner",
+      "failure_count": 0,
+      "result": "36 passed"
+    }
+  ],
+  "failure_count": 0,
+  "pass_count": 7,
+  "schema_version": "paper2md-v2-mvp-test-summary-v1",
+  "skip_count": 0,
+  "unit_test_count": 36,
+  "unit_test_passed": 36
+}

@@ -50,6 +50,27 @@
     "warnings": {
       "type": "array",
       "items": {"type": "object"}
+    },
+    "elements": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "images": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "degraded": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "physical_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
     }
   }
 }

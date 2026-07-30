@@ -47,6 +47,10 @@ def build_manifest(
     status: str,
     outputs: list[OutputFile],
     warnings: list[dict[str, Any]] | None = None,
+    elements: list[dict[str, Any]] | None = None,
+    images: list[dict[str, Any]] | None = None,
+    degraded: list[dict[str, Any]] | None = None,
+    physical_document: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": MANIFEST_VERSION,
@@ -58,6 +62,14 @@ def build_manifest(
         "outputs": [item.to_dict() for item in sorted(outputs, key=lambda x: x.path)],
         "warnings": warnings or [],
     }
+    if elements is not None:
+        manifest["elements"] = elements
+    if images is not None:
+        manifest["images"] = images
+    if degraded is not None:
+        manifest["degraded"] = degraded
+    if physical_document is not None:
+        manifest["physical_document"] = physical_document
     validate_manifest(manifest)
     return manifest
 
@@ -73,7 +85,8 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "outputs",
         "warnings",
     }
-    if set(value) != required:
+    optional = {"elements", "images", "degraded", "physical_document"}
+    if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
     if value["manifest_version"] != MANIFEST_VERSION:
         raise ContractValidationError("manifest_version 不受支持")
@@ -99,6 +112,18 @@ def validate_manifest(value: dict[str, Any]) -> None:
         paths.add(output["path"])
         if output["size_bytes"] < 0 or len(output["sha256"]) != 64:
             raise ContractValidationError("manifest output 大小或哈希非法")
+    for field_name in ("elements", "images", "degraded"):
+        if field_name in value and not isinstance(value[field_name], list):
+            raise ContractValidationError(f"manifest {field_name} 必须是数组")
+    if "physical_document" in value:
+        reference = value["physical_document"]
+        if set(reference) != {"path", "sha256"}:
+            raise ContractValidationError("manifest physical_document 引用非法")
+        path = Path(reference["path"])
+        if path.is_absolute() or ".." in path.parts:
+            raise ContractValidationError("manifest physical_document 路径非法")
+        if len(reference["sha256"]) != 64:
+            raise ContractValidationError("manifest physical_document 哈希非法")
 
 
 def canonical_manifest_json(value: dict[str, Any]) -> str:

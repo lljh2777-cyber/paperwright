@@ -28,11 +28,32 @@ class BackendCapabilities:
     render: bool
 
 
+@dataclass(frozen=True)
+class ExtractedAsset:
+    """In-memory asset emitted by a backend before atomic output assembly."""
+
+    element_id: str
+    suggested_name: str
+    media_type: str
+    data: bytes
+    width_px: int
+    height_px: int
+
+
+@dataclass(frozen=True)
+class BackendResult:
+    document: PhysicalDocument
+    assets: tuple[ExtractedAsset, ...] = ()
+    warnings: tuple[dict[str, object], ...] = ()
+
+
 class Backend(Protocol):
     identity: BackendIdentity
     capabilities: BackendCapabilities
 
-    def extract(self, source: Path, config: Paper2MDConfig) -> PhysicalDocument:
+    def extract(
+        self, source: Path, config: Paper2MDConfig
+    ) -> PhysicalDocument | BackendResult:
         """Map one PDF to the backend-neutral PhysicalDocument."""
 
 

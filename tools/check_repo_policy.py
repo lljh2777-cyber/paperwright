@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject files outside the Stage A source-only repository policy."""
+"""Reject files outside the Paper2MD source-only repository policy."""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def scan(root: Path) -> dict:
                         {"path": rel, "reason": f"secret_pattern:{name}", "size": size}
                     )
     return {
-        "policy_version": "stage-a-source-only-v1",
+        "policy_version": "source-only-v2",
         "extension_allowlist": sorted(ALLOWED_SUFFIXES),
         "max_file_bytes": MAX_BYTES,
         "scanned_file_count": len(files),

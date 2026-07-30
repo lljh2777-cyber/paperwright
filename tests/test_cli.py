@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from paper2md.cli import main
+from pdf_fixture_factory import create_born_digital_fixture
 
 
 class CLITests(unittest.TestCase):
@@ -30,16 +31,16 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn("输入或契约错误", stderr.getvalue())
 
-    def test_convert_reports_backend_unavailable(self):
+    def test_convert_rejects_corrupt_pdf(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source = root / "input.pdf"
-            source.write_bytes(b"%PDF-1.4\\n% self-generated CLI fixture\\n")
+            source.write_bytes(b"%PDF-1.4\\n% deliberately corrupt\\n")
             stderr = io.StringIO()
             with contextlib.redirect_stderr(stderr):
                 code = main(["convert", str(source), str(root / "out")])
-            self.assertEqual(code, 4)
-            self.assertIn("后端不可用", stderr.getvalue())
+            self.assertEqual(code, 2)
+            self.assertIn("PDFium", stderr.getvalue())
 
     def test_convert_rejects_existing_output_before_backend(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -53,6 +54,27 @@ class CLITests(unittest.TestCase):
                 code = main(["convert", str(source), str(output)])
             self.assertEqual(code, 2)
             self.assertIn("拒绝覆盖", stderr.getvalue())
+
+    def test_convert_real_fixture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "fixture.pdf"
+            create_born_digital_fixture(source)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(
+                    [
+                        "convert",
+                        str(source),
+                        str(root / "out"),
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(result["page_count"], 2)
+            self.assertTrue((root / "out/article.md").is_file())
 
 
 if __name__ == "__main__":

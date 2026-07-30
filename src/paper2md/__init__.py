@@ -1,6 +1,6 @@
-"""Paper2MD v2 bootstrap public API."""
+"""Paper2MD v2 MVP public API."""
 
-from .api import Paper2MD
+from .api import ConversionResult, Paper2MD
 from .config import Paper2MDConfig
 from .models import BBox, Element, Page, PhysicalDocument, Provenance
 
@@ -10,8 +10,9 @@ __all__ = [
     "Page",
     "Paper2MD",
     "Paper2MDConfig",
+    "ConversionResult",
     "PhysicalDocument",
     "Provenance",
 ]
 
-__version__ = "0.2.0a0"
+__version__ = "0.2.0b0"

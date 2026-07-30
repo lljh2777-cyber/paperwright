@@ -16,25 +16,26 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前提交范围仅为 **v2-bootstrap**：
+当前候选提交范围为 **v2-mvp（Stage B）**：
 
-- Python 包、CLI/API 和异常边界；
-- `PhysicalDocument` 核心数据模型；
-- manifest 与 PhysicalDocument JSON Schema；
-- PDFium/PDFBox 可替换后端接口（不含二进制或实现）；
-- 自生成 fixture 和标准库测试；
-- 路径安全、确定性序列化和仓库存储政策。
+- 可调用的单文件 CLI/API；
+- pypdfium2/PDFium 薄适配器；
+- `PDF → PhysicalDocument → article.md + images/ + manifest.json`；
+- 可追溯元素、页码、bbox、提取方法、输出哈希；
+- 基础双栏几何顺序、嵌入位图提取和诚实的表格降级；
+- 自生成 born-digital PDF fixture、路径安全、原子输出及逐字节确定性测试。
 
-bootstrap 阶段不会真正解析 PDF。`paper2md convert` 在后端未安装时会以
-非零状态明确失败，而不是生成伪输出。
+PDFBox 仍只是显式不可用的对照/回退边界。本阶段不实现 OCR、语义表格、
+公式 LaTeX、Figure/Caption 邻接或真实出版商版式泛化。
 
 ## 快速开始
 
-要求 Python 3.10+，bootstrap 本身无第三方运行时依赖。
+要求 Python 3.10+、`pypdfium2==5.3.0` 和 `Pillow==12.2.0`。
 
 ```bash
 python -m unittest discover -s tests -v
 PYTHONPATH=src python -m paper2md --version
+PYTHONPATH=src python -m paper2md convert input.pdf output-dir
 PYTHONPATH=src python -m paper2md validate-model \
   tests/fixtures/physical_document.minimal.json
 ```
@@ -70,7 +71,7 @@ paper2md --version
 
 ## 许可证状态
 
-bootstrap 源码尚未声明最终项目许可证。PDFium、pypdfium2、PDFBox 及其
+v2 MVP 源码尚未声明最终项目许可证。PDFium、pypdfium2、PDFBox 及其
 传递依赖的分发义务将在后续阶段单独核验。历史研究中的
 `agg23=NOASSERTION` 只表示正式分发尚未获批，不构成本地接口设计的已确认
 冲突。

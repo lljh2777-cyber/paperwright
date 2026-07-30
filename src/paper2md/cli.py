@@ -1,4 +1,4 @@
-"""Paper2MD bootstrap command line interface."""
+"""Paper2MD v2 MVP command line interface."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("validate-model", help="验证 PhysicalDocument JSON")
     validate.add_argument("model_json", type=Path)
 
-    convert = commands.add_parser("convert", help="转换单个 PDF（bootstrap 后端未启用）")
+    convert = commands.add_parser("convert", help="转换单个 born-digital PDF")
     convert.add_argument("input_pdf", type=Path)
     convert.add_argument("output_dir", type=Path)
     convert.add_argument("--backend", choices=("pdfium", "pdfbox"), default="pdfium")
@@ -60,7 +60,19 @@ def _convert(args: argparse.Namespace) -> int:
         product.register_backend("pdfium", PDFiumBackend())
     else:
         product.register_backend("pdfbox", PDFBoxBackend())
-    product.extract_physical_document(args.input_pdf, args.output_dir)
+    result = product.convert(args.input_pdf, args.output_dir)
+    print(
+        json.dumps(
+            {
+                "status": result.manifest["status"],
+                "output_dir": str(result.output_dir),
+                "page_count": result.manifest["page_count"],
+                "backend": result.manifest["backend"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

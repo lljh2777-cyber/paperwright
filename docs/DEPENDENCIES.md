@@ -1,20 +1,28 @@
 # 依赖与供应链边界
 
-## bootstrap
+## Stage B 锁定运行时
 
-运行时依赖仅为 Python 3.10+ 标准库。构建元数据使用 setuptools，但从
-源码运行和测试无需联网安装。
+| 构件 | 精确版本 | 当前用途 | 来源/许可证线索 |
+|---|---:|---|---|
+| Python | 3.10+ | 产品运行时 | PSF |
+| pypdfium2 | 5.3.0 | PDFium Python 薄封装 | 官方 PyPI/GitHub；BSD-3-Clause、Apache-2.0 及依赖许可证 |
+| PDFium | 145.0.7616.0 | PDF解析、文本/图片解码 | pypdfium2 当前平台运行时；本地哈希见下 |
+| Pillow | 12.2.0 | 将 PDFium bitmap 编码为 PNG | MIT-CMU |
 
-## 计划中的后端
+当前 Work Linux 环境 `libpdfium.so` 的 SHA-256：
+`504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568`。
+该动态库、wheel 与许可证文件不复制到源码包；本哈希只用于复现实验身份。
 
-| 后端 | 角色 | bootstrap 状态 |
+## 后端
+
+| 后端 | 角色 | Stage B 状态 |
 |---|---|---|
-| PDFium / pypdfium2 | MVP 计划主后端 | 仅接口，不下载、不加载、不捆绑 |
+| PDFium / pypdfium2 | MVP 主后端 | 使用现场固定版本；不下载、不捆绑 |
 | Apache PDFBox | 对照或回退 | 仅接口，不下载 JAR、不运行 Java |
 
-正式引入前必须锁定版本、来源、哈希、LICENSE/NOTICE、关键传递依赖和再分发
-条件。`agg23=NOASSERTION` 继续阻断正式分发批准，但不阻断本地 bootstrap
-设计。
+`pypdfium2` 安装元数据列出了 bundled dependency licenses，其中历史
+审计的 `agg23=NOASSERTION` 尚无发布级结论。因此本阶段只批准本地开发和
+source-only 交付；正式分发 PDFium 二进制/wheel 继续锁定。
 
 ## 明确排除
 
