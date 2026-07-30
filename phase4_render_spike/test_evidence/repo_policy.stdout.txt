@@ -1,0 +1,19 @@
+{
+  "extension_allowlist": [
+    "",
+    ".csv",
+    ".json",
+    ".md",
+    ".patch",
+    ".py",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml"
+  ],
+  "max_file_bytes": 5242880,
+  "policy_version": "source-only-v2",
+  "scanned_file_count": 156,
+  "violation_count": 0,
+  "violations": []
+}

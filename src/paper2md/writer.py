@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from .backends.base import ExtractedAsset
-from .figures import FigureGroup, analyze_figures, compose_group_png
+from .figures import CaptionCandidate, FigureGroup, analyze_figures, compose_group_png
 from .manifest import OutputFile, build_manifest, canonical_manifest_json, sha256_file
 from .models import Element, PhysicalDocument
+from .region_render import plan_region_renders
 
 
 @dataclass(frozen=True)
@@ -217,6 +218,9 @@ def write_outputs(
     document: PhysicalDocument,
     assets: tuple[ExtractedAsset, ...],
     backend_warnings: tuple[dict[str, object], ...],
+    source: Path | None = None,
+    region_renderer: Any | None = None,
+    region_render_page_indices: frozenset[int] = frozenset(),
 ) -> PreparedOutput:
     images_dir = root / "images"
     images_dir.mkdir(parents=True)
@@ -263,54 +267,188 @@ def write_outputs(
             )
 
     analysis = analyze_figures(document)
+    region_decisions = tuple(
+        item
+        for item in plan_region_renders(document, analysis)
+        if item.page_index in region_render_page_indices
+    )
+    requested_regions = {
+        item.figure_id: item
+        for item in region_decisions
+        if item.status == "requested"
+        and item.figure_id is not None
+        and item.request is not None
+    }
+    region_rejections: list[dict[str, Any]] = [
+        {
+            "figure_id": item.figure_id,
+            "page": item.page_index + 1,
+            "reason": item.reason,
+            "evidence_element_ids": list(item.evidence_element_ids),
+            "evidence_status": "region_render_rejected",
+        }
+        for item in region_decisions
+        if item.status == "rejected"
+    ]
     image_record_by_element = {
         item["element_id"]: item for item in image_records
     }
     figure_records: list[dict[str, Any]] = []
     figure_by_id: dict[str, FigureGroup] = {}
     figure_path_by_id: dict[str, str] = {}
+    figure_mode_by_id: dict[str, str] = {}
     figure_asset_paths: list[Path] = []
     for group in analysis.groups:
         figure_by_id[group.figure_id] = group
         if group.extraction_mode == "embedded":
             member_id = group.member_element_ids[0]
             asset_record = image_record_by_element[member_id]
-            relative = str(asset_record["path"])
-            asset_width = int(asset_record["width_px"])
-            asset_height = int(asset_record["height_px"])
-            asset_size = int(asset_record["size_bytes"])
-            asset_hash = str(asset_record["sha256"])
+            native_relative = str(asset_record["path"])
+            native_width = int(asset_record["width_px"])
+            native_height = int(asset_record["height_px"])
+            native_size = int(asset_record["size_bytes"])
+            native_hash = str(asset_record["sha256"])
         else:
-            composite, asset_width, asset_height = compose_group_png(
+            composite, native_width, native_height = compose_group_png(
                 group,
                 elements_by_id=elements_by_id,
                 assets_by_element=asset_by_element,
             )
-            relative = f"images/{group.figure_id}.png"
-            composite_path = root / relative
+            native_relative = f"images/{group.figure_id}.png"
+            composite_path = root / native_relative
             composite_path.write_bytes(composite)
             figure_asset_paths.append(composite_path)
-            asset_size = len(composite)
-            asset_hash = sha256_file(composite_path)
+            native_size = len(composite)
+            native_hash = sha256_file(composite_path)
+
+        relative = native_relative
+        asset_width = native_width
+        asset_height = native_height
+        asset_size = native_size
+        asset_hash = native_hash
+        extraction_mode = group.extraction_mode
+        region_record: dict[str, Any] = {
+            "status": "not_requested",
+            "reason": "no_conservative_mixed_vector_region_candidate",
+            "bbox": None,
+            "scale": None,
+            "dpi": None,
+            "rotation": None,
+            "width_px": None,
+            "height_px": None,
+            "pixel_variance": None,
+            "page_area_ratio": None,
+            "source_pdf_sha256": None,
+            "renderer_version": None,
+            "bbox_rule": None,
+        }
+        decision = requested_regions.get(group.figure_id)
+        effective_caption = group.caption
+        effective_caption_status = group.caption_status
+        effective_caption_confidence = group.caption_confidence
+        effective_caption_reason = group.caption_reason
+        if decision is not None and decision.request is not None:
+            request = decision.request
+            if source is None or region_renderer is None:
+                region_record["status"] = "rejected"
+                region_record["reason"] = "backend_region_renderer_unavailable"
+                region_rejections.append(
+                    {
+                        "figure_id": group.figure_id,
+                        "page": group.page_index + 1,
+                        "reason": "backend_region_renderer_unavailable",
+                        "evidence_element_ids": list(decision.evidence_element_ids),
+                        "evidence_status": "region_render_rejected",
+                    }
+                )
+            else:
+                try:
+                    rendered = region_renderer.render_region(
+                        source,
+                        request,
+                        expected_source_sha256=document.source_sha256,
+                    )
+                except Exception as exc:
+                    region_record["status"] = "rejected"
+                    region_record["reason"] = f"render_validation_failed:{type(exc).__name__}"
+                    region_rejections.append(
+                        {
+                            "figure_id": group.figure_id,
+                            "page": group.page_index + 1,
+                            "reason": region_record["reason"],
+                            "evidence_element_ids": list(decision.evidence_element_ids),
+                            "evidence_status": "region_render_rejected",
+                        }
+                    )
+                else:
+                    relative = f"images/{group.figure_id}-region.png"
+                    region_path = root / relative
+                    region_path.write_bytes(rendered.data)
+                    figure_asset_paths.append(region_path)
+                    asset_width = rendered.width_px
+                    asset_height = rendered.height_px
+                    asset_size = len(rendered.data)
+                    asset_hash = rendered.sha256
+                    extraction_mode = "region-rendered"
+                    region_record = {
+                        "status": "rendered",
+                        "reason": request.fallback_reason,
+                        "bbox": rendered.bbox.to_dict(),
+                        "scale": rendered.scale,
+                        "dpi": rendered.dpi,
+                        "rotation": rendered.page_rotation,
+                        "width_px": rendered.width_px,
+                        "height_px": rendered.height_px,
+                        "pixel_variance": rendered.pixel_variance,
+                        "page_area_ratio": rendered.page_area_ratio,
+                        "source_pdf_sha256": rendered.source_sha256,
+                        "renderer_version": rendered.renderer_version,
+                        "bbox_rule": request.bbox_rule,
+                    }
+                    if effective_caption is None:
+                        effective_caption = CaptionCandidate(
+                            caption_id=request.caption_id,
+                            page_index=group.page_index,
+                            label="",
+                            element_ids=request.caption_element_ids,
+                            text=request.caption_text,
+                            bbox=request.caption_bbox,
+                        )
+                        effective_caption_status = "matched"
+                        effective_caption_confidence = request.caption_confidence
+                        effective_caption_reason = request.caption_reason
         figure_path_by_id[group.figure_id] = relative
+        figure_mode_by_id[group.figure_id] = extraction_mode
         for member_id in group.member_element_ids:
             record = image_record_by_element[member_id]
             record["figure_group_id"] = group.figure_id
             record["markdown_referenced"] = (
-                group.extraction_mode == "embedded"
+                extraction_mode == "embedded"
             )
-        caption = group.caption
+        caption = effective_caption
+        degraded_reasons = [
+            item
+            for item in group.degraded_reasons
+            if not (
+                extraction_mode == "region-rendered"
+                and item == "vector_evidence_not_rendered"
+            )
+        ]
         figure_records.append(
             {
                 "figure_id": group.figure_id,
                 "page": group.page_index + 1,
-                "bbox": group.bbox.to_dict(),
+                "bbox": (
+                    region_record["bbox"]
+                    if extraction_mode == "region-rendered"
+                    else group.bbox.to_dict()
+                ),
                 "member_element_ids": list(group.member_element_ids),
                 "source_object_ids": [
                     elements_by_id[item].source_object_id
                     for item in group.member_element_ids
                 ],
-                "extraction_mode": group.extraction_mode,
+                "extraction_mode": extraction_mode,
                 "asset": {
                     "path": relative,
                     "sha256": asset_hash,
@@ -318,10 +456,20 @@ def write_outputs(
                     "width_px": asset_width,
                     "height_px": asset_height,
                 },
+                "native_asset": {
+                    "mode": group.extraction_mode,
+                    "path": native_relative,
+                    "sha256": native_hash,
+                    "size_bytes": native_size,
+                    "width_px": native_width,
+                    "height_px": native_height,
+                    "retained_for_provenance": True,
+                },
+                "region_render": region_record,
                 "caption": {
-                    "status": group.caption_status,
-                    "confidence": group.caption_confidence,
-                    "reason": group.caption_reason,
+                    "status": effective_caption_status,
+                    "confidence": effective_caption_confidence,
+                    "reason": effective_caption_reason,
                     "caption_id": caption.caption_id if caption else None,
                     "element_ids": list(caption.element_ids) if caption else [],
                     "text": caption.text if caption else None,
@@ -334,24 +482,52 @@ def write_outputs(
                     "matching_rule": (
                         "same_page_explicit_marker_and_geometry"
                         if group.caption_status == "matched"
+                        else "unique_same_page_explicit_caption_with_vector_bridge"
+                        if extraction_mode == "region-rendered"
+                        and effective_caption_status == "matched"
                         else None
                     ),
                 },
-                "evidence_status": group.evidence_status,
-                "degraded_reasons": list(group.degraded_reasons),
+                "evidence_status": (
+                    "complete_region_rendered_mixed_figure"
+                    if extraction_mode == "region-rendered"
+                    else group.evidence_status
+                ),
+                "degraded_reasons": degraded_reasons,
                 "vector_evidence": {
-                    "element_ids_sample": list(group.vector_evidence_element_ids),
-                    "count": group.vector_evidence_count,
-                    "element_ids_sha256": group.vector_evidence_sha256,
-                    "rendered_into_asset": False,
+                    "element_ids_sample": (
+                        list(decision.request.vector_evidence_element_ids)
+                        if extraction_mode == "region-rendered"
+                        and decision is not None
+                        and decision.request is not None
+                        else list(group.vector_evidence_element_ids)
+                    ),
+                    "count": (
+                        decision.request.vector_evidence_count
+                        if extraction_mode == "region-rendered"
+                        and decision is not None
+                        and decision.request is not None
+                        else group.vector_evidence_count
+                    ),
+                    "element_ids_sha256": (
+                        decision.request.vector_evidence_sha256
+                        if extraction_mode == "region-rendered"
+                        and decision is not None
+                        and decision.request is not None
+                        else group.vector_evidence_sha256
+                    ),
+                    "rendered_into_asset": extraction_mode == "region-rendered",
                     "reason": (
+                        "PDFium clipped page render includes same-page vector evidence"
+                        if extraction_mode == "region-rendered"
+                        else
                         "native path bounds are provenance evidence only; "
                         "the bitmap composite does not claim vector rendering"
                     ),
                 },
                 "markdown_placement": (
                     "immediately-before-caption"
-                    if group.caption_status == "matched"
+                    if effective_caption_status == "matched"
                     else "page-end-degraded"
                 ),
             }
@@ -360,10 +536,10 @@ def write_outputs(
     lines = [f"# {title}", ""]
     emitted_figures: set[str] = set()
     matched_by_caption_element: dict[str, str] = {}
-    for group in analysis.groups:
-        if group.caption_status == "matched" and group.caption is not None:
-            for element_id in group.caption.element_ids:
-                matched_by_caption_element[element_id] = group.figure_id
+    for record in figure_records:
+        if record["caption"]["status"] == "matched":
+            for element_id in record["caption"]["element_ids"]:
+                matched_by_caption_element[element_id] = record["figure_id"]
 
     def emit_figure(group: FigureGroup, placement: str) -> None:
         if group.figure_id in emitted_figures:
@@ -372,7 +548,7 @@ def write_outputs(
         lines.extend(
             [
                 f"<!-- figure: {group.figure_id}; page: {group.page_index + 1}; "
-                f"mode: {group.extraction_mode}; placement: {placement}; "
+                f"mode: {figure_mode_by_id[group.figure_id]}; placement: {placement}; "
                 f"members: {','.join(group.member_element_ids)} -->",
                 f"![Figure from page {group.page_index + 1}]({relative})",
                 "",
@@ -489,8 +665,10 @@ def write_outputs(
             }
         )
     grouped_vector_degraded = sum(
-        group.extraction_mode == "grouped" and group.vector_evidence_count > 0
-        for group in analysis.groups
+        item["extraction_mode"] == "grouped"
+        and item["vector_evidence"]["count"] > 0
+        and not item["vector_evidence"]["rendered_into_asset"]
+        for item in figure_records
     )
     if grouped_vector_degraded:
         warnings.append(
@@ -512,7 +690,7 @@ def write_outputs(
         elements=element_records,
         images=image_records,
         figures=figure_records,
-        figure_rejections=list(analysis.rejections),
+        figure_rejections=list(analysis.rejections) + region_rejections,
         degraded=degraded,
         physical_document={
             "path": "physical_document.json",

@@ -31,11 +31,28 @@ class OutputPolicy:
 
 
 @dataclass(frozen=True)
+class RegionRenderPolicy:
+    """Explicit opt-in for the bounded Phase 4 technical spike."""
+
+    enabled: bool = False
+    page_indices: tuple[int, ...] = ()
+
+    def validate(self) -> None:
+        if any(not isinstance(item, int) or item < 0 for item in self.page_indices):
+            raise ConfigurationError("region_render page_indices 必须是非负整数")
+        if len(set(self.page_indices)) != len(self.page_indices):
+            raise ConfigurationError("region_render page_indices 不得重复")
+        if self.enabled and not self.page_indices:
+            raise ConfigurationError("启用 region_render 时必须明确限定页面")
+
+
+@dataclass(frozen=True)
 class Paper2MDConfig:
     backend: str = "pdfium"
     contract_version: str = "paper2md-physical-document-v0.2"
     limits: Limits = field(default_factory=Limits)
     output: OutputPolicy = field(default_factory=OutputPolicy)
+    region_render: RegionRenderPolicy = field(default_factory=RegionRenderPolicy)
     workspace_root: Path | None = None
 
     def validate(self) -> None:
@@ -44,6 +61,7 @@ class Paper2MDConfig:
         if self.contract_version != "paper2md-physical-document-v0.2":
             raise ConfigurationError("不支持的 PhysicalDocument 契约版本")
         self.limits.validate()
+        self.region_render.validate()
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)

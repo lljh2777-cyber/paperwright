@@ -1,0 +1,213 @@
+{
+  "schema_version": "paper2md-phase4-render-spike-annotations-v1",
+  "frozen_before_candidate_render": true,
+  "authority": {
+    "base_commit": "ee379a5be6c713012e721d08995a88d5abec19af",
+    "coordinate_system": "top-left/pdf-point/y-down",
+    "source_manifest": "realworld/oa_sources.json",
+    "runtime_physical_documents": {
+      "RW2-005": {
+        "path": "paper2md-phase3-runtime-v4/run1/RW2-005/physical_document.json",
+        "sha256": "255e4f8120acbbca4c27e1fd4eb3bec02255523bb798a05c962461c99944b8e7"
+      },
+      "RW2-007": {
+        "path": "paper2md-phase3-runtime-v4/run1/RW2-007/physical_document.json",
+        "sha256": "40d96b9760d2a6283564d33be84ad4701ea86945b714fc00ebbb28c7157fbce9"
+      }
+    },
+    "source_pdfs": {
+      "RW2-005": {
+        "sha256": "030e9caff5bf11096f17b7741173e72a238c832560f892d0f038358458758131",
+        "size_bytes": 5698311,
+        "page_count": 18
+      },
+      "RW2-007": {
+        "sha256": "0bad582546653c8fddae3e8d2d7e1493cc367fb0ce73de7e9c00d2439afe8063",
+        "size_bytes": 10565623,
+        "page_count": 16
+      }
+    },
+    "pre_freeze_full_page_review": [
+      {
+        "paper_id": "RW2-005",
+        "page": 3,
+        "sha256": "1eac2e7393ed5d6a619bc1e81fa0192a989d47a0f6c06b3704d4da98d9f81f3d",
+        "pixel_size": [918, 1188]
+      },
+      {
+        "paper_id": "RW2-005",
+        "page": 7,
+        "sha256": "ba4fc0991c8b0d99cce1c9f2a6e8828c9ac5ef575706f8f84165859481b7bb8a",
+        "pixel_size": [918, 1188]
+      },
+      {
+        "paper_id": "RW2-007",
+        "page": 5,
+        "sha256": "345d3c304b67b9a055d3bc83babf4a79658e61ddb19e03463dd4ea643a2ca7bd",
+        "pixel_size": [893, 1174]
+      }
+    ]
+  },
+  "render_policy": {
+    "scale": 2.0,
+    "dpi": 144.0,
+    "max_pixels": 16000000,
+    "max_page_area_ratio": 0.82,
+    "minimum_variance": 2.0,
+    "caption_guard_points": 4.0,
+    "caption_must_not_be_inside_asset": true,
+    "cross_page_caption_policy": "reject",
+    "bbox_revision_policy": "append-only; retain this file and record a new version with reason"
+  },
+  "targets": [
+    {
+      "target_id": "P4-RS-RW2-005-P03-FIG1",
+      "paper_id": "RW2-005",
+      "page": 3,
+      "page_index": 2,
+      "applicability": "APPLICABLE_REQUIRED",
+      "expected_decision": "region-render",
+      "expected_caption": {
+        "marker_element_id": "p0002-text-00119",
+        "marker_text": "Figure 1.",
+        "marker_text_sha256": "c1f4ad59adc459616a40cff1414475a996f444f4eec767fa4b4203c3b2bf693c",
+        "marker_bbox": {
+          "x": 37.12689971923828,
+          "y": 503.2061767578125,
+          "width": 33.00800323486328,
+          "height": 7.720001220703125
+        }
+      },
+      "target_bbox": {
+        "x": 36.37799835205078,
+        "y": 53.875,
+        "width": 532.244987487793,
+        "height": 441.2640075683594
+      },
+      "allowed_body_boundary": {
+        "figure_bottom": 495.1390075683594,
+        "caption_top": 502.87017822265625,
+        "minimum_observed_gap": 7.731170654296875
+      },
+      "evidence": {
+        "outer_frame_element_id": "p0002-vector-00015",
+        "outer_frame_source_ref": "page:2:native-object-index:118",
+        "native_image_count_inside": 14,
+        "native_image_union": {
+          "x": 54.135894775390625,
+          "y": 95.27703857421875,
+          "width": 507.2640686035156,
+          "height": 371.30419921875
+        },
+        "figure_band_vector_count": 9,
+        "reason": "The native outer-frame path encloses panel labels, 14 bitmap placements, and plotted vector content; the caption begins below the frame."
+      },
+      "acceptance": [
+        "single region-rendered asset",
+        "bitmap panels and vector plots visibly present",
+        "outer frame retained",
+        "caption excluded from pixels",
+        "no unrelated body text",
+        "Markdown asset immediately precedes matched caption"
+      ]
+    },
+    {
+      "target_id": "P4-RS-RW2-005-P07-FIG3",
+      "paper_id": "RW2-005",
+      "page": 7,
+      "page_index": 6,
+      "applicability": "REJECT_REQUIRED",
+      "expected_decision": "reject",
+      "target_bbox": null,
+      "expected_caption": {
+        "marker_element_id": "p0006-text-00842",
+        "marker_text": "Figure 3.",
+        "marker_text_sha256": "df647f8eb2bd978b828636ba13ebe28d8af7a0c399a8984bdf115aecc342f215",
+        "continuation_element_id": "p0006-text-00855",
+        "continuation_text": "Figure 3 continued on next page",
+        "continuation_text_sha256": "b284a214daf0b53a168187ff14d27dc9463a256e1daf3fbfaf06fcdc08fe4dac"
+      },
+      "evidence": {
+        "native_image_count": 15,
+        "vector_count": 568,
+        "candidate_outer_frame_element_id": "p0006-vector-00567",
+        "candidate_outer_frame_source_ref": "page:6:native-object-index:841",
+        "candidate_outer_frame_bbox": {
+          "x": 36.37799835205078,
+          "y": 53.875,
+          "width": 488.96398162841797,
+          "height": 605.8040008544922
+        },
+        "reason": "The visible page-local frame is clear, but the same page explicitly states that Figure 3 continues on the next page. The spike forbids cross-page aggregation and therefore must not claim a complete Figure."
+      },
+      "acceptance": [
+        "no region-rendered asset",
+        "degraded rejection recorded",
+        "cross-page reason preserved",
+        "no forced caption association"
+      ]
+    },
+    {
+      "target_id": "P4-RS-RW2-007-P05-FIG2",
+      "paper_id": "RW2-007",
+      "page": 5,
+      "page_index": 4,
+      "applicability": "APPLICABLE",
+      "expected_decision": "region-render",
+      "expected_caption": {
+        "marker_element_id": "p0004-text-09677",
+        "marker_text": "Fig. 2 The tumor",
+        "marker_text_sha256": "1e5f246256dc28b03327c5c2492cbb8c63ae175d61f6d1d2d48efe5a3752c5ca",
+        "marker_bbox": {
+          "x": 44.09892272949219,
+          "y": 598.4784088134766,
+          "width": 57.15510559082031,
+          "height": 7.1970977783203125
+        }
+      },
+      "target_bbox": {
+        "x": 83.61199951171875,
+        "y": 47.78411865234375,
+        "width": 428.0360107421875,
+        "height": 545.3304595947266
+      },
+      "allowed_body_boundary": {
+        "figure_evidence_bottom": 589.1145782470703,
+        "caption_top": 598.4784088134766,
+        "padding": 4.0,
+        "remaining_caption_gap": 5.36383056640625
+      },
+      "evidence": {
+        "native_image_count": 1,
+        "native_image_union": {
+          "x": 87.61199951171875,
+          "y": 59.65899658203125,
+          "width": 420.0360107421875,
+          "height": 384.9960021972656
+        },
+        "figure_band_vector_count": 9553,
+        "vector_union": {
+          "x": 225.60499572753906,
+          "y": 170.29400634765625,
+          "width": 275.73399353027344,
+          "height": 405.6639862060547
+        },
+        "figure_band_text_union": {
+          "x": 87.9608383178711,
+          "y": 51.78411865234375,
+          "right": 506.5686950683594,
+          "bottom": 589.1145782470703
+        },
+        "bbox_rule": "union of same-page native image, vector, and figure text evidence between the page header and explicit caption marker, expanded by 4 PDF points without crossing the caption guard",
+        "reason": "The single native bitmap ends at y=444.655, while vector evidence and panel text continue to y=589.115; a region render is required to preserve the complete mixed Figure."
+      },
+      "acceptance": [
+        "single region-rendered asset",
+        "native raster panels and lower vector-only panel visibly present",
+        "caption excluded from pixels",
+        "no page header or unrelated body",
+        "Markdown asset immediately precedes matched caption"
+      ]
+    }
+  ]
+}

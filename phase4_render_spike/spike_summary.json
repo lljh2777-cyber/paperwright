@@ -1,0 +1,594 @@
+{
+  "automatic_status": "PASS",
+  "base_commit": "ee379a5be6c713012e721d08995a88d5abec19af",
+  "bbox_stats": [
+    {
+      "actual_bbox": {
+        "height": 441.2640075683594,
+        "width": 532.244987487793,
+        "x": 36.37799835205078,
+        "y": 53.875
+      },
+      "baseline_native_asset_sha256": "193eba5236be8301449725c153a7ffc0cc4b610b33dbdda93ce58b0c29dd3a80",
+      "bbox": {
+        "height": 441.2640075683594,
+        "width": 532.244987487793,
+        "x": 36.37799835205078,
+        "y": 53.875
+      },
+      "bbox_exact": true,
+      "bbox_rule": "smallest_same_page_native_vector_frame_containing_bitmap_group",
+      "caption_bbox": {
+        "height": 8.055999755859375,
+        "width": 368.9599838256836,
+        "x": 37.12689971923828,
+        "y": 502.87017822265625
+      },
+      "caption_overlap": false,
+      "dpi": 144.0,
+      "expected_bbox": {
+        "height": 441.2640075683594,
+        "width": 532.244987487793,
+        "x": 36.37799835205078,
+        "y": 53.875
+      },
+      "height_px": 882,
+      "page_area_ratio": 0.484544291334577,
+      "pixel_variance": 13740.785162596572,
+      "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+      "region_asset_sha256": "3e239449a19512b82fc4199bf6f8229f536f09b54deaa1acaa5c98b004639abf",
+      "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+      "rotation": 0,
+      "scale": 2.0,
+      "source_pdf_sha256": "030e9caff5bf11096f17b7741173e72a238c832560f892d0f038358458758131",
+      "status": "rendered",
+      "target_id": "P4-RS-RW2-005-P03-FIG1",
+      "width_px": 1064
+    },
+    {
+      "actual_bbox": {
+        "height": 545.3304595947266,
+        "width": 428.0360107421875,
+        "x": 83.61199951171875,
+        "y": 47.78411865234375
+      },
+      "baseline_native_asset_sha256": "3e4f67fdf30ca23e6984cfcebcd01d5b7d327e10ea4f81e0ee7cfe15ad2d6d67",
+      "bbox": {
+        "height": 545.3304595947266,
+        "width": 428.0360107421875,
+        "x": 83.61199951171875,
+        "y": 47.78411865234375
+      },
+      "bbox_exact": true,
+      "bbox_rule": "same_page_image_vector_text_union_between_header_and_explicit_caption",
+      "caption_bbox": {
+        "height": 7.228973388671875,
+        "width": 399.1005096435547,
+        "x": 44.09892272949219,
+        "y": 598.4784088134766
+      },
+      "caption_overlap": false,
+      "dpi": 144.0,
+      "expected_bbox": {
+        "height": 545.3304595947266,
+        "width": 428.0360107421875,
+        "x": 83.61199951171875,
+        "y": 47.78411865234375
+      },
+      "height_px": 1090,
+      "page_area_ratio": 0.5012033231924585,
+      "pixel_variance": 2096.3246512211313,
+      "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+      "region_asset_sha256": "e23fd761347557227666093f4ce78d0821d9a5a9cae4f3039d94ca0c80a8729a",
+      "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+      "rotation": 0,
+      "scale": 2.0,
+      "source_pdf_sha256": "0bad582546653c8fddae3e8d2d7e1493cc367fb0ce73de7e9c00d2439afe8063",
+      "status": "rendered",
+      "target_id": "P4-RS-RW2-007-P05-FIG2",
+      "width_px": 855
+    },
+    {
+      "reason": "cross_page_figure_continuation_explicitly_detected",
+      "region_asset_count": 0,
+      "status": "rejected",
+      "target_id": "P4-RS-RW2-005-P07-FIG3"
+    }
+  ],
+  "hard_checks": {
+    "articles_identical_to_phase3": true,
+    "default_region_render_disabled": true,
+    "eight_regression_documents": true,
+    "eight_regression_manifests_valid": true,
+    "frozen_annotations_unchanged": true,
+    "images_identical_to_phase3": true,
+    "physical_documents_identical_to_phase3": true,
+    "rw2_005_p3_bbox_exact": true,
+    "rw2_005_p3_caption_excluded": true,
+    "rw2_005_p3_manual_visual_complete": true,
+    "rw2_005_p3_single_region_asset": true,
+    "rw2_005_p7_manual_visual_rejection": true,
+    "rw2_005_p7_safe_rejection": true,
+    "rw2_007_p5_bbox_exact": true,
+    "rw2_007_p5_caption_excluded": true,
+    "rw2_007_p5_manual_visual_complete": true,
+    "rw2_007_p5_single_region_asset": true,
+    "target_runs_deterministic": true
+  },
+  "implementation_notes": [
+    {
+      "fix": "The request now hashes the complete region vector ID set; v1 runtime was retained and the same frozen matrix was rerun in results-v2.",
+      "issue": "The first v1 runtime retained the old bitmap-group vector hash while expanding the region vector count.",
+      "pixel_assets_unchanged": true,
+      "status": "fixed_before_final_summary"
+    }
+  ],
+  "regression": [
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 13428804,
+      "output_file_count": 12,
+      "page_count": 29,
+      "paper_id": "RW2-001",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 22174728,
+      "output_file_count": 10,
+      "page_count": 25,
+      "paper_id": "RW2-002",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 8477165,
+      "output_file_count": 12,
+      "page_count": 10,
+      "paper_id": "RW2-003",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 936195,
+      "output_file_count": 4,
+      "page_count": 4,
+      "paper_id": "RW2-004",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 11974919,
+      "output_file_count": 50,
+      "page_count": 18,
+      "paper_id": "RW2-005",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 11622573,
+      "output_file_count": 13,
+      "page_count": 30,
+      "paper_id": "RW2-006",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 78879191,
+      "output_file_count": 9,
+      "page_count": 16,
+      "paper_id": "RW2-007",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    },
+    {
+      "article_identical_to_phase3": true,
+      "images_identical_to_phase3": true,
+      "manifest_valid": true,
+      "output_bytes": 5116281,
+      "output_file_count": 15,
+      "page_count": 6,
+      "paper_id": "RW2-008",
+      "physical_document_identical_to_phase3": true,
+      "region_render_opt_in_count": 0
+    }
+  ],
+  "schema_version": "paper2md-phase4-render-spike-summary-v1",
+  "targets": [
+    {
+      "paper_id": "RW2-005",
+      "region_figures": [
+        {
+          "asset": {
+            "height_px": 882,
+            "path": "images/fig-p003-001-region.png",
+            "sha256": "3e239449a19512b82fc4199bf6f8229f536f09b54deaa1acaa5c98b004639abf",
+            "size_bytes": 627819,
+            "width_px": 1064
+          },
+          "bbox": {
+            "height": 441.2640075683594,
+            "width": 532.244987487793,
+            "x": 36.37799835205078,
+            "y": 53.875
+          },
+          "caption": {
+            "bbox": {
+              "height": 8.055999755859375,
+              "width": 368.9599838256836,
+              "x": 37.12689971923828,
+              "y": 502.87017822265625
+            },
+            "caption_id": "p0002-caption-001",
+            "confidence": 0.85,
+            "element_ids": [
+              "p0002-text-00119",
+              "p0002-text-00120",
+              "p0002-text-00121",
+              "p0002-text-00122",
+              "p0002-text-00124"
+            ],
+            "matching_rule": "same_page_explicit_marker_and_geometry",
+            "reason": "same_page_explicit_marker_and_geometry",
+            "status": "matched",
+            "text": "Figure 1. Deep learning (DL) enhances performance of confocal MERFISH imaging. ( a ) A single- bit high-",
+            "text_sha256": "1826e24f31d4804271d2ffd5822f2adf8bfdf6cf37bf7c88e0692de92e7015a2"
+          },
+          "degraded_reasons": [],
+          "evidence_status": "complete_region_rendered_mixed_figure",
+          "extraction_mode": "region-rendered",
+          "figure_id": "fig-p003-001",
+          "markdown_placement": "immediately-before-caption",
+          "member_element_ids": [
+            "p0002-image-0009",
+            "p0002-image-0003",
+            "p0002-image-0010",
+            "p0002-image-0004",
+            "p0002-image-0011",
+            "p0002-image-0005",
+            "p0002-image-0007",
+            "p0002-image-0001",
+            "p0002-image-0006",
+            "p0002-image-0000",
+            "p0002-image-0008",
+            "p0002-image-0002"
+          ],
+          "native_asset": {
+            "height_px": 1485,
+            "mode": "grouped",
+            "path": "images/fig-p003-001.png",
+            "retained_for_provenance": true,
+            "sha256": "193eba5236be8301449725c153a7ffc0cc4b610b33dbdda93ce58b0c29dd3a80",
+            "size_bytes": 1706907,
+            "width_px": 1256
+          },
+          "page": 3,
+          "region_render": {
+            "bbox": {
+              "height": 441.2640075683594,
+              "width": 532.244987487793,
+              "x": 36.37799835205078,
+              "y": 53.875
+            },
+            "bbox_rule": "smallest_same_page_native_vector_frame_containing_bitmap_group",
+            "dpi": 144.0,
+            "height_px": 882,
+            "page_area_ratio": 0.484544291334577,
+            "pixel_variance": 13740.785162596572,
+            "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+            "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+            "rotation": 0,
+            "scale": 2.0,
+            "source_pdf_sha256": "030e9caff5bf11096f17b7741173e72a238c832560f892d0f038358458758131",
+            "status": "rendered",
+            "width_px": 1064
+          },
+          "source_object_ids": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "vector_evidence": {
+            "count": 9,
+            "element_ids_sample": [
+              "p0002-vector-00007",
+              "p0002-vector-00008",
+              "p0002-vector-00009",
+              "p0002-vector-00010",
+              "p0002-vector-00011",
+              "p0002-vector-00012",
+              "p0002-vector-00013",
+              "p0002-vector-00014",
+              "p0002-vector-00015"
+            ],
+            "element_ids_sha256": "d29e69252df9dcb6413768afac18deebb339e086e28d4b28a2ce534fed1a30dc",
+            "reason": "PDFium clipped page render includes same-page vector evidence",
+            "rendered_into_asset": true
+          }
+        }
+      ],
+      "run_bytes": [
+        12603313,
+        12603313
+      ],
+      "run_file_counts": [
+        51,
+        51
+      ],
+      "two_runs_identical": true
+    },
+    {
+      "paper_id": "RW2-007",
+      "region_figures": [
+        {
+          "asset": {
+            "height_px": 1090,
+            "path": "images/fig-p005-001-region.png",
+            "sha256": "e23fd761347557227666093f4ce78d0821d9a5a9cae4f3039d94ca0c80a8729a",
+            "size_bytes": 503070,
+            "width_px": 855
+          },
+          "bbox": {
+            "height": 545.3304595947266,
+            "width": 428.0360107421875,
+            "x": 83.61199951171875,
+            "y": 47.78411865234375
+          },
+          "caption": {
+            "bbox": {
+              "height": 7.228973388671875,
+              "width": 399.1005096435547,
+              "x": 44.09892272949219,
+              "y": 598.4784088134766
+            },
+            "caption_id": "p0004-caption-001",
+            "confidence": 0.85,
+            "element_ids": [
+              "p0004-text-09677",
+              "p0004-text-09678",
+              "p0004-text-09679"
+            ],
+            "matching_rule": "unique_same_page_explicit_caption_with_vector_bridge",
+            "reason": "unique_same_page_explicit_caption_with_vector_bridge",
+            "status": "matched",
+            "text": "Fig. 2 The tumor – microenvironment interface is transcriptionally distinct from the surrounding microenvironment. a",
+            "text_sha256": "2456ba426ef4a8e8f3a0610057a2c43b8e94aff517a5ef4f6672a9dc9bac4612"
+          },
+          "degraded_reasons": [
+            "caption_none"
+          ],
+          "evidence_status": "complete_region_rendered_mixed_figure",
+          "extraction_mode": "region-rendered",
+          "figure_id": "fig-p005-001",
+          "markdown_placement": "immediately-before-caption",
+          "member_element_ids": [
+            "p0004-image-0000"
+          ],
+          "native_asset": {
+            "height_px": 1605,
+            "mode": "embedded",
+            "path": "images/page-005-image-001.png",
+            "retained_for_provenance": true,
+            "sha256": "3e4f67fdf30ca23e6984cfcebcd01d5b7d327e10ea4f81e0ee7cfe15ad2d6d67",
+            "size_bytes": 1415489,
+            "width_px": 1750
+          },
+          "page": 5,
+          "region_render": {
+            "bbox": {
+              "height": 545.3304595947266,
+              "width": 428.0360107421875,
+              "x": 83.61199951171875,
+              "y": 47.78411865234375
+            },
+            "bbox_rule": "same_page_image_vector_text_union_between_header_and_explicit_caption",
+            "dpi": 144.0,
+            "height_px": 1090,
+            "page_area_ratio": 0.5012033231924585,
+            "pixel_variance": 2096.3246512211313,
+            "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+            "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+            "rotation": 0,
+            "scale": 2.0,
+            "source_pdf_sha256": "0bad582546653c8fddae3e8d2d7e1493cc367fb0ce73de7e9c00d2439afe8063",
+            "status": "rendered",
+            "width_px": 855
+          },
+          "source_object_ids": [
+            null
+          ],
+          "vector_evidence": {
+            "count": 9553,
+            "element_ids_sample": [
+              "p0004-vector-00000",
+              "p0004-vector-00001",
+              "p0004-vector-00002",
+              "p0004-vector-00003",
+              "p0004-vector-00004",
+              "p0004-vector-00005",
+              "p0004-vector-00006",
+              "p0004-vector-00007",
+              "p0004-vector-00008",
+              "p0004-vector-00009",
+              "p0004-vector-00010",
+              "p0004-vector-00011",
+              "p0004-vector-00012",
+              "p0004-vector-00013",
+              "p0004-vector-00014",
+              "p0004-vector-00015",
+              "p0004-vector-00016",
+              "p0004-vector-00017",
+              "p0004-vector-00018",
+              "p0004-vector-00019",
+              "p0004-vector-00020",
+              "p0004-vector-00021",
+              "p0004-vector-00022",
+              "p0004-vector-00023",
+              "p0004-vector-00024",
+              "p0004-vector-00025",
+              "p0004-vector-00026",
+              "p0004-vector-00027",
+              "p0004-vector-00028",
+              "p0004-vector-00029",
+              "p0004-vector-00030",
+              "p0004-vector-00031",
+              "p0004-vector-00032",
+              "p0004-vector-00033",
+              "p0004-vector-00034",
+              "p0004-vector-00035",
+              "p0004-vector-00036",
+              "p0004-vector-00037",
+              "p0004-vector-00038",
+              "p0004-vector-00039",
+              "p0004-vector-00040",
+              "p0004-vector-00041",
+              "p0004-vector-00042",
+              "p0004-vector-00043",
+              "p0004-vector-00044",
+              "p0004-vector-00045",
+              "p0004-vector-00046",
+              "p0004-vector-00047",
+              "p0004-vector-00048",
+              "p0004-vector-00049",
+              "p0004-vector-00050",
+              "p0004-vector-00051",
+              "p0004-vector-00052",
+              "p0004-vector-00053",
+              "p0004-vector-00054",
+              "p0004-vector-00055",
+              "p0004-vector-00056",
+              "p0004-vector-00057",
+              "p0004-vector-00058",
+              "p0004-vector-00059",
+              "p0004-vector-00060",
+              "p0004-vector-00061",
+              "p0004-vector-00062",
+              "p0004-vector-00063",
+              "p0004-vector-00064",
+              "p0004-vector-00065",
+              "p0004-vector-00066",
+              "p0004-vector-00067",
+              "p0004-vector-00068",
+              "p0004-vector-00069",
+              "p0004-vector-00070",
+              "p0004-vector-00071",
+              "p0004-vector-00072",
+              "p0004-vector-00073",
+              "p0004-vector-00074",
+              "p0004-vector-00075",
+              "p0004-vector-00076",
+              "p0004-vector-00077",
+              "p0004-vector-00078",
+              "p0004-vector-00079",
+              "p0004-vector-00080",
+              "p0004-vector-00081",
+              "p0004-vector-00082",
+              "p0004-vector-00083",
+              "p0004-vector-00084",
+              "p0004-vector-00085",
+              "p0004-vector-00086",
+              "p0004-vector-00087",
+              "p0004-vector-00088",
+              "p0004-vector-00089",
+              "p0004-vector-00090",
+              "p0004-vector-00091",
+              "p0004-vector-00092",
+              "p0004-vector-00093",
+              "p0004-vector-00094",
+              "p0004-vector-00095",
+              "p0004-vector-00096",
+              "p0004-vector-00097",
+              "p0004-vector-00098",
+              "p0004-vector-00099",
+              "p0004-vector-00100",
+              "p0004-vector-00101",
+              "p0004-vector-00102",
+              "p0004-vector-00103",
+              "p0004-vector-00104",
+              "p0004-vector-00105",
+              "p0004-vector-00106",
+              "p0004-vector-00107",
+              "p0004-vector-00108",
+              "p0004-vector-00109",
+              "p0004-vector-00110",
+              "p0004-vector-00111",
+              "p0004-vector-00112",
+              "p0004-vector-00113",
+              "p0004-vector-00114",
+              "p0004-vector-00115",
+              "p0004-vector-00116",
+              "p0004-vector-00117",
+              "p0004-vector-00118",
+              "p0004-vector-00119",
+              "p0004-vector-00120",
+              "p0004-vector-00121",
+              "p0004-vector-00122",
+              "p0004-vector-00123",
+              "p0004-vector-00124",
+              "p0004-vector-00125",
+              "p0004-vector-00126",
+              "p0004-vector-00127"
+            ],
+            "element_ids_sha256": "9a440e8c8a4717be2a3536f85829fe885bc759284a55139927726ba77b2876fd",
+            "reason": "PDFium clipped page render includes same-page vector evidence",
+            "rendered_into_asset": true
+          }
+        }
+      ],
+      "run_bytes": [
+        79383137,
+        79383137
+      ],
+      "run_file_counts": [
+        10,
+        10
+      ],
+      "two_runs_identical": true
+    }
+  ],
+  "totals": {
+    "failure_count": 0,
+    "region_rendered_assets_per_run": 2,
+    "regression_output_bytes": 152609856,
+    "regression_output_files": 125,
+    "regression_pages": 138,
+    "regression_papers": 8,
+    "safe_rejections_per_run": 1,
+    "skip_count": 0,
+    "target_document_runs": 4,
+    "target_output_bytes": 183972900,
+    "target_output_files": 122,
+    "target_page_observations": 6,
+    "timeout_count": 0
+  },
+  "visual_gate": "PASS"
+}

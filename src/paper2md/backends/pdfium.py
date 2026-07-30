@@ -9,12 +9,16 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import io
+import math
 from pathlib import Path
 from typing import Any
+
+from PIL import ImageStat
 
 from ..config import Paper2MDConfig
 from ..exceptions import BackendExecutionError, BackendUnavailableError
 from ..models import BBox, Element, Page, PhysicalDocument, Provenance
+from ..region_render import RegionRenderRequest, RegionRenderResult
 from .base import (
     BackendCapabilities,
     BackendIdentity,
@@ -248,6 +252,105 @@ class PDFiumBackend:
             },
         )
         return BackendResult(physical, tuple(assets), tuple(warnings))
+
+    def render_region(
+        self,
+        source: Path,
+        request: RegionRenderRequest,
+        *,
+        expected_source_sha256: str,
+    ) -> RegionRenderResult:
+        """Render one real clipped page region through PDFium.
+
+        ``crop`` is expressed as amounts cut from the rendered page's
+        left/bottom/right/top edges.  Paper2MD's public bbox is top-left,
+        y-down, so the bottom crop is ``page_height - bbox.bottom``.
+        """
+
+        source_hash = _sha256(source)
+        if source_hash != expected_source_sha256:
+            raise BackendExecutionError("region render 输入 PDF 哈希与提取结果不一致")
+        pdfium = self._pdfium
+        document = pdfium.PdfDocument(source)
+        try:
+            if not 0 <= request.page_index < len(document):
+                raise BackendExecutionError("region render 页码越界")
+            page = document[request.page_index]
+            try:
+                width = float(page.get_width())
+                height = float(page.get_height())
+                bbox = request.bbox
+                if (
+                    bbox.x < 0
+                    or bbox.y < 0
+                    or bbox.right > width + 1e-6
+                    or bbox.bottom > height + 1e-6
+                ):
+                    raise BackendExecutionError("region render bbox 越界")
+                if bbox.bottom > request.caption_top - request.caption_guard + 1e-6:
+                    raise BackendExecutionError("region render bbox 侵入 caption guard")
+                area_ratio = bbox.width * bbox.height / (width * height)
+                if area_ratio >= request.max_page_area_ratio:
+                    raise BackendExecutionError("region render 拒绝整页或近整页截图")
+                width_px = int(math.ceil(bbox.width * request.scale))
+                height_px = int(math.ceil(bbox.height * request.scale))
+                if width_px <= 0 or height_px <= 0:
+                    raise BackendExecutionError("region render 像素尺寸为零")
+                if width_px * height_px > request.max_pixels:
+                    raise BackendExecutionError("region render 超过像素上限")
+                crop = (
+                    bbox.x,
+                    height - bbox.bottom,
+                    width - bbox.right,
+                    bbox.y,
+                )
+                bitmap = page.render(
+                    scale=request.scale,
+                    rotation=0,
+                    crop=crop,
+                    may_draw_forms=False,
+                    draw_annots=False,
+                    rev_byteorder=True,
+                )
+                try:
+                    image = bitmap.to_pil().convert("RGB")
+                finally:
+                    bitmap.close()
+                if image.width * image.height > request.max_pixels:
+                    raise BackendExecutionError("region render 实际像素数超过上限")
+                channel_variance = ImageStat.Stat(image).var
+                pixel_variance = float(sum(channel_variance) / len(channel_variance))
+                if not math.isfinite(pixel_variance) or pixel_variance < request.min_variance:
+                    raise BackendExecutionError("region render 空白或近恒定图像")
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG", optimize=False, compress_level=9)
+                data = buffer.getvalue()
+                return RegionRenderResult(
+                    figure_id=request.figure_id,
+                    data=data,
+                    width_px=image.width,
+                    height_px=image.height,
+                    sha256=hashlib.sha256(data).hexdigest(),
+                    pixel_variance=pixel_variance,
+                    page_area_ratio=area_ratio,
+                    page_rotation=int(page.get_rotation()),
+                    renderer_version=(
+                        f"pypdfium2/{self.identity.wrapper_version} "
+                        f"pdfium/{self.identity.engine_version}"
+                    ),
+                    source_sha256=source_hash,
+                    bbox=bbox,
+                    scale=request.scale,
+                    dpi=request.dpi,
+                )
+            finally:
+                page.close()
+        except BackendExecutionError:
+            raise
+        except Exception as exc:
+            raise BackendExecutionError(f"PDFium region render 失败: {exc}") from exc
+        finally:
+            document.close()
 
     def _extract_page(
         self,

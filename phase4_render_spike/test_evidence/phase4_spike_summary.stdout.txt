@@ -1,0 +1,24 @@
+{
+  "check_count": 15,
+  "checks": {
+    "automatic_status": true,
+    "base_commit": true,
+    "frozen_before_render": true,
+    "hard_check_count": true,
+    "hard_checks_pass": true,
+    "no_failure_or_skip": true,
+    "phase3_regression_exact": true,
+    "regression_paper_count": true,
+    "rw2_005_p3_required_pass": true,
+    "rw2_005_p7_safe_rejection": true,
+    "rw2_007_p5_applicable_pass": true,
+    "target_count": true,
+    "target_two_run_determinism": true,
+    "visual_gate": true,
+    "visual_review_count": true
+  },
+  "failure_count": 0,
+  "pass_count": 15,
+  "schema_version": "paper2md-phase4-render-spike-persisted-check-v1",
+  "skip_count": 0
+}

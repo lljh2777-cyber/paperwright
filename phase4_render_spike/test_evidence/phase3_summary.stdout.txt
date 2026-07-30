@@ -1,0 +1,25 @@
+{
+  "check_count": 17,
+  "check_version": "paper2md-phase3-persisted-summary-check-v1",
+  "checks": {
+    "base_commit": true,
+    "determinism": true,
+    "fail_timeout_skip": true,
+    "frozen_case_count": true,
+    "has_grouped_figure": true,
+    "has_matched_caption": true,
+    "honest_degraded_groups": true,
+    "no_blank_figure_asset": true,
+    "output_hashes": true,
+    "page_count": true,
+    "page_markers": true,
+    "paper_count": true,
+    "physical_document_unchanged": true,
+    "title_exact": true,
+    "traceability": true,
+    "visual_no_fake_page": true,
+    "visual_scope": true
+  },
+  "failure_count": 0,
+  "pass_count": 17
+}

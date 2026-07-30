@@ -79,6 +79,15 @@ class Paper2MD:
                 document=result.document,
                 assets=result.assets,
                 backend_warnings=result.warnings,
+                source=source,
+                region_renderer=(
+                    backend if callable(getattr(backend, "render_region", None)) else None
+                ),
+                region_render_page_indices=(
+                    frozenset(self.config.region_render.page_indices)
+                    if self.config.region_render.enabled
+                    else frozenset()
+                ),
             )
             total = sum(
                 path.stat().st_size

@@ -125,3 +125,87 @@ def create_born_digital_fixture(path: Path) -> dict[str, object]:
         "pages": 2,
         "rights": "project-authored temporary fixture",
     }
+
+
+def create_region_render_fixture(
+    path: Path,
+    *,
+    rotation: int = 0,
+    blank: bool = False,
+) -> dict[str, object]:
+    """Create one page with a mixed bitmap/vector Figure and a separate caption."""
+
+    if rotation not in {0, 90, 180, 270}:
+        raise ValueError("rotation must be 0/90/180/270")
+    content = (
+        b""
+        if blank
+        else b"\n".join(
+            [
+                b"0 0 0 RG 1 w 50 330 500 400 re S",
+                b"q 180 0 0 160 70 500 cm /Im0 Do Q",
+                b"0.1 0.3 0.9 RG 2 w 320 500 m 365 570 l 420 520 l 475 650 l 530 550 l S",
+                b"0.8 0.1 0.1 rg 330 390 45 70 re f",
+                b"0.1 0.7 0.2 rg 400 390 45 110 re f",
+                b"BT /F2 15 Tf 65 700 Td (a  Mixed bitmap and vector Figure) Tj ET",
+                b"BT /F1 11 Tf 50 300 Td (Figure 1. Caption must remain outside the crop.) Tj ET",
+                b"BT /F1 10 Tf 50 270 Td (Unrelated body text below the caption.) Tj ET",
+            ]
+        )
+    )
+    rotate = f" /Rotate {rotation}".encode() if rotation else b""
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        3: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
+            + rotate
+            + b" /Resources << /Font << /F1 4 0 R /F2 5 0 R >> "
+            b"/XObject << /Im0 6 0 R >> >> /Contents 7 0 R >>"
+        ),
+        4: (
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+            b"/Encoding /WinAnsiEncoding >>"
+        ),
+        5: (
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
+            b"/Encoding /WinAnsiEncoding >>"
+        ),
+        6: _stream(
+            _image_pixels(),
+            b"/Type /XObject /Subtype /Image /Width 16 /Height 12 "
+            b"/ColorSpace /DeviceRGB /BitsPerComponent 8 ",
+        ),
+        7: _stream(content),
+        8: b"<< /Title (Region render fixture) /Producer (Paper2MD self-test) >>",
+    }
+    payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {0: 0}
+    for number in range(1, 9):
+        offsets[number] = len(payload)
+        payload.extend(f"{number} 0 obj\n".encode())
+        payload.extend(objects[number])
+        payload.extend(b"\nendobj\n")
+    xref = len(payload)
+    payload.extend(b"xref\n0 9\n")
+    payload.extend(b"0000000000 65535 f \n")
+    for number in range(1, 9):
+        payload.extend(f"{offsets[number]:010d} 00000 n \n".encode())
+    identifier = hashlib.md5(bytes(payload), usedforsecurity=False).hexdigest()
+    payload.extend(
+        (
+            "trailer\n"
+            f"<< /Size 9 /Root 1 0 R /Info 8 0 R "
+            f"/ID [<{identifier}><{identifier}>] >>\n"
+            f"startxref\n{xref}\n%%EOF\n"
+        ).encode()
+    )
+    path.write_bytes(bytes(payload))
+    return {
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size_bytes": len(payload),
+        "pages": 1,
+        "rotation": rotation,
+        "blank": blank,
+        "rights": "project-authored temporary fixture",
+    }

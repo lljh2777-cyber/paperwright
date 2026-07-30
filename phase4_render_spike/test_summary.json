@@ -1,0 +1,195 @@
+{
+  "base_commit": "ee379a5be6c713012e721d08995a88d5abec19af",
+  "check_count": 9,
+  "checks": [
+    {
+      "check_id": "unit_tests",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.590652Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.042259Z",
+      "stderr_path": "phase4_render_spike/test_evidence/unit_tests.stderr.txt",
+      "stderr_sha256": "76140688bb3d02932e158bd10cf0248c03f4048a509286958fcc660e6eac74a2",
+      "stderr_size_bytes": 7897,
+      "stdout_path": "phase4_render_spike/test_evidence/unit_tests.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    },
+    {
+      "check_id": "fixture_check",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/generate_fixtures.py",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.660286Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.591139Z",
+      "stderr_path": "phase4_render_spike/test_evidence/fixture_check.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/fixture_check.stdout.txt",
+      "stdout_sha256": "c06234adcaf9481bffecef34aaf387c78bfc50a1f09999c9393cda05285755e6",
+      "stdout_size_bytes": 20
+    },
+    {
+      "check_id": "content_smoke",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/run_stage_b_smoke.py"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.777530Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.660661Z",
+      "stderr_path": "phase4_render_spike/test_evidence/content_smoke.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/content_smoke.stdout.txt",
+      "stdout_sha256": "b48e849fde6b465811d658e430249b3620c45b6fedecc3cb203b88fb337c31e8",
+      "stdout_size_bytes": 3283
+    },
+    {
+      "check_id": "stage_c_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_stage_c_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.804444Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.777881Z",
+      "stderr_path": "phase4_render_spike/test_evidence/stage_c_summary.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/stage_c_summary.stdout.txt",
+      "stdout_sha256": "0ddc2e28ce80ed0be20ffd23cc56cacc888ae0dcb65e19088ae588ebda785263",
+      "stdout_size_bytes": 490
+    },
+    {
+      "check_id": "phase3_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_phase3_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.823229Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.804732Z",
+      "stderr_path": "phase4_render_spike/test_evidence/phase3_summary.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/phase3_summary.stdout.txt",
+      "stdout_sha256": "36b4eff1a4409c467fa687d28857fb2cc664dc07117ba55923d2ce9875ff9fc9",
+      "stdout_size_bytes": 650
+    },
+    {
+      "check_id": "phase4_spike_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_phase4_spike_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.843644Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.823454Z",
+      "stderr_path": "phase4_render_spike/test_evidence/phase4_spike_summary.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/phase4_spike_summary.stdout.txt",
+      "stdout_sha256": "54f0466db4650356cf7dd5e32a448af8051a5ef179eccfb453c2925060392da6",
+      "stdout_size_bytes": 669
+    },
+    {
+      "check_id": "compileall",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "tools"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.875193Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.843897Z",
+      "stderr_path": "phase4_render_spike/test_evidence/compileall.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/compileall.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    },
+    {
+      "check_id": "repo_policy",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_repo_policy.py",
+        "--root",
+        "."
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.912118Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.875393Z",
+      "stderr_path": "phase4_render_spike/test_evidence/repo_policy.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/repo_policy.stdout.txt",
+      "stdout_sha256": "7da8856a17f99a1985c4e4c08591dbd7eeab6451fbdf6625d77e2bd73a3e1128",
+      "stdout_size_bytes": 293
+    },
+    {
+      "check_id": "diff_check",
+      "command_argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T04:33:09.915533Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T04:33:09.912389Z",
+      "stderr_path": "phase4_render_spike/test_evidence/diff_check.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase4_render_spike/test_evidence/diff_check.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    }
+  ],
+  "failure_count": 0,
+  "locked_dependencies": {
+    "PDFium": "145.0.7616.0",
+    "Pillow": "12.2.0",
+    "pypdfium2": "5.3.0"
+  },
+  "new_region_render_test_count": 12,
+  "pass_count": 9,
+  "preexisting_test_count": 48,
+  "python": "3.12.13",
+  "schema_version": "paper2md-phase4-render-spike-test-summary-v1",
+  "skip_count": 0,
+  "unit_test_count": 60
+}

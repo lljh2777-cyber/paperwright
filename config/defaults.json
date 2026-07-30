@@ -9,5 +9,9 @@
   "output": {
     "allow_existing_directory": false,
     "atomic_write": true
+  },
+  "region_render": {
+    "enabled": false,
+    "page_indices": []
   }
 }

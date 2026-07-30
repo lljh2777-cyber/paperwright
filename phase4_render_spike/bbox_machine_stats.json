@@ -1,0 +1,94 @@
+[
+  {
+    "actual_bbox": {
+      "height": 441.2640075683594,
+      "width": 532.244987487793,
+      "x": 36.37799835205078,
+      "y": 53.875
+    },
+    "baseline_native_asset_sha256": "193eba5236be8301449725c153a7ffc0cc4b610b33dbdda93ce58b0c29dd3a80",
+    "bbox": {
+      "height": 441.2640075683594,
+      "width": 532.244987487793,
+      "x": 36.37799835205078,
+      "y": 53.875
+    },
+    "bbox_exact": true,
+    "bbox_rule": "smallest_same_page_native_vector_frame_containing_bitmap_group",
+    "caption_bbox": {
+      "height": 8.055999755859375,
+      "width": 368.9599838256836,
+      "x": 37.12689971923828,
+      "y": 502.87017822265625
+    },
+    "caption_overlap": false,
+    "dpi": 144.0,
+    "expected_bbox": {
+      "height": 441.2640075683594,
+      "width": 532.244987487793,
+      "x": 36.37799835205078,
+      "y": 53.875
+    },
+    "height_px": 882,
+    "page_area_ratio": 0.484544291334577,
+    "pixel_variance": 13740.785162596572,
+    "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+    "region_asset_sha256": "3e239449a19512b82fc4199bf6f8229f536f09b54deaa1acaa5c98b004639abf",
+    "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+    "rotation": 0,
+    "scale": 2.0,
+    "source_pdf_sha256": "030e9caff5bf11096f17b7741173e72a238c832560f892d0f038358458758131",
+    "status": "rendered",
+    "target_id": "P4-RS-RW2-005-P03-FIG1",
+    "width_px": 1064
+  },
+  {
+    "actual_bbox": {
+      "height": 545.3304595947266,
+      "width": 428.0360107421875,
+      "x": 83.61199951171875,
+      "y": 47.78411865234375
+    },
+    "baseline_native_asset_sha256": "3e4f67fdf30ca23e6984cfcebcd01d5b7d327e10ea4f81e0ee7cfe15ad2d6d67",
+    "bbox": {
+      "height": 545.3304595947266,
+      "width": 428.0360107421875,
+      "x": 83.61199951171875,
+      "y": 47.78411865234375
+    },
+    "bbox_exact": true,
+    "bbox_rule": "same_page_image_vector_text_union_between_header_and_explicit_caption",
+    "caption_bbox": {
+      "height": 7.228973388671875,
+      "width": 399.1005096435547,
+      "x": 44.09892272949219,
+      "y": 598.4784088134766
+    },
+    "caption_overlap": false,
+    "dpi": 144.0,
+    "expected_bbox": {
+      "height": 545.3304595947266,
+      "width": 428.0360107421875,
+      "x": 83.61199951171875,
+      "y": 47.78411865234375
+    },
+    "height_px": 1090,
+    "page_area_ratio": 0.5012033231924585,
+    "pixel_variance": 2096.3246512211313,
+    "reason": "native_bitmap_asset_is_incomplete_for_mixed_bitmap_vector_figure",
+    "region_asset_sha256": "e23fd761347557227666093f4ce78d0821d9a5a9cae4f3039d94ca0c80a8729a",
+    "renderer_version": "pypdfium2/5.3.0 pdfium/145.0.7616.0",
+    "rotation": 0,
+    "scale": 2.0,
+    "source_pdf_sha256": "0bad582546653c8fddae3e8d2d7e1493cc367fb0ce73de7e9c00d2439afe8063",
+    "status": "rendered",
+    "target_id": "P4-RS-RW2-007-P05-FIG2",
+    "width_px": 855
+  },
+  {
+    "reason": "cross_page_figure_continuation_explicitly_detected",
+    "region_asset_count": 0,
+    "status": "rejected",
+    "target_id": "P4-RS-RW2-005-P07-FIG3"
+  }
+]

@@ -16,7 +16,7 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前候选提交范围已推进到 **Phase 3 Figure/Caption 增强**：
+当前候选提交包含 **Phase 4 region-render 技术 spike**：
 
 - 可调用的单文件 CLI/API；
 - pypdfium2/PDFium 薄适配器；
@@ -26,10 +26,12 @@ MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 - 同页 Figure 候选分组、明确 Figure/Fig. caption 的保守配对与
   Markdown 邻接；
 - 对低置信、歧义、无 caption、跨页或未渲染矢量证据明确降级；
+- 在显式页面白名单下，用 PDFium 对确定性的 Figure bbox 做真正的
+  clipped page-region render；原生位图/组合资产仍保留作追溯；
 - 自生成 born-digital PDF fixture、路径安全、原子输出及逐字节确定性测试。
 
-PDFBox 仍只是显式不可用的对照/回退边界。本阶段不实现 OCR、语义表格、
-公式 LaTeX、纯矢量 Figure 重建或深层图像语义理解。
+PDFBox 仍只是显式不可用的对照/回退边界。本 spike 不默认打开区域渲染，
+也不实现 OCR、语义表格、公式 LaTeX、纯矢量语义解析或深层图像理解。
 
 Stage C 使用 8 篇新选择的 CC BY born-digital OA 论文做小规模真实版式
 验证；结果和明确限制见
@@ -41,6 +43,10 @@ Phase 3 的实现、8 篇复核结果和限制见
 [`phase3/report_zh.md`](phase3/report_zh.md)。尤其是 RW2-005：
 碎片对象已能确定性组合并与 caption 邻接，但混合位图/矢量的完整区域
 重建仍标为 degraded。
+
+受限 region-render spike 的冻结边界、机器证据与视觉结论见
+[`phase4_render_spike/report_zh.md`](phase4_render_spike/report_zh.md)。
+该结果只验证三个冻结目标，不代表已铺开完整 Phase 4。
 
 ## 快速开始
 

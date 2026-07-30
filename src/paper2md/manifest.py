@@ -10,7 +10,7 @@ from typing import Any
 
 from .exceptions import ContractValidationError
 
-MANIFEST_VERSION = "paper2md-manifest-v0.3"
+MANIFEST_VERSION = "paper2md-manifest-v0.4"
 
 
 def sha256_file(path: Path) -> str:
@@ -144,6 +144,8 @@ def validate_manifest(value: dict[str, Any]) -> None:
             "source_object_ids",
             "extraction_mode",
             "asset",
+            "native_asset",
+            "region_render",
             "caption",
             "evidence_status",
             "degraded_reasons",
@@ -157,7 +159,11 @@ def validate_manifest(value: dict[str, Any]) -> None:
         figure_ids.add(figure["figure_id"])
         if figure["page"] <= 0 or not figure["member_element_ids"]:
             raise ContractValidationError("manifest figure 页码或成员非法")
-        if figure["extraction_mode"] not in {"embedded", "grouped"}:
+        if figure["extraction_mode"] not in {
+            "embedded",
+            "grouped",
+            "region-rendered",
+        }:
             raise ContractValidationError("manifest figure extraction_mode 非法")
         caption = figure["caption"]
         if caption.get("status") not in {"matched", "ambiguous", "none"}:
@@ -178,6 +184,27 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError("manifest figure asset 路径非法")
         if len(asset["sha256"]) != 64 or asset["size_bytes"] <= 0:
             raise ContractValidationError("manifest figure asset 哈希或大小非法")
+        native_asset = figure["native_asset"]
+        if native_asset.get("mode") not in {"embedded", "grouped"}:
+            raise ContractValidationError("manifest native_asset mode 非法")
+        if (
+            len(native_asset.get("sha256", "")) != 64
+            or native_asset.get("size_bytes", 0) <= 0
+            or native_asset.get("retained_for_provenance") is not True
+        ):
+            raise ContractValidationError("manifest native_asset 追溯字段非法")
+        region = figure["region_render"]
+        if region.get("status") not in {"not_requested", "rendered", "rejected"}:
+            raise ContractValidationError("manifest region_render status 非法")
+        if figure["extraction_mode"] == "region-rendered":
+            if region["status"] != "rendered":
+                raise ContractValidationError("region-rendered Figure 缺少渲染证据")
+            if region.get("source_pdf_sha256") != value["source_sha256"]:
+                raise ContractValidationError("region render source hash 不一致")
+            if region.get("bbox") != figure["bbox"]:
+                raise ContractValidationError("region render bbox 与 Figure bbox 不一致")
+            if region.get("page_area_ratio", 1) >= 0.82:
+                raise ContractValidationError("region render 近整页区域非法")
     if "physical_document" in value:
         reference = value["physical_document"]
         if set(reference) != {"path", "sha256"}:

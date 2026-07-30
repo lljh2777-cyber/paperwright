@@ -1,4 +1,4 @@
-# Paper2MD v2 / Phase 3 复现说明
+# Paper2MD v2 / Phase 4 region-render spike 复现说明
 
 ## 环境
 
@@ -22,6 +22,7 @@ PYTHONPATH=src python -m paper2md validate-model \
 python -m unittest discover -s tests -v
 python tools/check_repo_policy.py --root .
 PYTHONPATH=src:tests python tools/run_phase3_checks.py
+PYTHONPATH=src python -m unittest tests.test_phase4_region_render -v
 ```
 
 测试不以“进程退出码 0”作为唯一证据。单元测试分别断言：
@@ -76,3 +77,31 @@ PYTHONPATH=src python tools/analyze_phase3_results.py \
 ```
 
 脚本会逐件校验冻结 SHA-256、字节数和页数；不匹配时停止，不能换样本。
+
+## 受限 region-render spike
+
+先验证自生成 fixture 与全部回归：
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+python -m compileall -q src tests tools
+python tools/check_repo_policy.py --root .
+```
+
+真实 PDF 不进入仓库。若现场已有 `realworld/oa_sources.json` 中严格匹配的
+8 份本地测试输入，可运行：
+
+```bash
+PYTHONPATH=src python tools/run_phase4_render_spike.py \
+  --repo . \
+  --pdf-dir /isolated/RW2-pdfs \
+  --output-root /isolated/phase4-render-spike
+
+PYTHONPATH=src python tools/analyze_phase4_render_spike.py \
+  --repo . \
+  --runtime /isolated/phase4-render-spike \
+  --phase3-runtime /isolated/phase3-output
+```
+
+工具只对 RW2-005 页索引 2/6 与 RW2-007 页索引 4 启用裁剪渲染；默认
+CLI/API 不会隐式启用 spike。

@@ -1,0 +1,19 @@
+{
+  "schema_version": "paper2md-phase4-packaging-attempts-v1",
+  "attempts": [
+    {
+      "attempt_id": "package-attempt-001",
+      "started_at_utc": "2026-07-30T04:33:13Z",
+      "ended_at_utc": "2026-07-30T04:33:14Z",
+      "command": "PYTHONPATH=src:tests python tools/build_phase4_render_spike_delivery.py",
+      "exit_code": 1,
+      "classification": "packaging_manifest_type_error",
+      "error": "TypeError: hard_checks is a JSON object, not a list of objects",
+      "impact": "交付目录构建中止；产品源码、运行输出和既有测试证据未改变",
+      "disposition": "不完整目录已移至 phase4-render-spike-delivery.failed-20260730T0433Z；修正打包器后重新执行"
+    }
+  ],
+  "current_gate_impact": "none_after_successful_rebuild",
+  "failure_count": 1,
+  "skip_count": 0
+}
