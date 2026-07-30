@@ -1,0 +1,20 @@
+{
+  "check_count": 12,
+  "checks": {
+    "conversion_success": true,
+    "determinism": true,
+    "images_valid": true,
+    "machine_failures": true,
+    "no_missing_nonempty_page": true,
+    "no_tracked_pdf": true,
+    "source_count": true,
+    "source_hashes_unique": true,
+    "source_pages": true,
+    "summary_count": true,
+    "tables_honest": true,
+    "title_exact": true
+  },
+  "failure_count": 0,
+  "pass_count": 12,
+  "schema_version": "paper2md-v2-realworld-summary-check-v1"
+}

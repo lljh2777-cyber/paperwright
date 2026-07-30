@@ -1,0 +1,226 @@
+{
+  "base_commit": "0897f3ca82b74468ece7aa65d6e331416c4afd96",
+  "check_count": 7,
+  "checks": [
+    {
+      "check_id": "unit_tests",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.565908Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.328037Z",
+      "stderr": {
+        "path": "realworld/test_evidence/unit_tests.stderr.txt",
+        "sha256": "a24aa48aadee6bf30c138e85f44002ab91a483e239125f280531d12069a3fa6d",
+        "size_bytes": 5382
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/unit_tests.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "fixture_check",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/generate_fixtures.py",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.609715Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.566316Z",
+      "stderr": {
+        "path": "realworld/test_evidence/fixture_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/fixture_check.stdout.txt",
+        "sha256": "c06234adcaf9481bffecef34aaf387c78bfc50a1f09999c9393cda05285755e6",
+        "size_bytes": 20
+      }
+    },
+    {
+      "check_id": "content_smoke",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/run_stage_b_smoke.py"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.723360Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.610015Z",
+      "stderr": {
+        "path": "realworld/test_evidence/content_smoke.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/content_smoke.stdout.txt",
+        "sha256": "a82fbb907ac066438df06275a8aa578ce7fc02ed2f61c532c129162e14e8f565",
+        "size_bytes": 3283
+      }
+    },
+    {
+      "check_id": "stage_c_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_stage_c_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.751136Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.723700Z",
+      "stderr": {
+        "path": "realworld/test_evidence/stage_c_summary.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/stage_c_summary.stdout.txt",
+        "sha256": "0ddc2e28ce80ed0be20ffd23cc56cacc888ae0dcb65e19088ae588ebda785263",
+        "size_bytes": 490
+      }
+    },
+    {
+      "check_id": "compileall",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "tools"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.790944Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.751441Z",
+      "stderr": {
+        "path": "realworld/test_evidence/compileall.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/compileall.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "repo_policy",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_repo_policy.py",
+        "--root",
+        "."
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.822305Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.791215Z",
+      "stderr": {
+        "path": "realworld/test_evidence/repo_policy.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/repo_policy.stdout.txt",
+        "sha256": "880fa3dec26da818f1e34e122def0e1726174c0280ec728847a02631a96bf789",
+        "size_bytes": 292
+      }
+    },
+    {
+      "check_id": "diff_check",
+      "command_argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T02:06:06.824477Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T02:06:06.822573Z",
+      "stderr": {
+        "path": "realworld/test_evidence/diff_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "realworld/test_evidence/diff_check.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    }
+  ],
+  "content_assertion_count": 13,
+  "content_assertion_passed": 13,
+  "environment": {
+    "implementation": "CPython",
+    "pdfium": "145.0.7616.0",
+    "pdfium_runtime_candidate_count": 1,
+    "pdfium_runtime_sha256": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+    "pillow": "12.2.0",
+    "platform": "Linux-6.12.13-x86_64-with-glibc2.39",
+    "pypdfium2": "5.3.0",
+    "python": "3.12.13 (main, Mar  3 2026, 14:59:34) [Clang 21.1.4 ]"
+  },
+  "failure_count": 0,
+  "historical_pre_final_failures": [
+    {
+      "classification": "stage_c_runner_argument_validation_bug",
+      "evidence": "runtime directory baseline_failed_preflight-001 (not packaged)",
+      "result": "fixed_before_any_baseline_backend process started"
+    },
+    {
+      "classification": "column_gutter_regression_test_initial_failure",
+      "evidence": "interactive stdout not used as final test evidence",
+      "result": "wide-line threshold corrected from 0.55 to 0.65; all 43 final tests pass"
+    },
+    {
+      "classification": "RW2-001_initial_download_truncated",
+      "evidence": "realworld/oa_sources.json",
+      "result": "rejected; fresh atomic download verified to frozen size/hash"
+    },
+    {
+      "classification": "RW2-008_NCBI_historical_package_404",
+      "evidence": "realworld/oa_sources.json",
+      "result": "replaced by authoritative Europe PMC article PDF endpoint"
+    }
+  ],
+  "pass_count": 7,
+  "schema_version": "paper2md-v2-realworld-test-summary-v1",
+  "security_regressions": {
+    "corrupt_pdf": "pass_via_test_cli_and_test_mvp_pipeline",
+    "existing_output": "pass_via_test_cli_and_test_paths_api",
+    "input_output_conflict_and_workspace_escape": "pass_via_test_paths_api"
+  },
+  "skip_count": 0,
+  "unit_test_count": 43,
+  "unit_test_passed": 43
+}

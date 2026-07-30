@@ -1,0 +1,1862 @@
+{
+  "base_commit": "0897f3ca82b74468ece7aa65d6e331416c4afd96",
+  "failures": [],
+  "not_verified": [
+    "real publisher generalization beyond these eight OA PDFs",
+    "semantic table reconstruction",
+    "caption adjacency",
+    "complete reconstruction of vector and fragmented multi-panel figures",
+    "OCR/scanned documents",
+    "formula-to-LaTeX fidelity",
+    "release redistribution approval including agg23 NOASSERTION"
+  ],
+  "papers": [
+    {
+      "character_multiset_recall_by_page": [
+        0.9987955435109906,
+        0.992598466825271,
+        0.9901701323251417,
+        0.9824341279799247,
+        0.9890539483971853,
+        0.990358126721763,
+        0.9901477832512315,
+        0.9824010056568196,
+        0.9897585954645208,
+        0.9910421021200359,
+        0.9849473156046161,
+        0.9709020368574199,
+        0.9887175629936066,
+        0.9705593719332679,
+        0.9786780383795309,
+        0.9910740850937221,
+        0.9895433949111189,
+        0.979050279329609,
+        0.9685863874345549,
+        0.9907178217821783,
+        0.9830028328611898,
+        0.9912075029308324,
+        0.9918831168831169,
+        0.9885057471264368,
+        0.9835526315789473,
+        0.9878983461073013,
+        0.9923371647509579,
+        0.9922520661157025,
+        0.9863201094391245
+      ],
+      "character_multiset_recall_macro": 0.9864308842884868,
+      "character_multiset_recall_min_page": 0.9685863874345549,
+      "degraded_table_page_count": 15,
+      "degraded_table_pages": [
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20,
+        21,
+        22,
+        23,
+        25
+      ],
+      "determinism_evaluated": true,
+      "determinism_mismatches": [],
+      "deterministic": true,
+      "element_count": 5135,
+      "element_kind_counts": {
+        "image": 9,
+        "text": 4807,
+        "vector": 319
+      },
+      "extracted_normalized_character_count": 72363,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 9,
+      "images": [
+        {
+          "dimensions": [
+            233,
+            233
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-001.png",
+          "sha256": "c49d8f79736687bdb8a7733c9ab60e8c720f562e532887c23bf5cdae8152fd28",
+          "size_bytes": 37245,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            39,
+            50
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-002.png",
+          "sha256": "8c80048ebb0ebd2ced13ae37223d1dc4181f0e4e51416fc5240f654d5275d044",
+          "size_bytes": 1999,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1800,
+            1576
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 4,
+          "path": "images/page-004-image-001.png",
+          "sha256": "7cb194f2b524d0e33ddef5e94d99961c4343668c3c3c07ae78eedc53c373301a",
+          "size_bytes": 738856,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1800,
+            1441
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 8,
+          "path": "images/page-008-image-001.png",
+          "sha256": "a88412a91aa5a968c6d8fb4e3712d0dee8cf832fedf70ee8d7b4aeea817b4214",
+          "size_bytes": 621266,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1800,
+            1846
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 12,
+          "path": "images/page-012-image-001.png",
+          "sha256": "efb0660fc0718b9d0bd8f037cdbc6d74bdb2879430def235764dcca335ceb23e",
+          "size_bytes": 1631314,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1801,
+            2010
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 14,
+          "path": "images/page-014-image-001.png",
+          "sha256": "49fcf689bfad2e008a91f1766fa08228f983868d5dd290181b58cbad4fab3d4e",
+          "size_bytes": 902915,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1800,
+            1441
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 15,
+          "path": "images/page-015-image-001.png",
+          "sha256": "82a8707b550937467ee81a82eefbc9dfd6da539c4ebcbd4601577b3ee5a21d2c",
+          "size_bytes": 1045168,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1801,
+            2100
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 19,
+          "path": "images/page-019-image-001.png",
+          "sha256": "d5c217ccaaa3d27b39f739998fe25a7ace8d365cfc378e683af4351c217617ae",
+          "size_bytes": 2361566,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1800,
+            1441
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 21,
+          "path": "images/page-021-image-001.png",
+          "sha256": "80f52e539e509460ebe0266c1dcdfd8d40d826b5eb72a7760151d22df8d2f762",
+          "size_bytes": 806254,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 12,
+      "output_hashes_valid": true,
+      "output_size_bytes": 13413122,
+      "page_count_actual": 29,
+      "page_count_expected": 29,
+      "paper_id": "RW2-001",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 73045,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "Data-driven model discovery and model selection for noisy biological systems",
+      "title_changed": false,
+      "title_exact_normalized": true,
+      "title_expected": "Data-driven model discovery and model selection for noisy biological systems",
+      "title_final": "Data-driven model discovery and model selection for noisy biological systems",
+      "valid_image_count": 9,
+      "warning_codes": {
+        "degenerate_object_bbox": 729,
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 15,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 746
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        0.9946341463414634,
+        0.9936854190585533,
+        0.9659090909090909,
+        0.9781420765027322,
+        0.9931972789115646,
+        0.9935856318152662,
+        0.9917420369642155,
+        0.9897340177321512,
+        0.9943661971830986,
+        0.9936467598475223,
+        0.9925634295713036,
+        0.9936461388074291,
+        0.9939619136089178,
+        0.994098955969133,
+        0.9922297297297298,
+        0.9930675909878682,
+        0.9743315508021391,
+        0.9808612440191388,
+        0.9803117309269893,
+        0.9796264855687606,
+        0.9919042590637099,
+        0.9932678821879383,
+        0.9933145672061928,
+        0.9953582825645488
+      ],
+      "character_multiset_recall_macro": 0.9894874566511782,
+      "character_multiset_recall_min_page": 0.9659090909090909,
+      "degraded_table_page_count": 2,
+      "degraded_table_pages": [
+        16,
+        22
+      ],
+      "determinism_evaluated": false,
+      "determinism_mismatches": [],
+      "deterministic": null,
+      "element_count": 15002,
+      "element_kind_counts": {
+        "image": 7,
+        "text": 14578,
+        "vector": 417
+      },
+      "extracted_normalized_character_count": 62153,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 7,
+      "images": [
+        {
+          "dimensions": [
+            39,
+            50
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-001.png",
+          "sha256": "d74675af3947d214f052c5c65b51d49d5de60a648524072942fc232a6f2a2565",
+          "size_bytes": 2033,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1784,
+            2237
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 4,
+          "path": "images/page-004-image-001.png",
+          "sha256": "20c62fa43d344cf09cf0f47dbb324b97192a091594514c5553cc833bddfaf2e8",
+          "size_bytes": 926334,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1929,
+            2041
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-001.png",
+          "sha256": "be97e0346b1821eda879cfa97d5b2f5a3671b7bf2ebbf0f7fcd438ea50714faa",
+          "size_bytes": 432130,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1749,
+            2301
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 18,
+          "path": "images/page-018-image-001.png",
+          "sha256": "0491b8d23f8eacbaf96fc836083194b4beb6ed73418f29c12752fb279a0adb59",
+          "size_bytes": 2124255,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1748,
+            1715
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 19,
+          "path": "images/page-019-image-001.png",
+          "sha256": "45408cf6ba5ced300079d251108491d60900f4cdd5560462b3809c0f4addf553",
+          "size_bytes": 1164856,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2034,
+            1953
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 20,
+          "path": "images/page-020-image-001.png",
+          "sha256": "c2e5b3e9be9897b09a9fec734487511bd6cb1fffdab83f79fac21a03445b4219",
+          "size_bytes": 1017182,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1935,
+            1940
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 21,
+          "path": "images/page-021-image-001.png",
+          "sha256": "25d30083088a0cb31bb55d322a188589e062ee38830bf8df33a154aa377b13b0",
+          "size_bytes": 1703136,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 10,
+      "output_hashes_valid": true,
+      "output_size_bytes": 22163174,
+      "page_count_actual": 25,
+      "page_count_expected": 25,
+      "paper_id": "RW2-002",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 62091,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "Modeling single cell trajectory using forward-backward stochastic differential equations",
+      "title_changed": false,
+      "title_exact_normalized": true,
+      "title_expected": "Modeling single cell trajectory using forward-backward stochastic differential equations",
+      "title_final": "Modeling single cell trajectory using forward-backward stochastic differential equations",
+      "valid_image_count": 7,
+      "warning_codes": {
+        "degenerate_object_bbox": 286,
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 2,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 290
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 1.0,
+      "character_multiset_recall_min_page": 1.0,
+      "degraded_table_page_count": 2,
+      "degraded_table_pages": [
+        3,
+        9
+      ],
+      "determinism_evaluated": true,
+      "determinism_mismatches": [],
+      "deterministic": true,
+      "element_count": 1737,
+      "element_kind_counts": {
+        "image": 9,
+        "text": 1605,
+        "vector": 123
+      },
+      "extracted_normalized_character_count": 33069,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 9,
+      "images": [
+        {
+          "dimensions": [
+            946,
+            983
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 2,
+          "path": "images/page-002-image-001.png",
+          "sha256": "b29c25da177bba2b82c5eb964b5aabd8ed4abc4dc3459acb44cf7d27c979d0b4",
+          "size_bytes": 400937,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            4017,
+            1851
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "1b12a31ad2f24fe94751f9c86c4c029d8d88e7278c3c0ac68343f3303f335d18",
+          "size_bytes": 1361844,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            4017,
+            1407
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 4,
+          "path": "images/page-004-image-001.png",
+          "sha256": "f8b3350d0b26941aa14ebdae11d9dc085cca7fdc3d700b5c6bb5a6cbc7ae6b5d",
+          "size_bytes": 1016531,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2835,
+            2035
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 4,
+          "path": "images/page-004-image-002.png",
+          "sha256": "c3b7c9c6915da47261fc3367507867dfdab63030a4aa4430aede44eab09a6713",
+          "size_bytes": 386849,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            4016,
+            1070
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-001.png",
+          "sha256": "6852fc99a7b9a835148606dd0f9191981789549579fb0eecd4e6a15a30a30635",
+          "size_bytes": 1610495,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1772,
+            927
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 6,
+          "path": "images/page-006-image-001.png",
+          "sha256": "82b4b893b8c49e8b54fa34a0f89d9de83ad30b0ced61890c8b593c93c58ea2f1",
+          "size_bytes": 326848,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2835,
+            1371
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-001.png",
+          "sha256": "da681605474b85843d7ced1bd129c7a3c53fd10101482c2a449c55fd09b5ab14",
+          "size_bytes": 643903,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1891,
+            1320
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 8,
+          "path": "images/page-008-image-001.png",
+          "sha256": "e33f995ffa4e5e5edb8f0cd3d183cbd2cd9c13527e0bfa276dc89b264d2c6e79",
+          "size_bytes": 395923,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1772,
+            1320
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 8,
+          "path": "images/page-008-image-002.png",
+          "sha256": "343f575071883b499c49f41e2e4b6a76862614f334f72d65a5e3dd2f69c15e48",
+          "size_bytes": 510900,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 12,
+      "output_hashes_valid": true,
+      "output_size_bytes": 8459962,
+      "page_count_actual": 10,
+      "page_count_expected": 10,
+      "paper_id": "RW2-003",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 33040,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "Recent Advances of Deep Learning in Bioinformatics and Computational Biology",
+      "title_changed": false,
+      "title_exact_normalized": true,
+      "title_expected": "Recent Advances of Deep Learning in Bioinformatics and Computational Biology",
+      "title_final": "Recent Advances of Deep Learning in Bioinformatics and Computational Biology",
+      "valid_image_count": 9,
+      "warning_codes": {
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 2,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 4
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 1.0,
+      "character_multiset_recall_min_page": 1.0,
+      "degraded_table_page_count": 3,
+      "degraded_table_pages": [
+        2,
+        3,
+        4
+      ],
+      "determinism_evaluated": false,
+      "determinism_mismatches": [],
+      "deterministic": null,
+      "element_count": 717,
+      "element_kind_counts": {
+        "image": 1,
+        "text": 615,
+        "vector": 101
+      },
+      "extracted_normalized_character_count": 15513,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 1,
+      "images": [
+        {
+          "dimensions": [
+            958,
+            957
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "3a016c15a41a158b9847ddaa68b29029aced7b80e981a8f2aebd292caf598188",
+          "size_bytes": 188822,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 4,
+      "output_hashes_valid": true,
+      "output_size_bytes": 934317,
+      "page_count_actual": 4,
+      "page_count_expected": 4,
+      "paper_id": "RW2-004",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 15511,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "GitHub Statistics as a Measure of the Impact of Open-Source Bioinformatics Software",
+      "title_changed": false,
+      "title_exact_normalized": true,
+      "title_expected": "GitHub Statistics as a Measure of the Impact of Open-Source Bioinformatics Software",
+      "title_final": "GitHub Statistics as a Measure of the Impact of Open-Source Bioinformatics Software",
+      "valid_image_count": 1,
+      "warning_codes": {
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 3,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 5
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.998422712933754,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 0.9999123729407641,
+      "character_multiset_recall_min_page": 0.998422712933754,
+      "degraded_table_page_count": 1,
+      "degraded_table_pages": [
+        10
+      ],
+      "determinism_evaluated": true,
+      "determinism_mismatches": [],
+      "deterministic": true,
+      "element_count": 4447,
+      "element_kind_counts": {
+        "image": 43,
+        "text": 2739,
+        "vector": 1665
+      },
+      "extracted_normalized_character_count": 62369,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 43,
+      "images": [
+        {
+          "dimensions": [
+            505,
+            504
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-010.png",
+          "sha256": "ca2ee01ba0469cdbbf41c0900208e2b169fe451721edd6a1b9f3ccd922fc08f4",
+          "size_bytes": 513681,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            503,
+            503
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-004.png",
+          "sha256": "53a2abf41e47c733df2497fd8b3ce5154121953e06c254076a91d777ea72115c",
+          "size_bytes": 422894,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            129,
+            633
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-011.png",
+          "sha256": "7d5fbc7e18008f77e8977565a40f0a764976678402b3b67c4e3bdda86ef48487",
+          "size_bytes": 165941,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            127,
+            630
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-005.png",
+          "sha256": "4265fb55f292245caa7aa1da11901871ac810090174835f16fdc0047dab34af5",
+          "size_bytes": 127505,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            576,
+            538
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-014.png",
+          "sha256": "7348fcbf5784157344d68d833a2b26f891d4689c3d5df2c33f42c2bd087363bf",
+          "size_bytes": 64030,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            505,
+            128
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-012.png",
+          "sha256": "d23cc95a3b686136c5f9fde082f19567fef3617c81a1c4ab48c53821a90f4142",
+          "size_bytes": 130206,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            505,
+            128
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-006.png",
+          "sha256": "efb717ae759c5cf915c53f9fa18be4621ec3c65506a3cf224d0b6cedd5367200",
+          "size_bytes": 99629,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            127,
+            630
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-008.png",
+          "sha256": "c4d6d9228c1700d464a23aa62b4c6f60b1772444ad2513ab7edf6b519ef16b29",
+          "size_bytes": 39138,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            127,
+            630
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-002.png",
+          "sha256": "6b5d9a141dbff751e12c0cc51df08fd5380b18d3a5952a47fceeaeb7ea76edbe",
+          "size_bytes": 8180,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            504,
+            503
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-007.png",
+          "sha256": "8c3e836bae39a6022ae3594ce3e7e31632b3b7a29998cfc93aad9c19433925c9",
+          "size_bytes": 112222,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            503,
+            503
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "ab222cce04e6dc8bd642329c06214da1d6f4ddecf709f2a3d7db0aea451e8e95",
+          "size_bytes": 96630,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            569,
+            530
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-013.png",
+          "sha256": "8d251a6fedf1492d22e77217ec629343b168a5328a12b3f4f99f2aa7abc348f7",
+          "size_bytes": 55690,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            505,
+            128
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-009.png",
+          "sha256": "b8c7ac243feb483d495b93fe3a3bd06facfd70d74e62a6742996ee85c93bfb81",
+          "size_bytes": 21927,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            505,
+            128
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-003.png",
+          "sha256": "2874db5f8058a113187557d9a843c6d098a063ff2cc6444ad3ec5230fc4ab278",
+          "size_bytes": 13591,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1204,
+            1203
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-006.png",
+          "sha256": "7c1f50113a616fd6dae85d06b3bc1f71089ee96af9e7925ff20c89b7955332eb",
+          "size_bytes": 106829,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            540,
+            540
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-003.png",
+          "sha256": "3699e1553ab7823d021ef938951dfeb2ff28815f70c01e7b71997f19a78605ee",
+          "size_bytes": 220416,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            594,
+            597
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-009.png",
+          "sha256": "408ab3f3d7e5eb08878104fbb510e79cb09281da9f2ab9dd7e104800cbeba66b",
+          "size_bytes": 545763,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1203,
+            1204
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-005.png",
+          "sha256": "5ec87f4c32abdd50448375f9e222ffc556fdb509c477b6ff3800b0195818c1e8",
+          "size_bytes": 99795,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            480,
+            480
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-002.png",
+          "sha256": "13cd5da0493e78b426225625b8fa5ab6de60da0a7f82cd8d41502c63a0ce3544",
+          "size_bytes": 434872,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1204,
+            1204
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-004.png",
+          "sha256": "854a84393277036ad591ee853fe2aa641fb166723ab63fb723691c7e6033aa80",
+          "size_bytes": 109209,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            4,
+            6
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-010.png",
+          "sha256": "4db45d4299d9f1e25e609bd02a385a2297efc8bef8b429de414d022ed2c519b0",
+          "size_bytes": 90,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            177,
+            20
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-007.png",
+          "sha256": "192a37f09d29202f4b2e668c9de557604b2cf61c17ea6184622e5e670ce628cb",
+          "size_bytes": 3644,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            349,
+            344
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-001.png",
+          "sha256": "61c6f414aea740c767b6fcf97dd475ce4961a2cad27b5bda6296108a30b4bd1e",
+          "size_bytes": 49787,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            404,
+            402
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-008.png",
+          "sha256": "98ff0c1815b37bfa78a2a04065511ba017764f0c21f594c47e6a80c25f7e9fe5",
+          "size_bytes": 27010,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            357,
+            292
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-013.png",
+          "sha256": "54eea0494180c88488f17dba9fc6c397ca4258683f66ada1d5fcabf1c68a6960",
+          "size_bytes": 83539,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            356,
+            292
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-012.png",
+          "sha256": "55e0971ce70c416ab1bce659d8b6db44423e34ebcfbb6650fa4ea2be2541ebc0",
+          "size_bytes": 83240,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            351,
+            293
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-014.png",
+          "sha256": "09fe26e2e2df9feea71a9b2f84656466175a1d9db839d722ecc940e1e9a6f86f",
+          "size_bytes": 86929,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            503,
+            497
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-015.png",
+          "sha256": "f26b1dd696f8854c448712b2666e8c1d78ba357ad88c9a3b1fe855cd92473f21",
+          "size_bytes": 113716,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            356,
+            358
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-005.png",
+          "sha256": "b738b29fa49fc319d252bea4c47f66f859c823a1359e3d6d6537a7db99b5a9e5",
+          "size_bytes": 59791,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            348,
+            224
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-006.png",
+          "sha256": "a2bff41cf72651bbcf8590d21fc2ed7c4d1e66a162ff4375a9150bba5f575de9",
+          "size_bytes": 90818,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            348,
+            224
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-007.png",
+          "sha256": "50dd96983ff6850f799b9a464cbde1e6a63bc9c6f0cf2447f7414ca606867680",
+          "size_bytes": 92662,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            352,
+            225
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-002.png",
+          "sha256": "66f854042860a826a19e1f0ba0fdea38d904c4600538f16139a1d4faa30b818e",
+          "size_bytes": 94239,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            210,
+            142
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-010.png",
+          "sha256": "49aed950de1740795cb374200df6bdfec8feb7a9d0d890dd44ceb09d7e5518b1",
+          "size_bytes": 16274,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            210,
+            142
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-011.png",
+          "sha256": "506b81285f44c2cb0a225ad0ca6ffbb0bad1032d9ea3c0ab49295bf446f03ac5",
+          "size_bytes": 17647,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            210,
+            142
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-009.png",
+          "sha256": "6be24b6a4677cf5d1151a25bfb0470f195b8ac9124f5162e83b3470713a1a6e8",
+          "size_bytes": 22428,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            210,
+            142
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-008.png",
+          "sha256": "ced96e873c2ecf89f98bed65847295db51ed4ac5c282c571f200a719d7377a70",
+          "size_bytes": 14774,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            209,
+            141
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-003.png",
+          "sha256": "95f5185028e216e13dfa89c3d0fa4c3b6e04cbf7460267be78cd9a050e1cf924",
+          "size_bytes": 14771,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            208,
+            141
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-004.png",
+          "sha256": "72e244b49016ef4e427a5582f049d98f0451ff3d4c923a5df2f9ee5dab4f1ab8",
+          "size_bytes": 34967,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            391,
+            230
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 7,
+          "path": "images/page-007-image-001.png",
+          "sha256": "115e6c999bcdc8b56f63ad322e2e353e8cff5c4b57c5e1365c58153d4df42840",
+          "size_bytes": 34537,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 16,
+          "path": "images/page-016-image-001.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 16,
+          "path": "images/page-016-image-002.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 16,
+          "path": "images/page-016-image-003.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 16,
+          "path": "images/page-016-image-004.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 46,
+      "output_hashes_valid": true,
+      "output_size_bytes": 8713067,
+      "page_count_actual": 18,
+      "page_count_expected": 18,
+      "paper_id": "RW2-005",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 62285,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "TOOLS AND RESOURCES",
+      "title_changed": true,
+      "title_exact_normalized": true,
+      "title_expected": "Three-dimensional single-cell transcriptome imaging of thick tissues",
+      "title_final": "Three-dimensional single-cell transcriptome imaging of thick tissues",
+      "valid_image_count": 43,
+      "warning_codes": {
+        "degenerate_object_bbox": 699,
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 1,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 702
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        0.981081081081081,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 0.9993693693693693,
+      "character_multiset_recall_min_page": 0.981081081081081,
+      "degraded_table_page_count": 8,
+      "degraded_table_pages": [
+        2,
+        4,
+        8,
+        12,
+        13,
+        16,
+        18,
+        27
+      ],
+      "determinism_evaluated": false,
+      "determinism_mismatches": [],
+      "deterministic": null,
+      "element_count": 5220,
+      "element_kind_counts": {
+        "image": 10,
+        "text": 4432,
+        "vector": 778
+      },
+      "extracted_normalized_character_count": 92389,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 10,
+      "images": [
+        {
+          "dimensions": [
+            2676,
+            2399
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "4ef60c362642cca5ff88419e7ab33c92da2bc8a993f4006d74fda1511b6f03a1",
+          "size_bytes": 1070564,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2700,
+            3168
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 6,
+          "path": "images/page-006-image-001.png",
+          "sha256": "6399aea50c68717927b617910b128c40b9b944a4c62a08d5fc047015729419f8",
+          "size_bytes": 2939153,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2661,
+            1569
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 10,
+          "path": "images/page-010-image-001.png",
+          "sha256": "270250670a5de15f5b0be212c54c853b99a30e9f6c744f823f5bd339487de91a",
+          "size_bytes": 1016952,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2653,
+            2570
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 12,
+          "path": "images/page-012-image-001.png",
+          "sha256": "822e3ca6cc104294d654e560906c334ab2aab6322d038329b8d04b597f235def",
+          "size_bytes": 1259232,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-001.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-002.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-003.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-004.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-005.png",
+          "sha256": "b193fbf93b25206b6ba83cc42fb7beb3b8b405e671da10413505cc2c8f9ed5bb",
+          "size_bytes": 2347,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            34,
+            33
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 22,
+          "path": "images/page-022-image-006.png",
+          "sha256": "bb4181cac1a07fdcf591b5a37db2e7b450f77787f3d32bd345faf849862129d0",
+          "size_bytes": 2405,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 13,
+      "output_hashes_valid": true,
+      "output_size_bytes": 11612843,
+      "page_count_actual": 30,
+      "page_count_expected": 30,
+      "paper_id": "RW2-006",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 92260,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "RESEARCH ARTICLE",
+      "title_changed": true,
+      "title_exact_normalized": true,
+      "title_expected": "Collateral deletion of the mitochondrial AAA+ ATPase ATAD1 sensitizes cancer cells to proteasome dysfunction",
+      "title_final": "Collateral deletion of the mitochondrial AAA+ ATPase ATAD1 sensitizes cancer cells to proteasome dysfunction",
+      "valid_image_count": 10,
+      "warning_codes": {
+        "degenerate_object_bbox": 875,
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 8,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 885
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9997737044580222,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 0.9999858565286264,
+      "character_multiset_recall_min_page": 0.9997737044580222,
+      "degraded_table_page_count": 5,
+      "degraded_table_pages": [
+        2,
+        3,
+        9,
+        12,
+        13
+      ],
+      "determinism_evaluated": true,
+      "determinism_mismatches": [],
+      "deterministic": true,
+      "element_count": 83412,
+      "element_kind_counts": {
+        "image": 6,
+        "text": 5283,
+        "vector": 78123
+      },
+      "extracted_normalized_character_count": 83607,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 6,
+      "images": [
+        {
+          "dimensions": [
+            1751,
+            2054
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "1bec50742c33c374e85f3d57f264512647f3c4b992aa9b168873cf40a9908ab9",
+          "size_bytes": 1834657,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1750,
+            1605
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-001.png",
+          "sha256": "3e4f67fdf30ca23e6984cfcebcd01d5b7d327e10ea4f81e0ee7cfe15ad2d6d67",
+          "size_bytes": 1415489,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1426,
+            2241
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 6,
+          "path": "images/page-006-image-001.png",
+          "sha256": "549b8c370b4db9316368a8ef7573e2da5a1ea0491427c8976aa2ef933ec7cf6f",
+          "size_bytes": 622982,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1283,
+            1795
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 8,
+          "path": "images/page-008-image-001.png",
+          "sha256": "31ce522392f57184985866b324c9fa831bb6e0225b7c5df647650c117e94612f",
+          "size_bytes": 1242465,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1812,
+            802
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 10,
+          "path": "images/page-010-image-001.png",
+          "sha256": "28d5c2c8c014ac4a47cb7cd8f4661efe92e49f2c453ea115594283272fdf5373",
+          "size_bytes": 1555442,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1100,
+            91
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 15,
+          "path": "images/page-015-image-001.png",
+          "sha256": "8f5170629544627d9605dc40169ba51e657d944120a0c2dd4e24e1ae9eb33168",
+          "size_bytes": 5839,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 9,
+      "output_hashes_valid": true,
+      "output_size_bytes": 78860274,
+      "page_count_actual": 16,
+      "page_count_expected": 16,
+      "paper_id": "RW2-007",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 81518,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "Spatially resolved transcriptomics reveals the architecture of the tumor-microenvironment interface",
+      "title_changed": false,
+      "title_exact_normalized": true,
+      "title_expected": "Spatially resolved transcriptomics reveals the architecture of the tumor-microenvironment interface",
+      "title_final": "Spatially resolved transcriptomics reveals the architecture of the tumor-microenvironment interface",
+      "valid_image_count": 6,
+      "warning_codes": {
+        "degenerate_object_bbox": 195,
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 5,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 202
+    },
+    {
+      "character_multiset_recall_by_page": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "character_multiset_recall_macro": 1.0,
+      "character_multiset_recall_min_page": 1.0,
+      "degraded_table_page_count": 3,
+      "degraded_table_pages": [
+        2,
+        4,
+        6
+      ],
+      "determinism_evaluated": false,
+      "determinism_mismatches": [],
+      "deterministic": null,
+      "element_count": 668,
+      "element_kind_counts": {
+        "image": 12,
+        "text": 637,
+        "vector": 19
+      },
+      "extracted_normalized_character_count": 18421,
+      "fabricated_markdown_table_grid_lines": 0,
+      "image_count": 12,
+      "images": [
+        {
+          "dimensions": [
+            815,
+            131
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-004.png",
+          "sha256": "43ba01037d1a7168fe4aa0cb7b8a96a67e8843e2b84f665281a38309c200cb34",
+          "size_bytes": 89504,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            149,
+            149
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-005.png",
+          "sha256": "b3ad92c9bcf16190b6767f0a3cc0b2f9aaeff6fa568b0ae073febf6cd903ee55",
+          "size_bytes": 17750,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            68,
+            68
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-001.png",
+          "sha256": "300b1095d03b50ba7da2e5b6c5deff76d9107df1da563ea340b7ba19e77b6a4d",
+          "size_bytes": 2868,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            68,
+            68
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-002.png",
+          "sha256": "f260fb8b0680e47fcd6c4e709c6e8d9889406872c6eba47ab2b88182637a08cc",
+          "size_bytes": 2881,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            55
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 1,
+          "path": "images/page-001-image-003.png",
+          "sha256": "d1a697c30c08089b871b86622e17f8aeced67911736c3c4c56711f29596dc2cf",
+          "size_bytes": 17176,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            54
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 2,
+          "path": "images/page-002-image-001.png",
+          "sha256": "eea11818d510b2abc892ef70bd511ac929700d279442fbea7acc2e6daa0a0825",
+          "size_bytes": 17181,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            54
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-002.png",
+          "sha256": "eea11818d510b2abc892ef70bd511ac929700d279442fbea7acc2e6daa0a0825",
+          "size_bytes": 17181,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            2090,
+            2073
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 3,
+          "path": "images/page-003-image-001.png",
+          "sha256": "164ef2201f71360c2e1c271c14fd7afcbea7f0bcacfc8382f07c6f8812a64e8a",
+          "size_bytes": 1789056,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            54
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 4,
+          "path": "images/page-004-image-001.png",
+          "sha256": "eea11818d510b2abc892ef70bd511ac929700d279442fbea7acc2e6daa0a0825",
+          "size_bytes": 17181,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            54
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-002.png",
+          "sha256": "eea11818d510b2abc892ef70bd511ac929700d279442fbea7acc2e6daa0a0825",
+          "size_bytes": 17181,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            1900,
+            2111
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 5,
+          "path": "images/page-005-image-001.png",
+          "sha256": "5a77c181b5c6c6a884548c678ec45694133e37552732033425da1b050720de23",
+          "size_bytes": 2392485,
+          "valid": true
+        },
+        {
+          "dimensions": [
+            213,
+            54
+          ],
+          "markdown_reference": true,
+          "nonblank_pixel_range": true,
+          "page": 6,
+          "path": "images/page-006-image-001.png",
+          "sha256": "eea11818d510b2abc892ef70bd511ac929700d279442fbea7acc2e6daa0a0825",
+          "size_bytes": 17181,
+          "valid": true
+        }
+      ],
+      "manifest_valid": true,
+      "missing_nonempty_pages": [],
+      "output_file_count": 15,
+      "output_hashes_valid": true,
+      "output_size_bytes": 5108896,
+      "page_count_actual": 6,
+      "page_count_expected": 6,
+      "paper_id": "RW2-008",
+      "physical_document_valid": true,
+      "reference_normalized_character_count": 18415,
+      "source_sha256_match": true,
+      "status": "success_with_degradation",
+      "title_baseline": "SM-MSYS210386 1..6",
+      "title_changed": true,
+      "title_exact_normalized": true,
+      "title_expected": "Uniform Manifold Approximation and Projection (UMAP) Reveals Composite Patterns and Resolves Visualization Artifacts in Microbiome Data",
+      "title_final": "Uniform Manifold Approximation and Projection (UMAP) Reveals Composite Patterns and Resolves Visualization Artifacts in Microbiome Data",
+      "valid_image_count": 12,
+      "warning_codes": {
+        "image_placement_page_end": 1,
+        "table_structure_degraded": 3,
+        "text_control_characters_sanitized": 1
+      },
+      "warning_count": 5
+    }
+  ],
+  "schema_version": "paper2md-v2-realworld-summary-v1",
+  "scope": {
+    "new_corpus_not_historical_recovery": true,
+    "page_count": 138,
+    "paper_count": 8,
+    "pdf_payloads_in_source_delivery": false
+  },
+  "source_manifest": {
+    "path": "realworld/oa_sources.json",
+    "sha256": "f8cb752715d49dd8a15e6208dfffaae1ec06f8b8fb729e2fd78b2fcfe25a611c"
+  },
+  "totals": {
+    "character_multiset_recall_macro": 0.9968982424723031,
+    "character_multiset_recall_min_page": 0.9659090909090909,
+    "degraded_table_page_count": 39,
+    "determinism_paper_count": 4,
+    "determinism_pass_count": 4,
+    "fabricated_markdown_table_grid_lines": 0,
+    "failure_count": 0,
+    "image_count": 97,
+    "no_missing_nonempty_page": 8,
+    "output_file_count": 121,
+    "output_size_bytes": 149265655,
+    "skip_count": 0,
+    "success_count": 8,
+    "title_exact_normalized": 8,
+    "valid_image_count": 97
+  }
+}

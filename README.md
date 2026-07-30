@@ -16,7 +16,7 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前候选提交范围为 **v2-mvp（Stage B）**：
+当前候选提交范围已推进到 **v2-realworld（Stage C）**：
 
 - 可调用的单文件 CLI/API；
 - pypdfium2/PDFium 薄适配器；
@@ -26,7 +26,13 @@ MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 - 自生成 born-digital PDF fixture、路径安全、原子输出及逐字节确定性测试。
 
 PDFBox 仍只是显式不可用的对照/回退边界。本阶段不实现 OCR、语义表格、
-公式 LaTeX、Figure/Caption 邻接或真实出版商版式泛化。
+公式 LaTeX 或 Figure/Caption 邻接。
+
+Stage C 使用 8 篇新选择的 CC BY born-digital OA 论文做小规模真实版式
+验证；结果和明确限制见
+[`realworld/report_zh.md`](realworld/report_zh.md)。该 corpus 不是已丢失
+Phase 1B/2 检查点的恢复，PDF 和转换输出不会提交到仓库；8 篇结果也不
+外推为全部真实出版商版式泛化。
 
 ## 快速开始
 

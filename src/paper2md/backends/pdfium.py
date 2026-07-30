@@ -78,24 +78,98 @@ def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
     if len(text) < 2:
         return sorted(text, key=lambda item: (item.bbox.y, item.bbox.x)) + others
 
-    wide = [item for item in text if item.bbox.width >= page_width * 0.55]
-    narrow = [item for item in text if item not in wide]
-    anchors = sorted(wide, key=lambda item: (item.bbox.y, item.bbox.x))
-    result: list[Element] = []
+    # A native text object can be a whole line or only one word.  Classifying
+    # word fragments as columns makes a single line read as "all left words,
+    # then all right words".  First form conservative same-line groups.  The
+    # gap limit intentionally remains much smaller than a normal column gutter.
+    line_groups: list[list[Element]] = []
+    for item in sorted(text, key=lambda value: (value.bbox.y, value.bbox.x)):
+        match: list[Element] | None = None
+        item_center = item.bbox.y + item.bbox.height / 2
+        for group in reversed(line_groups[-12:]):
+            group_top = min(value.bbox.y for value in group)
+            group_bottom = max(value.bbox.y + value.bbox.height for value in group)
+            group_center = (group_top + group_bottom) / 2
+            group_height = group_bottom - group_top
+            center_limit = max(2.5, min(item.bbox.height, group_height) * 0.45)
+            if abs(item_center - group_center) > center_limit:
+                continue
+            group_left = min(value.bbox.x for value in group)
+            group_right = max(value.bbox.x + value.bbox.width for value in group)
+            horizontal_gap = max(
+                group_left - (item.bbox.x + item.bbox.width),
+                item.bbox.x - group_right,
+                0.0,
+            )
+            gap_limit = max(
+                8.0,
+                min(14.0, max(item.bbox.height, group_height) * 1.2),
+            )
+            if horizontal_gap <= gap_limit:
+                match = group
+                break
+        if match is None:
+            line_groups.append([item])
+        else:
+            match.append(item)
+
+    def line_bbox(group: list[Element]) -> tuple[float, float, float, float]:
+        left = min(item.bbox.x for item in group)
+        top = min(item.bbox.y for item in group)
+        right = max(item.bbox.x + item.bbox.width for item in group)
+        bottom = max(item.bbox.y + item.bbox.height for item in group)
+        return left, top, right, bottom
+
+    wide = [
+        group
+        for group in line_groups
+        if line_bbox(group)[2] - line_bbox(group)[0] >= page_width * 0.65
+    ]
+    narrow = [group for group in line_groups if group not in wide]
+    anchors = sorted(wide, key=lambda group: (line_bbox(group)[1], line_bbox(group)[0]))
+    ordered_groups: list[list[Element]] = []
     lower = -1.0
     for anchor in anchors + [None]:
-        upper = anchor.bbox.y if anchor is not None else float("inf")
-        band = [item for item in narrow if lower < item.bbox.y < upper]
-        left = [item for item in band if item.bbox.x < page_width / 2]
-        right = [item for item in band if item.bbox.x >= page_width / 2]
+        upper = line_bbox(anchor)[1] if anchor is not None else float("inf")
+        band = [group for group in narrow if lower < line_bbox(group)[1] < upper]
+        left = [group for group in band if line_bbox(group)[0] < page_width / 2]
+        right = [group for group in band if line_bbox(group)[0] >= page_width / 2]
         if left and right:
-            result.extend(sorted(left, key=lambda item: (item.bbox.y, item.bbox.x)))
-            result.extend(sorted(right, key=lambda item: (item.bbox.y, item.bbox.x)))
+            ordered_groups.extend(
+                sorted(left, key=lambda group: (line_bbox(group)[1], line_bbox(group)[0]))
+            )
+            ordered_groups.extend(
+                sorted(right, key=lambda group: (line_bbox(group)[1], line_bbox(group)[0]))
+            )
         else:
-            result.extend(sorted(band, key=lambda item: (item.bbox.y, item.bbox.x)))
+            ordered_groups.extend(
+                sorted(band, key=lambda group: (line_bbox(group)[1], line_bbox(group)[0]))
+            )
         if anchor is not None:
-            result.append(anchor)
-            lower = anchor.bbox.y
+            ordered_groups.append(anchor)
+            lower = line_bbox(anchor)[1]
+
+    result: list[Element] = []
+    for line_number, group in enumerate(ordered_groups):
+        for line_position, item in enumerate(
+            sorted(group, key=lambda value: (value.bbox.x, value.bbox.y))
+        ):
+            result.append(
+                Element(
+                    element_id=item.element_id,
+                    kind=item.kind,
+                    page_index=item.page_index,
+                    bbox=item.bbox,
+                    provenance=item.provenance,
+                    text=item.text,
+                    source_object_id=item.source_object_id,
+                    metadata={
+                        **item.metadata,
+                        "line_group": line_number,
+                        "line_position": line_position,
+                    },
+                )
+            )
     # Non-text objects are kept after text, ordered geometrically. Markdown
     # placement is page-local and explicitly disclosed rather than inferred.
     result.extend(sorted(others, key=lambda item: (item.bbox.y, item.bbox.x)))

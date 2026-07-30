@@ -1,0 +1,130 @@
+{
+  "backend": {
+    "name": "pdfium",
+    "version": "pypdfium2/5.3.0 pdfium/145.0.7616.0"
+  },
+  "check_count": 13,
+  "checks": [
+    {
+      "actual": 2,
+      "check_id": "fixture_pages",
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "actual": "a761973f70545217d1d8cda1fa7287dae4966f40bbab1436ad9d3043324e22c8",
+      "check_id": "manifest_source_hash",
+      "expected": "a761973f70545217d1d8cda1fa7287dae4966f40bbab1436ad9d3043324e22c8",
+      "pass": true
+    },
+    {
+      "actual": 2,
+      "check_id": "physical_pages",
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "actual": true,
+      "check_id": "title",
+      "expected": true,
+      "pass": true
+    },
+    {
+      "actual": [
+        788,
+        868,
+        941,
+        1023
+      ],
+      "check_id": "double_column_order",
+      "expected": [
+        788,
+        868,
+        941,
+        1023
+      ],
+      "pass": true
+    },
+    {
+      "actual": true,
+      "check_id": "unicode_cafe",
+      "expected": true,
+      "pass": true
+    },
+    {
+      "actual": 1,
+      "check_id": "table_degraded_count",
+      "expected": 1,
+      "pass": true
+    },
+    {
+      "actual": false,
+      "check_id": "fabricated_table_grid",
+      "expected": false,
+      "pass": true
+    },
+    {
+      "actual": 1,
+      "check_id": "image_count",
+      "expected": 1,
+      "pass": true
+    },
+    {
+      "actual": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+      "check_id": "image_hash",
+      "expected": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+      "pass": true
+    },
+    {
+      "actual": {
+        "color_count": 24,
+        "format": "PNG",
+        "size": [
+          16,
+          12
+        ]
+      },
+      "check_id": "image_content",
+      "expected": {
+        "color_count": 24,
+        "format": "PNG",
+        "size": [
+          16,
+          12
+        ]
+      },
+      "pass": true
+    },
+    {
+      "actual": 20,
+      "check_id": "manifest_element_coverage",
+      "expected": 20,
+      "pass": true
+    },
+    {
+      "actual": {
+        "article.md": "b8eaaaad93e196d43d2ab1206ccddab4440a7d8a3f86f763423a47c32729eb0b",
+        "images/page-001-image-001.png": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+        "manifest.json": "da01d9f0cea18ceaba0f9f1c8580f55bddcd61762eb625d4a9e9e6c3dfcdf10b",
+        "physical_document.json": "afe6fc9a469b5ef93bcc9d9c644efeafa970cb2ec8c976a32074373dbcc488ff"
+      },
+      "check_id": "two_run_tree_determinism",
+      "expected": {
+        "article.md": "b8eaaaad93e196d43d2ab1206ccddab4440a7d8a3f86f763423a47c32729eb0b",
+        "images/page-001-image-001.png": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+        "manifest.json": "da01d9f0cea18ceaba0f9f1c8580f55bddcd61762eb625d4a9e9e6c3dfcdf10b",
+        "physical_document.json": "afe6fc9a469b5ef93bcc9d9c644efeafa970cb2ec8c976a32074373dbcc488ff"
+      },
+      "pass": true
+    }
+  ],
+  "failure_count": 0,
+  "fixture": {
+    "pages": 2,
+    "rights": "project-authored temporary fixture",
+    "sha256": "a761973f70545217d1d8cda1fa7287dae4966f40bbab1436ad9d3043324e22c8",
+    "size_bytes": 1915
+  },
+  "pass_count": 13,
+  "schema_version": "paper2md-v2-mvp-smoke-v1"
+}
