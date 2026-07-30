@@ -45,8 +45,24 @@ class PublicOnboardingTests(unittest.TestCase):
         for platform in ("macOS", "Windows ARM", "Linux ARM"):
             self.assertIn(platform, normalized)
         self.assertIn("尚未验证", readme)
-        self.assertIn("尚未添加项目级许可证", readme)
         self.assertNotIn("所有平台均受支持", readme)
+
+    def test_apache_license_is_declared_and_packaged(self):
+        project = tomllib.loads(
+            (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]
+        self.assertEqual(project["license"], "Apache-2.0")
+        self.assertEqual(project["license-files"], ["LICENSE", "NOTICE"])
+        self.assertFalse(
+            any(item.startswith("License ::") for item in project["classifiers"])
+        )
+        license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertIn("Apache License", license_text)
+        self.assertIn("Version 2.0, January 2004", license_text)
+        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
+        self.assertTrue((ROOT / "NOTICE").is_file())
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[Apache License 2.0](LICENSE)", readme)
 
 
 if __name__ == "__main__":

@@ -144,9 +144,9 @@ python -m paper2md convert input.pdf output-dir
 
 ## 许可证与分发
 
-当前项目尚未添加项目级许可证。外部用户在许可证确定之前不能把本仓库视为
-可自由复制、修改或再分发的开源软件。项目所有者控制范围内的审阅与测试可以
-继续，但不应创建正式 Release、PyPI 包或二进制附件。
+Paper2MD 采用 [Apache License 2.0](LICENSE)。任何人都可以在遵守许可证条件的
+前提下使用、复制、修改和分发本项目。分发本项目或衍生作品时，请同时保留
+`LICENSE` 和 `NOTICE` 中要求保留的声明。
 
 完整的阶段研发记录和历史验证证据保存在
 `agent/v2-rebuild` 分支。
