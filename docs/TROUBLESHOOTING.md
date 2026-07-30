@@ -47,4 +47,5 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 - 深层 Figure/caption 语义；
 - PDFBox 完整后端；
 - GUI、Web 服务、容器或公开 PyPI release；
-- Windows 已验证声明（由本地门禁另行验证）。
+- Phase 6 云端重新验证 Windows 的声明。Phase 5 已有一次独立 Windows
+  门禁，但其他 Windows/Python 组合仍需用户侧验证。

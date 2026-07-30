@@ -1,0 +1,54 @@
+{
+  "schema_version": "paper2md-phase6-alpha-rc-windows-validation-v1",
+  "validated_on": "2026-07-30",
+  "status": "PASS_WITH_LIMITATIONS",
+  "baseline_commit": "47e31abb58d062e1da0ecf92a2a303afddaa39af",
+  "runtime": {
+    "platform": "Windows",
+    "python": "3.11.2",
+    "pypdfium2": "5.3.0",
+    "pdfium": "145.0.7616.0",
+    "pillow": "12.2.0",
+    "wheel": "0.47.0"
+  },
+  "unit_tests": {
+    "total": 100,
+    "passed": 100,
+    "failed": 0,
+    "skipped": 0
+  },
+  "batch_checks": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "content_assertions_passed": true,
+    "deterministic": true
+  },
+  "install_checks": {
+    "artifacts_installed": 2,
+    "command_checks": 12,
+    "passed": 12,
+    "failed": 0,
+    "content_assertions_passed": true,
+    "wheel_sdist_outputs_deterministic": true,
+    "wheel_sha256": "3543230b19b63683a484613063f4374f6781d93a3dad3cf18a922b2243b89902",
+    "sdist_sha256": "3beb41932c99722ea5b9c259037ebf8cbb6f5894ec9cddb130b031b7542bfb36"
+  },
+  "local_compatibility_fix": {
+    "scope": "Phase 6 protected-evidence checker",
+    "issue": "Git core.autocrlf changed LF checkouts to CRLF",
+    "resolution": "Normalize CRLF to LF before exact size and SHA-256 checks",
+    "expected_files_or_hashes_relaxed": false
+  },
+  "license_decision": {
+    "source_alpha_merge": "recommended_with_conditions",
+    "formal_distribution": "not_approved"
+  },
+  "limitations": [
+    "Project-level license remains NOASSERTION",
+    "Public source-package and binary distribution remain not approved",
+    "macOS is not verified",
+    "Temporary validation runtimes are excluded from Git and require local cleanup"
+  ],
+  "runtime_evidence_location": "%LOCALAPPDATA%/Temp/paper2md-phase6-windows-runtime"
+}

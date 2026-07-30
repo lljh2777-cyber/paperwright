@@ -43,7 +43,8 @@ paper2md batch converted-auto \
 
 ## Windows PowerShell
 
-以下命令供本地审查使用；本阶段云端只验证 Linux，不能声称已验证 Windows。
+以下命令已在 Phase 5 的 Windows/Python 3.11.2 本地门禁中独立通过；
+Phase 6 云端只重新验证 Linux，不能把本轮表述为再次验证 Windows。
 
 ```powershell
 py -3.12 -m venv .venv

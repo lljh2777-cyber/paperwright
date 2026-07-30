@@ -1,0 +1,56 @@
+{
+  "schema_version": "paper2md-phase6-alpha-rc-test-summary-v1",
+  "baseline_commit": "47e31abb58d062e1da0ecf92a2a303afddaa39af",
+  "candidate_version": "0.6.0a0",
+  "runtime": {
+    "platform": "Linux Work cloud",
+    "python": "3.12.13",
+    "pypdfium2": "5.3.0",
+    "pdfium": "145.0.7616.0",
+    "pillow": "12.2.0",
+    "setuptools": "82.0.1",
+    "wheel": "0.47.0"
+  },
+  "unit_tests": {
+    "inherited": 94,
+    "phase6_added": 6,
+    "total": 100,
+    "passed": 100,
+    "failed": 0,
+    "skipped": 0
+  },
+  "persisted_and_content_checks": {
+    "stage_b_content_assertions": "13/13",
+    "stage_c_summary": "12/12",
+    "phase3_summary": "17/17",
+    "phase4_render_spike_summary": "15/15",
+    "phase4_auto_summary": "11/11",
+    "phase5_summary": "8/8"
+  },
+  "batch_checks": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "content_assertions_passed": true,
+    "two_run_determinism": true
+  },
+  "installation_checks": {
+    "artifacts": 2,
+    "command_checks": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "content_assertions_passed": true,
+    "wheel_sdist_outputs_deterministic": true
+  },
+  "static_checks": {
+    "compileall": "pass",
+    "repo_policy": "pass",
+    "secret_scan": "pass",
+    "git_diff_check": "pass",
+    "historical_phase5_evidence_unchanged": true
+  },
+  "failure_count": 0,
+  "skip_count": 0
+}

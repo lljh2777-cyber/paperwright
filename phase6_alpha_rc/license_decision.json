@@ -1,0 +1,41 @@
+{
+  "schema_version": "paper2md-phase6-alpha-rc-license-decision-v1",
+  "review_type": "engineering supply-chain review; not legal advice",
+  "actual_license_conflict_found": false,
+  "project_license": {
+    "spdx": "NOASSERTION",
+    "license_file_present": false,
+    "effect": "public reuse and redistribution rights are not approved"
+  },
+  "agg23": {
+    "spdx": "NOASSERTION",
+    "evidence": "LicenseRef-agg23-permissive-text retained from Phase 5",
+    "effect": "does not block source development; blocks binary distribution approval"
+  },
+  "decisions": {
+    "merge_development_branch_to_main": {
+      "status": "approved_with_limitations",
+      "scope": "project owner controlled source Alpha"
+    },
+    "owner_reviewer_source_handoff": {
+      "status": "approved_with_limitations",
+      "scope": "review, local installation and controlled trial"
+    },
+    "public_source_package_redistribution": {
+      "status": "not_approved",
+      "reason": "Paper2MD project-level license remains NOASSERTION"
+    },
+    "wheel_or_sdist_distribution": {
+      "status": "not_approved",
+      "reason": "project license and transitive/bundled notices remain unresolved"
+    },
+    "pdfium_bundled_binary_distribution": {
+      "status": "not_approved",
+      "reason": "platform SBOM/NOTICE and agg23 review remain incomplete"
+    }
+  },
+  "temporary_wheel_sdist_use": "build/install verification only; artifacts excluded",
+  "formal_release": "locked",
+  "blocking_for_source_alpha_merge": false,
+  "blocking_for_public_distribution": true
+}

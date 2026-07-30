@@ -16,7 +16,8 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前候选源码是 **Phase 5 Alpha**：在 Phase 4 默认关闭、显式 opt-in 的
+当前候选源码是 **Phase 6 Alpha Release Candidate**（产品版本
+`0.6.0a0`）：在 Phase 4 默认关闭、显式 opt-in 的
 通用 auto region-render 之上，增加标准源码安装、批处理、机器可读诊断和
 可复现验证：
 
@@ -93,6 +94,12 @@ PYTHONPATH=src python -m paper2md validate-model \
 - [Alpha Quickstart](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
+- [Alpha RC 变更说明](docs/ALPHA_RC_RELEASE_NOTES.md)
+- [支持矩阵](docs/SUPPORT_MATRIX.md)
+
+Phase 5 已在 Windows/Python 3.11.2 上由本地门禁独立复测；证据见
+[`phase5_alpha/windows_validation_zh.md`](phase5_alpha/windows_validation_zh.md)。
+Phase 6 的云端复核仅代表 Linux 实测，不冒充又一次 Windows 验证。
 
 ## 仓库存储边界
 
@@ -111,8 +118,8 @@ PYTHONPATH=src python -m paper2md validate-model \
 - PDFium、JAR 或其他二进制文件
 - 凭据或令牌
 
-后续产品开发应在评审分支中进行，不直接修改 `main`。Alpha 不是正式
-release，不包含 OCR、服务端、GUI 或二进制分发。
+后续产品开发应在评审分支中进行，不直接修改 `main`。Alpha RC 不是正式
+release，不包含 OCR、服务端、GUI 或获批的二进制分发。
 
 ## 许可证状态
 

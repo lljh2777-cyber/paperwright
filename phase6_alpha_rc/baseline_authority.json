@@ -1,0 +1,52 @@
+{
+  "schema_version": "paper2md-phase6-alpha-rc-baseline-v1",
+  "repository": "https://github.com/lljh2777-cyber/Paper2MD.git",
+  "branch": "agent/v2-rebuild",
+  "commit": "47e31abb58d062e1da0ecf92a2a303afddaa39af",
+  "tree": "9991794a78b7312c0fc078d14edfadced2657563",
+  "tracked_file_count": 197,
+  "tracked_total_bytes": 925220,
+  "protected_files": [
+    {
+      "path": "phase5_alpha/windows_validation.json",
+      "size_bytes": 1920,
+      "sha256": "5736f7227b273b338faf2aed117ec51cee0930b2e0e7d682bd07b8af25b10bab"
+    },
+    {
+      "path": "phase5_alpha/windows_validation_zh.md",
+      "size_bytes": 1580,
+      "sha256": "a106ae869e2efec1342404d6ab80643b56f79558f1e5fcf7cb2d0caeac19b0e4"
+    },
+    {
+      "path": "phase5_alpha/test_summary.json",
+      "size_bytes": 1853,
+      "sha256": "bd74d70561e3711397063a5b1d4c0a335c5dec909c0967cda5c156fec78ae65f"
+    },
+    {
+      "path": "phase5_alpha/install_test_summary.json",
+      "size_bytes": 10012,
+      "sha256": "f971c86ddf534eaf76838b62aae19dfe0c1b88113c52c7ce0ccca331f1ef2d08"
+    },
+    {
+      "path": "phase5_alpha/batch_test_summary.json",
+      "size_bytes": 5805,
+      "sha256": "fcb03da5b4fce1aecbca8a46567af959b514f3718f0c00addb313dc74f5c1788"
+    },
+    {
+      "path": "phase5_alpha/license_inventory.json",
+      "size_bytes": 5758,
+      "sha256": "29ca32947f610d326f72df4a5f8c9c2086c518e25d8ee4dbc44a2549284999e4"
+    },
+    {
+      "path": "src/paper2md/region_render.py",
+      "size_bytes": 26043,
+      "sha256": "111ee10acedbc8113f56b0e933152164b349e6579aa47caa43ec5bb2ff86f7d1"
+    },
+    {
+      "path": "src/paper2md/schemas/manifest.schema.json",
+      "size_bytes": 9333,
+      "sha256": "d315e5e68df5d842d38bf2b8989207eb400813e81d9e004d33bc9e5b0a914d7d"
+    }
+  ],
+  "old_phase5_evidence_must_not_be_modified": true
+}

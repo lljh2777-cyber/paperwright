@@ -1,0 +1,57 @@
+{
+  "schema_version": "paper2md-phase6-alpha-rc-release-readiness-v1",
+  "candidate_version": "0.6.0a0",
+  "baseline_commit": "47e31abb58d062e1da0ecf92a2a303afddaa39af",
+  "overall": "PASS_WITH_LIMITATIONS",
+  "product_algorithm_changes": 0,
+  "rc_changes": [
+    "release-candidate documentation",
+    "support and license matrices",
+    "documentation consistency corrections",
+    "six release consistency tests",
+    "reproducible install and delivery checks"
+  ],
+  "command_matrix": {
+    "version": "pass",
+    "help": "pass",
+    "convert": "pass_with_content_assertions",
+    "batch": "pass_with_content_assertions",
+    "validate_model": "pass"
+  },
+  "behavior": {
+    "default_backend_pdfium": true,
+    "region_render_default_off": true,
+    "region_render_auto_opt_in": true,
+    "pdfbox_explicit_unavailable": true,
+    "path_safety": true,
+    "atomic_output": true,
+    "deterministic_single_and_batch": true,
+    "manifest_v04_v05_compatible": true,
+    "batch_summary_schema_valid": true,
+    "error_categories_complete": true
+  },
+  "test_gate": {
+    "unit": "100/100",
+    "batch": "8/8",
+    "install_commands": "12/12",
+    "failures": 0,
+    "skips": 0
+  },
+  "platforms": {
+    "linux_phase6": "measured_pass",
+    "windows_phase5": "independent_measured_pass_preserved",
+    "windows_phase6": "not_retested",
+    "macos": "not_verified"
+  },
+  "source_alpha_merge": "recommended_with_conditions",
+  "formal_distribution": "not_approved",
+  "release_actions_performed": [],
+  "limitations": [
+    "project license remains NOASSERTION",
+    "agg23 and bundled PDFium notice review remain incomplete",
+    "OCR and scanned PDF are unsupported",
+    "semantic tables and formula LaTeX are unsupported",
+    "PDFBox implementation is unavailable",
+    "no GUI, server, container, tag, PyPI or binary release"
+  ]
+}
