@@ -1,0 +1,50 @@
+{
+  "schema_version": "paper2md-phase4-auto-test-summary-v1",
+  "base_commit": "25e4ecea02979cf7dcb56ab2d280425bc56e74e2",
+  "runtime": {
+    "python": "3.12.13",
+    "pypdfium2": "5.3.0",
+    "pdfium": "145.0.7616.0",
+    "libpdfium_sha256": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+    "pillow": "12.2.0"
+  },
+  "unit_tests": {
+    "command": "PYTHONPATH=src python -m unittest discover -s tests -v",
+    "total": 77,
+    "passed": 77,
+    "failed": 0,
+    "skipped": 0,
+    "prior_regression_tests": 60,
+    "new_auto_region_tests": 17
+  },
+  "realworld": {
+    "default_papers": 8,
+    "default_outputs_byte_identical": 8,
+    "auto_papers": 8,
+    "pages": 138,
+    "rendered": 2,
+    "rejected": 48,
+    "failure": 0,
+    "timeout": 0,
+    "skip": 0,
+    "repeat_papers": 4,
+    "repeat_tree_identical": 4,
+    "final_visual_reviews": 2,
+    "final_visual_pass": 2
+  },
+  "development_failures_retained": [
+    {
+      "command": "python tools/analyze_phase4_auto_results.py ...",
+      "exit_code": 1,
+      "reason": "首次调用缺少 PYTHONPATH=src，未产生可信汇总结论；随后以记录的正确命令成功复算"
+    },
+    {
+      "artifact": "phase4-auto-runtime/auto-final-v1",
+      "reason": "首次全量视觉检查发现 RW2-007 p6/p8 为局部误裁剪；保留 pre-fix 证据，增加通用安全拒绝后生成隔离 auto-final-v2"
+    }
+  ],
+  "automatic_hard_checks": {
+    "passed": 12,
+    "total": 12
+  }
+}

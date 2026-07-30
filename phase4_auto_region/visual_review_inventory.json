@@ -1,0 +1,67 @@
+{
+  "schema_version": "paper2md-phase4-auto-visual-review-inventory-v1",
+  "review_scope": {
+    "auto_rendered_candidates_reviewed": 2,
+    "auto_rendered_candidates_total": 2,
+    "continued_rejection_cases_reviewed": 1,
+    "review_method": "人工并排查看原页+bbox、Phase 3 native asset 与最终 PDFium clipped region asset"
+  },
+  "reviews": [
+    {
+      "paper_id": "RW2-005",
+      "page": 3,
+      "figure_id": "fig-p003-001",
+      "decision": "PASS",
+      "region_sha256": "3e239449a19512b82fc4199bf6f8229f536f09b54deaa1acaa5c98b004639abf",
+      "observations": [
+        "完整覆盖 Figure 1 的 a-d 面板",
+        "原生荧光位图和矢量散点图均可见",
+        "未烧入 caption，未见明显无关正文或整页截图",
+        "Phase 3 native asset 仍保留用于追溯"
+      ],
+      "evidence_contact_sheet": "rw2-005-p003-contact.png"
+    },
+    {
+      "paper_id": "RW2-007",
+      "page": 5,
+      "figure_id": "fig-p005-001",
+      "decision": "PASS",
+      "region_sha256": "e23fd761347557227666093f4ce78d0821d9a5a9cae4f3039d94ca0c80a8729a",
+      "observations": [
+        "完整覆盖 Fig. 2 的 a-e 面板",
+        "组织位图、热图、散点图、空间图和条形图均可见",
+        "未烧入 caption，未见明显无关正文或整页截图",
+        "Phase 3 native asset 仍保留用于追溯"
+      ],
+      "evidence_contact_sheet": "rw2-007-p005-contact.png"
+    },
+    {
+      "paper_id": "RW2-005",
+      "page": 7,
+      "figure_id": null,
+      "decision": "PASS_SAFE_REJECTION",
+      "region_sha256": null,
+      "observations": [
+        "页底明确出现 Figure 3 continued on next page",
+        "自动模式没有创建 region asset，也没有强配跨页 Figure",
+        "原生资产和拒绝 provenance 保留"
+      ],
+      "evidence_contact_sheet": "rw2-005-p007-contact.png"
+    }
+  ],
+  "pre_fix_findings_retained": [
+    {
+      "paper_id": "RW2-007",
+      "page": 6,
+      "finding": "auto-final-v1 左缘截断面板，修复后按通用 caption 水平覆盖规则拒绝"
+    },
+    {
+      "paper_id": "RW2-007",
+      "page": 8,
+      "finding": "auto-final-v1 左缘/上缘截断面板，修复后按通用 caption 水平覆盖规则拒绝"
+    }
+  ],
+  "all_final_auto_rendered_visually_reviewed": true,
+  "visual_payload_in_source_package": false,
+  "visual_payload_delivery": "phase4-auto-region-visual-evidence.zip"
+}

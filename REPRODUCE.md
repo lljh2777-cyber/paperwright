@@ -1,4 +1,4 @@
-# Paper2MD v2 / Phase 4 region-render spike 复现说明
+# Paper2MD v2 / Phase 4 auto region-render 复现说明
 
 ## 环境
 
@@ -78,7 +78,7 @@ PYTHONPATH=src python tools/analyze_phase3_results.py \
 
 脚本会逐件校验冻结 SHA-256、字节数和页数；不匹配时停止，不能换样本。
 
-## 受限 region-render spike
+## 通用 auto region-render
 
 先验证自生成 fixture 与全部回归：
 
@@ -86,6 +86,28 @@ PYTHONPATH=src python tools/analyze_phase3_results.py \
 PYTHONPATH=src python -m unittest discover -s tests -v
 python -m compileall -q src tests tools
 python tools/check_repo_policy.py --root .
+```
+
+默认关闭，不改变既有输出：
+
+```bash
+PYTHONPATH=src python -m paper2md convert input.pdf output-off
+```
+
+显式 opt-in：
+
+```bash
+PYTHONPATH=src python -m paper2md convert input.pdf output-auto \
+  --region-render-mode auto \
+  --region-render-max-candidates 12
+```
+
+调试某页（页索引从 0 开始）：
+
+```bash
+PYTHONPATH=src python -m paper2md convert input.pdf output-explicit \
+  --region-render-mode explicit \
+  --region-render-page 2
 ```
 
 真实 PDF 不进入仓库。若现场已有 `realworld/oa_sources.json` 中严格匹配的
@@ -105,3 +127,26 @@ PYTHONPATH=src python tools/analyze_phase4_render_spike.py \
 
 工具只对 RW2-005 页索引 2/6 与 RW2-007 页索引 4 启用裁剪渲染；默认
 CLI/API 不会隐式启用 spike。
+
+8 篇冻结 OA 本地副本存在时，可复算通用模式：
+
+```bash
+PYTHONPATH=src python tools/run_phase4_auto_corpus.py \
+  --repo . \
+  --pdf-dir /isolated/RW2-pdfs \
+  --output-root /isolated/phase4-auto \
+  --mode auto \
+  --max-candidates 12
+
+PYTHONPATH=src python tools/analyze_phase4_auto_results.py \
+  --repo . \
+  --default-runtime /isolated/default-current \
+  --auto-runtime /isolated/phase4-auto \
+  --baseline-root /isolated/baseline-25e4ece \
+  --summary /tmp/auto_region_summary.json \
+  --inventory-json /tmp/auto_candidate_inventory.json \
+  --inventory-csv /tmp/auto_candidate_inventory.csv
+```
+
+真实 PDF、转换输出与视觉图不进入 source-only 包。来源必须与
+`realworld/oa_sources.json` 的 SHA-256、字节数和页数完全一致。

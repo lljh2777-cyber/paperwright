@@ -1,0 +1,31 @@
+{
+  "schema_version": "paper2md-phase4-auto-fixture-matrix-v1",
+  "frozen_at_utc": "2026-07-30T05:19:21Z",
+  "frozen_before_implementation": true,
+  "cases": [
+    {"case_id": "AUTO-001", "category": "single_bitmap", "expected": "not_candidate"},
+    {"case_id": "AUTO-002", "category": "pure_vector", "expected": "rejected_no_native_group"},
+    {"case_id": "AUTO-003", "category": "mixed_bitmap_vector", "expected": "rendered"},
+    {"case_id": "AUTO-004", "category": "multi_panel_mixed", "expected": "rendered"},
+    {"case_id": "AUTO-005", "category": "adjacent_two_column_figures", "expected": "two_independent_or_conservative_rejection"},
+    {"case_id": "AUTO-006", "category": "caption_ambiguity", "expected": "rejected"},
+    {"case_id": "AUTO-007", "category": "cross_page_continued", "expected": "rejected"},
+    {"case_id": "AUTO-008", "category": "near_full_page", "expected": "rejected"},
+    {"case_id": "AUTO-009", "category": "caption_or_body_intrusion", "expected": "rejected"},
+    {"case_id": "AUTO-010", "category": "rotated_page", "expected": "rendered_with_rotation_recorded_or_rejected"},
+    {"case_id": "AUTO-011", "category": "blank_region", "expected": "render_validation_rejected"},
+    {"case_id": "AUTO-012", "category": "pixel_limit", "expected": "render_validation_rejected"},
+    {"case_id": "AUTO-013", "category": "source_hash_mismatch", "expected": "render_validation_rejected"},
+    {"case_id": "AUTO-014", "category": "markdown_caption_adjacency", "expected": "pass"},
+    {"case_id": "AUTO-015", "category": "manifest_and_native_retention", "expected": "pass"},
+    {"case_id": "AUTO-016", "category": "two_run_determinism", "expected": "pass"}
+  ],
+  "realworld": {
+    "papers": 8,
+    "default_mode_runs": 8,
+    "auto_mode_runs": 8,
+    "minimum_determinism_papers": 4,
+    "all_auto_rendered_candidates_require_visual_review": true,
+    "maximum_auto_candidates_per_document": 12
+  }
+}

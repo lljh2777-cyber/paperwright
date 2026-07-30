@@ -32,18 +32,50 @@ class OutputPolicy:
 
 @dataclass(frozen=True)
 class RegionRenderPolicy:
-    """Explicit opt-in for the bounded Phase 4 technical spike."""
+    """Opt-in policy for conservative clipped page-region rendering.
+
+    ``enabled`` is retained as a compatibility alias for the Phase 4 spike:
+    ``enabled=True`` with page indices means ``mode="explicit"``.  New callers
+    should set ``mode`` directly.
+    """
 
     enabled: bool = False
     page_indices: tuple[int, ...] = ()
+    mode: str = "off"
+    max_candidates_per_document: int = 12
+
+    @property
+    def effective_mode(self) -> str:
+        return "explicit" if self.enabled else self.mode
 
     def validate(self) -> None:
+        if self.mode not in {"off", "explicit", "auto"}:
+            raise ConfigurationError(
+                "region_render mode 必须是 off/explicit/auto"
+            )
+        if self.enabled and self.mode not in {"off", "explicit"}:
+            raise ConfigurationError(
+                "legacy enabled 不能与 auto mode 同时使用"
+            )
         if any(not isinstance(item, int) or item < 0 for item in self.page_indices):
             raise ConfigurationError("region_render page_indices 必须是非负整数")
         if len(set(self.page_indices)) != len(self.page_indices):
             raise ConfigurationError("region_render page_indices 不得重复")
-        if self.enabled and not self.page_indices:
-            raise ConfigurationError("启用 region_render 时必须明确限定页面")
+        if self.effective_mode == "explicit" and not self.page_indices:
+            raise ConfigurationError(
+                "region_render explicit mode 必须明确限定页面"
+            )
+        if self.effective_mode in {"off", "auto"} and self.page_indices:
+            raise ConfigurationError(
+                "region_render page_indices 仅允许用于 explicit mode"
+            )
+        if (
+            not isinstance(self.max_candidates_per_document, int)
+            or not 1 <= self.max_candidates_per_document <= 100
+        ):
+            raise ConfigurationError(
+                "region_render max_candidates_per_document 必须位于 [1,100]"
+            )
 
 
 @dataclass(frozen=True)

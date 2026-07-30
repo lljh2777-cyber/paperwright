@@ -11,7 +11,7 @@ from . import __version__
 from .api import Paper2MD
 from .backends.pdfbox import PDFBoxBackend
 from .backends.pdfium import PDFiumBackend
-from .config import Paper2MDConfig
+from .config import Paper2MDConfig, RegionRenderPolicy
 from .exceptions import BackendUnavailableError, Paper2MDError
 from .models import PhysicalDocument
 
@@ -29,6 +29,26 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("output_dir", type=Path)
     convert.add_argument("--backend", choices=("pdfium", "pdfbox"), default="pdfium")
     convert.add_argument("--workspace-root", type=Path)
+    convert.add_argument(
+        "--region-render-mode",
+        choices=("off", "explicit", "auto"),
+        default="off",
+        help="保守区域渲染；默认关闭",
+    )
+    convert.add_argument(
+        "--region-render-page",
+        type=int,
+        action="append",
+        default=[],
+        metavar="ZERO_BASED_PAGE",
+        help="explicit 模式限定的零基页索引，可重复",
+    )
+    convert.add_argument(
+        "--region-render-max-candidates",
+        type=int,
+        default=12,
+        help="auto 模式每文档候选硬上限",
+    )
     return parser
 
 
@@ -54,6 +74,11 @@ def _convert(args: argparse.Namespace) -> int:
     config = Paper2MDConfig(
         backend=args.backend,
         workspace_root=args.workspace_root,
+        region_render=RegionRenderPolicy(
+            mode=args.region_render_mode,
+            page_indices=tuple(args.region_render_page),
+            max_candidates_per_document=args.region_render_max_candidates,
+        ),
     )
     product = Paper2MD(config=config)
     if args.backend == "pdfium":

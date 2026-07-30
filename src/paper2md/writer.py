@@ -11,7 +11,13 @@ from typing import Any
 
 from .backends.base import ExtractedAsset
 from .figures import CaptionCandidate, FigureGroup, analyze_figures, compose_group_png
-from .manifest import OutputFile, build_manifest, canonical_manifest_json, sha256_file
+from .manifest import (
+    AUTO_REGION_MANIFEST_VERSION,
+    OutputFile,
+    build_manifest,
+    canonical_manifest_json,
+    sha256_file,
+)
 from .models import Element, PhysicalDocument
 from .region_render import plan_region_renders
 
@@ -212,6 +218,24 @@ def _table_degradation(page_elements: tuple[Element, ...]) -> bool:
     return "table " in text.casefold() or ("表 " in text and vectors >= 2)
 
 
+def _region_render_failure_reason(error: Exception) -> str:
+    message = str(error)
+    mappings = (
+        ("输入 PDF 哈希", "source_pdf_hash_mismatch"),
+        ("页码越界", "page_index_out_of_bounds"),
+        ("bbox 越界", "bbox_out_of_bounds_or_nonpositive"),
+        ("caption guard", "caption_guard_intrusion"),
+        ("整页或近整页", "near_full_page_region_rejected"),
+        ("像素尺寸为零", "zero_pixel_dimensions"),
+        ("像素上限", "pixel_limit_exceeded"),
+        ("空白或近恒定", "blank_or_low_variance_region"),
+    )
+    for fragment, reason in mappings:
+        if fragment in message:
+            return reason
+    return f"render_validation_failed:{type(error).__name__}"
+
+
 def write_outputs(
     *,
     root: Path,
@@ -221,6 +245,8 @@ def write_outputs(
     source: Path | None = None,
     region_renderer: Any | None = None,
     region_render_page_indices: frozenset[int] = frozenset(),
+    region_render_mode: str = "off",
+    region_render_max_candidates: int = 12,
 ) -> PreparedOutput:
     images_dir = root / "images"
     images_dir.mkdir(parents=True)
@@ -267,10 +293,20 @@ def write_outputs(
             )
 
     analysis = analyze_figures(document)
-    region_decisions = tuple(
-        item
-        for item in plan_region_renders(document, analysis)
-        if item.page_index in region_render_page_indices
+    planned_regions = plan_region_renders(
+        document,
+        analysis,
+        mode=region_render_mode,
+        max_candidates=region_render_max_candidates,
+    )
+    region_decisions = (
+        tuple(
+            item
+            for item in planned_regions
+            if item.page_index in region_render_page_indices
+        )
+        if region_render_mode == "explicit"
+        else planned_regions
     )
     requested_regions = {
         item.figure_id: item
@@ -290,6 +326,11 @@ def write_outputs(
         for item in region_decisions
         if item.status == "rejected"
     ]
+    rejected_regions = {
+        item.figure_id: item
+        for item in region_decisions
+        if item.status == "rejected" and item.figure_id is not None
+    }
     image_record_by_element = {
         item["element_id"]: item for item in image_records
     }
@@ -342,6 +383,10 @@ def write_outputs(
             "renderer_version": None,
             "bbox_rule": None,
         }
+        rejected_decision = rejected_regions.get(group.figure_id)
+        if rejected_decision is not None:
+            region_record["status"] = "rejected"
+            region_record["reason"] = rejected_decision.reason
         decision = requested_regions.get(group.figure_id)
         effective_caption = group.caption
         effective_caption_status = group.caption_status
@@ -370,7 +415,7 @@ def write_outputs(
                     )
                 except Exception as exc:
                     region_record["status"] = "rejected"
-                    region_record["reason"] = f"render_validation_failed:{type(exc).__name__}"
+                    region_record["reason"] = _region_render_failure_reason(exc)
                     region_rejections.append(
                         {
                             "figure_id": group.figure_id,
@@ -434,6 +479,10 @@ def write_outputs(
                 and item == "vector_evidence_not_rendered"
             )
         ]
+        if rejected_decision is not None:
+            degraded_reasons.append(
+                f"region_render_rejected:{rejected_decision.reason}"
+            )
         figure_records.append(
             {
                 "figure_id": group.figure_id,
@@ -698,6 +747,20 @@ def write_outputs(
                 document.canonical_json().encode("utf-8")
             ).hexdigest(),
         },
+        manifest_version=(
+            AUTO_REGION_MANIFEST_VERSION
+            if region_render_mode in {"explicit", "auto"}
+            else "paper2md-manifest-v0.4"
+        ),
+        region_render_policy=(
+            {
+                "mode": region_render_mode,
+                "page_indices": sorted(region_render_page_indices),
+                "max_candidates_per_document": region_render_max_candidates,
+            }
+            if region_render_mode in {"explicit", "auto"}
+            else None
+        ),
     )
     (root / "manifest.json").write_text(
         canonical_manifest_json(manifest), encoding="utf-8"

@@ -11,6 +11,7 @@ from typing import Any
 from .exceptions import ContractValidationError
 
 MANIFEST_VERSION = "paper2md-manifest-v0.4"
+AUTO_REGION_MANIFEST_VERSION = "paper2md-manifest-v0.5"
 
 
 def sha256_file(path: Path) -> str:
@@ -53,9 +54,11 @@ def build_manifest(
     figure_rejections: list[dict[str, Any]] | None = None,
     degraded: list[dict[str, Any]] | None = None,
     physical_document: dict[str, Any] | None = None,
+    manifest_version: str = MANIFEST_VERSION,
+    region_render_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
-        "manifest_version": MANIFEST_VERSION,
+        "manifest_version": manifest_version,
         "source_sha256": source_sha256,
         "backend": {"name": backend, "version": backend_version},
         "contract_version": contract_version,
@@ -76,6 +79,8 @@ def build_manifest(
         manifest["degraded"] = degraded
     if physical_document is not None:
         manifest["physical_document"] = physical_document
+    if region_render_policy is not None:
+        manifest["region_render_policy"] = region_render_policy
     validate_manifest(manifest)
     return manifest
 
@@ -98,11 +103,42 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "figure_rejections",
         "degraded",
         "physical_document",
+        "region_render_policy",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
-    if value["manifest_version"] != MANIFEST_VERSION:
+    if value["manifest_version"] not in {
+        MANIFEST_VERSION,
+        AUTO_REGION_MANIFEST_VERSION,
+    }:
         raise ContractValidationError("manifest_version 不受支持")
+    if value["manifest_version"] == MANIFEST_VERSION:
+        if "region_render_policy" in value:
+            raise ContractValidationError("manifest v0.4 不允许 region_render_policy")
+    else:
+        policy = value.get("region_render_policy")
+        if not isinstance(policy, dict) or set(policy) != {
+            "mode",
+            "page_indices",
+            "max_candidates_per_document",
+        }:
+            raise ContractValidationError("manifest v0.5 缺少 region_render_policy")
+        if policy["mode"] not in {"explicit", "auto"}:
+            raise ContractValidationError("manifest region_render_policy mode 非法")
+        if (
+            not isinstance(policy["page_indices"], list)
+            or len(policy["page_indices"]) != len(set(policy["page_indices"]))
+            or any(
+                not isinstance(item, int) or item < 0
+                for item in policy["page_indices"]
+            )
+        ):
+            raise ContractValidationError("manifest region_render_policy 页码非法")
+        if (
+            not isinstance(policy["max_candidates_per_document"], int)
+            or policy["max_candidates_per_document"] <= 0
+        ):
+            raise ContractValidationError("manifest region_render_policy 上限非法")
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
         raise ContractValidationError("manifest source_sha256 非法")

@@ -85,8 +85,12 @@ class Paper2MD:
                 ),
                 region_render_page_indices=(
                     frozenset(self.config.region_render.page_indices)
-                    if self.config.region_render.enabled
+                    if self.config.region_render.effective_mode == "explicit"
                     else frozenset()
+                ),
+                region_render_mode=self.config.region_render.effective_mode,
+                region_render_max_candidates=(
+                    self.config.region_render.max_candidates_per_document
                 ),
             )
             total = sum(

@@ -1,0 +1,37 @@
+{
+  "schema_version": "paper2md-phase4-auto-baseline-authority-v1",
+  "frozen_at_utc": "2026-07-30T05:19:21Z",
+  "git": {
+    "remote": "https://github.com/lljh2777-cyber/Paper2MD.git",
+    "branch": "agent/v2-rebuild",
+    "commit": "25e4ecea02979cf7dcb56ab2d280425bc56e74e2",
+    "clean_before_changes": true
+  },
+  "runtime": {
+    "python": "3.12.13",
+    "pypdfium2": "5.3.0",
+    "pdfium": "145.0.7616.0",
+    "libpdfium_sha256": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+    "pillow": "12.2.0"
+  },
+  "input_authority": {
+    "manifest": "realworld/oa_sources.json",
+    "manifest_sha256": "f8cb752715d49dd8a15e6208dfffaae1ec06f8b8fb729e2fd78b2fcfe25a611c",
+    "paper_count": 8,
+    "all_local_payload_hashes_and_sizes_matched": true
+  },
+  "default_output_baseline": {
+    "runtime_path_not_for_git": "/workspace/scratch/44a1d2333e11/phase4-auto-runtime/baseline-25e4ece",
+    "index": "/workspace/scratch/44a1d2333e11/phase4-auto-runtime/baseline-25e4ece/baseline_index.json",
+    "paper_count": 8,
+    "output_file_count_excluding_index": 125,
+    "output_bytes_excluding_index": 152609856,
+    "failure_count": 0,
+    "skip_count": 0
+  },
+  "prior_spike_artifacts_read_only": {
+    "source_zip_sha256": "e7a841198a7288e5f36522bf1284519e55d3f1d61de966c01f9d99fa428c8dd4",
+    "patch_sha256": "58671c877ea0776cd01654a4c9d76f30ac12fee7ead8d370509c1a7b15bdc792",
+    "visual_evidence_zip_sha256": "639b4dd227c6ef44b15d92bd9b3ebc5faa8f7f2f1091344785e9ce0f28bba2d9"
+  }
+}

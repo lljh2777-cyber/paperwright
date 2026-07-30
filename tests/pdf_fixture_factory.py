@@ -209,3 +209,185 @@ def create_region_render_fixture(
         "blank": blank,
         "rights": "project-authored temporary fixture",
     }
+
+
+def create_auto_region_fixture(
+    path: Path,
+    case: str,
+    *,
+    rotation: int = 0,
+) -> dict[str, object]:
+    """Create deterministic one-page fixtures for conservative auto planning."""
+
+    if rotation not in {0, 90, 180, 270}:
+        raise ValueError("rotation must be 0/90/180/270")
+    common_figure = [
+        b"0 0 0 RG 1 w 50 330 500 400 re S",
+        b"0.2 0.4 0.8 RG 2 w 310 500 m 360 570 l 420 510 l 485 650 l 540 540 l S",
+        b"0.8 0.1 0.1 rg 330 390 45 70 re f",
+        b"0.1 0.7 0.2 rg 400 390 45 110 re f",
+        b"BT /F2 15 Tf 65 700 Td (a  Deterministic Figure panel) Tj ET",
+        b"BT /F1 11 Tf 50 300 Td (Figure 1. Explicit same-page caption.) Tj ET",
+    ]
+    uses_image = case not in {"pure_vector"}
+    if case == "single_bitmap":
+        content = [
+            b"q 300 0 0 220 120 470 cm /Im0 Do Q",
+            b"BT /F1 11 Tf 100 430 Td (Figure 1. Complete bitmap caption.) Tj ET",
+        ]
+    elif case == "pure_vector":
+        content = common_figure
+    elif case in {"mixed", "rotated"}:
+        content = [
+            common_figure[0],
+            b"q 180 0 0 160 70 500 cm /Im0 Do Q",
+            *common_figure[1:],
+        ]
+    elif case == "multi_panel":
+        content = [
+            common_figure[0],
+            b"q 180 0 0 160 70 500 cm /Im0 Do Q",
+            b"q 180 0 0 160 255 500 cm /Im0 Do Q",
+            *common_figure[1:],
+        ]
+    elif case == "adjacent":
+        content = [
+            b"0 0 0 RG 1 w 35 420 255 290 re S",
+            b"35 420 m 290 710 l S",
+            b"35 710 m 290 420 l S",
+            b"80 450 30 80 re S",
+            b"150 450 30 120 re S",
+            b"q 180 0 0 160 55 500 cm /Im0 Do Q",
+            b"BT /F1 10 Tf 35 390 Td (Figure 1. Left-column caption.) Tj ET",
+            b"0 0 0 RG 1 w 322 420 255 290 re S",
+            b"322 420 m 577 710 l S",
+            b"322 710 m 577 420 l S",
+            b"370 450 30 80 re S",
+            b"440 450 30 120 re S",
+            b"q 180 0 0 160 342 500 cm /Im0 Do Q",
+            b"BT /F1 10 Tf 322 390 Td (Figure 2. Right-column caption.) Tj ET",
+        ]
+    elif case == "continued":
+        content = [
+            common_figure[0],
+            b"q 180 0 0 160 70 500 cm /Im0 Do Q",
+            *common_figure[1:],
+            b"BT /F2 10 Tf 50 270 Td (Figure 1 continued on next page) Tj ET",
+        ]
+    elif case == "ambiguous":
+        content = [
+            common_figure[0],
+            b"q 480 0 0 160 60 500 cm /Im0 Do Q",
+            *common_figure[1:5],
+            b"BT /F1 10 Tf 60 300 Td (Figure 1. Left caption candidate.) Tj ET",
+            b"BT /F1 10 Tf 330 300 Td (Figure 2. Right caption candidate.) Tj ET",
+        ]
+    elif case == "near_full":
+        content = [
+            b"0 0 0 RG 1 w 10 80 592 690 re S",
+            b"10 80 m 602 770 l S",
+            b"10 770 m 602 80 l S",
+            b"100 200 80 200 re S",
+            b"300 200 80 300 re S",
+            b"q 240 0 0 220 100 150 cm /Im0 Do Q",
+            b"BT /F1 10 Tf 20 50 Td (Figure 1. Near-full-page candidate.) Tj ET",
+        ]
+    elif case == "body_intrusion":
+        content = [
+            common_figure[0],
+            b"q 180 0 0 160 70 500 cm /Im0 Do Q",
+            *common_figure[1:5],
+            (
+                b"BT /F1 6 Tf 70 470 Td "
+                b"(This is deliberately long unrelated body prose inside the candidate "
+                b"region and must cause a conservative rejection because it is not a "
+                b"short in-figure label.) Tj ET"
+            ),
+            common_figure[5],
+        ]
+    elif case == "caption_span_mismatch":
+        content = [
+            b"0 0 0 RG 1 w 155 350 300 360 re S",
+            b"155 350 m 455 710 l S",
+            b"155 710 m 455 350 l S",
+            b"230 430 30 90 re S",
+            b"340 430 30 130 re S",
+            b"q 180 0 0 160 210 500 cm /Im0 Do Q",
+            (
+                b"BT /F1 10 Tf 35 315 Td "
+                b"(Figure 1. Wide caption indicates a wider multi-panel figure boundary.) "
+                b"Tj ET"
+            ),
+        ]
+    else:
+        raise ValueError(f"unknown auto region fixture case: {case}")
+
+    rotate_value = rotation if case == "rotated" else 0
+    rotate = f" /Rotate {rotate_value}".encode() if rotate_value else b""
+    resources = b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >>"
+    if uses_image:
+        resources += b" /XObject << /Im0 6 0 R >>"
+    resources += b" >>"
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        3: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
+            + rotate
+            + b" "
+            + resources
+            + b" /Contents 7 0 R >>"
+        ),
+        4: (
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+            b"/Encoding /WinAnsiEncoding >>"
+        ),
+        5: (
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
+            b"/Encoding /WinAnsiEncoding >>"
+        ),
+        6: (
+            _stream(
+                _image_pixels(),
+                b"/Type /XObject /Subtype /Image /Width 16 /Height 12 "
+                b"/ColorSpace /DeviceRGB /BitsPerComponent 8 ",
+            )
+            if uses_image
+            else b"<< /Type /XObject >>"
+        ),
+        7: _stream(b"\n".join(content)),
+        8: (
+            b"<< /Title (Auto region fixture) "
+            b"/Producer (Paper2MD self-test) >>"
+        ),
+    }
+    payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {0: 0}
+    for number in range(1, 9):
+        offsets[number] = len(payload)
+        payload.extend(f"{number} 0 obj\n".encode())
+        payload.extend(objects[number])
+        payload.extend(b"\nendobj\n")
+    xref = len(payload)
+    payload.extend(b"xref\n0 9\n")
+    payload.extend(b"0000000000 65535 f \n")
+    for number in range(1, 9):
+        payload.extend(f"{offsets[number]:010d} 00000 n \n".encode())
+    identifier = hashlib.md5(bytes(payload), usedforsecurity=False).hexdigest()
+    payload.extend(
+        (
+            "trailer\n"
+            f"<< /Size 9 /Root 1 0 R /Info 8 0 R "
+            f"/ID [<{identifier}><{identifier}>] >>\n"
+            f"startxref\n{xref}\n%%EOF\n"
+        ).encode()
+    )
+    path.write_bytes(bytes(payload))
+    return {
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size_bytes": len(payload),
+        "pages": 1,
+        "case": case,
+        "rotation": rotate_value,
+        "rights": "project-authored temporary fixture",
+    }

@@ -1,0 +1,28 @@
+{
+  "amends": "phase4_auto_region/frozen_rules_v1.json",
+  "amendment_reason": "首次 auto 全量视觉检查发现两个候选区域只覆盖多面板 Figure 的局部；保留 pre-fix auto-final-v1 后，在任何修复后运行前增加通用安全拒绝。",
+  "created_before_post_fix_backend_run": true,
+  "new_rule": {
+    "id": "AR-R16",
+    "metric": "candidate bbox 水平范围之外的显式 caption bbox 宽度占 caption 总宽度的比例",
+    "reject_if_greater_than": 0.15,
+    "reason": "candidate_does_not_cover_caption_horizontal_span",
+    "rationale": "显式 caption 明显宽于候选区域时，候选可能只捕获横向多面板 Figure 的一部分；保守拒绝并保留 native asset。"
+  },
+  "pre_fix_evidence": [
+    {
+      "paper_id": "RW2-007",
+      "page": 6,
+      "observation": "region 左缘截断面板 b",
+      "runtime_output": "phase4-auto-runtime/auto-final-v1/first/RW2-007/images/fig-p006-001-region.png"
+    },
+    {
+      "paper_id": "RW2-007",
+      "page": 8,
+      "observation": "region 左缘与上缘截断面板",
+      "runtime_output": "phase4-auto-runtime/auto-final-v1/first/RW2-007/images/fig-p008-001-region.png"
+    }
+  ],
+  "scope": "auto mode only; explicit debug mode and default-off output remain unchanged",
+  "schema_version": "paper2md-phase4-auto-frozen-rule-amendment-v1"
+}

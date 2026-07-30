@@ -12,6 +12,8 @@
   },
   "region_render": {
     "enabled": false,
-    "page_indices": []
+    "page_indices": [],
+    "mode": "off",
+    "max_candidates_per_document": 12
   }
 }

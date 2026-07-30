@@ -1,0 +1,102 @@
+{
+  "schema_version": "paper2md-phase4-auto-frozen-rules-v1",
+  "frozen_at_utc": "2026-07-30T05:19:21Z",
+  "frozen_before_auto_output": true,
+  "scope": {
+    "goal": "conservative automatic recognition of mixed bitmap/vector Figure regions",
+    "default_mode": "off",
+    "supported_modes": ["off", "explicit", "auto"],
+    "default_output_must_remain_byte_identical": true,
+    "no_paper_id_page_or_title_special_cases": true,
+    "excluded": [
+      "OCR",
+      "semantic table reconstruction",
+      "formula LaTeX",
+      "deep caption semantics",
+      "PDFBox capability scoring",
+      "release packaging"
+    ]
+  },
+  "candidate_requirements": {
+    "same_page_only": true,
+    "native_figure_group_required": true,
+    "explicit_caption_required": true,
+    "minimum_caption_confidence": 0.85,
+    "caption_candidate_count": 1,
+    "minimum_vector_evidence_count": 4,
+    "minimum_native_image_count": 1,
+    "minimum_page_area_ratio": 0.01,
+    "maximum_page_area_ratio": 0.82,
+    "minimum_render_variance": 2.0,
+    "caption_guard_points": 4.0,
+    "figure_text_lookback_points": 12.0,
+    "evidence_padding_points": 4.0,
+    "maximum_caption_gap_points": 200.0,
+    "maximum_candidates_per_document": 12
+  },
+  "native_incompleteness_rules": {
+    "require_vector_evidence_outside_or_structurally_bridging_native_bbox": true,
+    "minimum_vector_extension_points": 2.0,
+    "outer_vector_frame_may_define_boundary": true,
+    "single_complete_bitmap_without_vector_extension": "not_a_candidate",
+    "pure_vector_without_native_figure_group": "reject_and_preserve_provenance"
+  },
+  "hard_rejections": [
+    "cross_page_figure_continuation_explicitly_detected",
+    "caption_missing_or_unmatched",
+    "caption_ambiguous",
+    "caption_competed_by_multiple_figures",
+    "caption_guard_intrusion",
+    "near_full_page_region_rejected",
+    "bbox_out_of_bounds_or_nonpositive",
+    "blank_or_low_variance_region",
+    "pixel_limit_exceeded",
+    "source_pdf_hash_mismatch",
+    "rotation_mapping_unverified",
+    "suspected_body_text_intrusion",
+    "suspected_header_or_footer_intrusion",
+    "insufficient_deterministic_region_boundary",
+    "document_candidate_limit_exceeded"
+  ],
+  "body_intrusion_rule": {
+    "long_text_min_characters": 100,
+    "wide_text_min_page_width_ratio": 0.25,
+    "header_footer_guard_page_ratio": 0.04,
+    "caption_text_is_always_excluded": true
+  },
+  "render_policy": {
+    "scale": 2.0,
+    "dpi": 144.0,
+    "maximum_pixels": 16000000,
+    "draw_annotations": false,
+    "draw_forms": false,
+    "region_is_direct_pdfium_page_crop": true
+  },
+  "selection_order": [
+    "page_index",
+    "candidate_bbox_y",
+    "candidate_bbox_x",
+    "figure_id"
+  ],
+  "fallback": {
+    "retain_native_asset": true,
+    "retain_grouped_asset": true,
+    "record_rejection_reason": true,
+    "never_drop_original_elements": true,
+    "markdown_uses_region_only_after_all_guards_pass": true
+  },
+  "known_acceptance_targets_not_algorithm_special_cases": [
+    {
+      "target": "RW2-005 page 3",
+      "expected": "rendered"
+    },
+    {
+      "target": "RW2-005 page 7",
+      "expected": "rejected_cross_page"
+    },
+    {
+      "target": "RW2-007 page 5",
+      "expected": "rendered"
+    }
+  ]
+}

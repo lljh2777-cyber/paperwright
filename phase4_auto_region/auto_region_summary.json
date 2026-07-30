@@ -1,0 +1,181 @@
+{
+  "auto": [
+    {
+      "degraded_count": 15,
+      "figure_count": 7,
+      "figure_rejected_count": 7,
+      "global_rejected_count": 1,
+      "output_bytes": 13431483,
+      "output_file_count": 12,
+      "page_count": 29,
+      "paper_id": "RW2-001",
+      "rendered_count": 0
+    },
+    {
+      "degraded_count": 2,
+      "figure_count": 6,
+      "figure_rejected_count": 6,
+      "global_rejected_count": 1,
+      "output_bytes": 22176339,
+      "output_file_count": 10,
+      "page_count": 25,
+      "paper_id": "RW2-002",
+      "rendered_count": 0
+    },
+    {
+      "degraded_count": 2,
+      "figure_count": 9,
+      "figure_rejected_count": 9,
+      "global_rejected_count": 0,
+      "output_bytes": 8479086,
+      "output_file_count": 12,
+      "page_count": 10,
+      "paper_id": "RW2-003",
+      "rendered_count": 0
+    },
+    {
+      "degraded_count": 3,
+      "figure_count": 1,
+      "figure_rejected_count": 1,
+      "global_rejected_count": 0,
+      "output_bytes": 936504,
+      "output_file_count": 4,
+      "page_count": 4,
+      "paper_id": "RW2-004",
+      "rendered_count": 0
+    },
+    {
+      "degraded_count": 1,
+      "figure_count": 7,
+      "figure_rejected_count": 2,
+      "global_rejected_count": 6,
+      "output_bytes": 12605185,
+      "output_file_count": 51,
+      "page_count": 18,
+      "paper_id": "RW2-005",
+      "rendered_count": 1
+    },
+    {
+      "degraded_count": 8,
+      "figure_count": 4,
+      "figure_rejected_count": 2,
+      "global_rejected_count": 8,
+      "output_bytes": 11625330,
+      "output_file_count": 13,
+      "page_count": 30,
+      "paper_id": "RW2-006",
+      "rendered_count": 0
+    },
+    {
+      "degraded_count": 5,
+      "figure_count": 5,
+      "figure_rejected_count": 4,
+      "global_rejected_count": 1,
+      "output_bytes": 79393130,
+      "output_file_count": 10,
+      "page_count": 16,
+      "paper_id": "RW2-007",
+      "rendered_count": 1
+    },
+    {
+      "degraded_count": 3,
+      "figure_count": 2,
+      "figure_rejected_count": 0,
+      "global_rejected_count": 0,
+      "output_bytes": 5116371,
+      "output_file_count": 15,
+      "page_count": 6,
+      "paper_id": "RW2-008",
+      "rendered_count": 0
+    }
+  ],
+  "automatic_conclusion": "PASS",
+  "base_commit": "25e4ecea02979cf7dcb56ab2d280425bc56e74e2",
+  "default": [
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-001",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-002",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-003",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-004",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-005",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-006",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-007",
+      "region_rendered_count": 0
+    },
+    {
+      "byte_identical_to_authoritative_commit_output": true,
+      "manifest_version": "paper2md-manifest-v0.4",
+      "paper_id": "RW2-008",
+      "region_rendered_count": 0
+    }
+  ],
+  "determinism": {
+    "RW2-001": true,
+    "RW2-002": true,
+    "RW2-005": true,
+    "RW2-007": true
+  },
+  "hard_checks": {
+    "all_rendered_assets_hash_valid": true,
+    "all_rendered_captions_adjacent": true,
+    "all_rendered_native_assets_retained": true,
+    "all_required_repeat_runs_deterministic": true,
+    "default_has_zero_region_renders": true,
+    "default_manifest_remains_v04": true,
+    "eight_auto_documents_completed": true,
+    "eight_default_outputs_byte_identical": true,
+    "failure_timeout_skip_zero": true,
+    "rw2_005_page3_general_rule_rendered": true,
+    "rw2_005_page7_cross_page_rejected": true,
+    "rw2_007_page5_general_rule_rendered": true
+  },
+  "schema_version": "paper2md-phase4-auto-region-summary-v1",
+  "totals": {
+    "degraded_count": 39,
+    "failure_count": 0,
+    "figure_rejected_count": 31,
+    "global_rejected_count": 17,
+    "output_bytes": 153763428,
+    "output_file_count": 127,
+    "pages": 138,
+    "papers": 8,
+    "rendered_count": 2,
+    "repeat_identical": 4,
+    "repeat_papers": 4,
+    "skip_count": 0,
+    "timeout_count": 0
+  },
+  "visual_review_required_for_rendered_count": 2
+}
