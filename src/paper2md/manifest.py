@@ -12,6 +12,7 @@ from .exceptions import ContractValidationError
 
 MANIFEST_VERSION = "paper2md-manifest-v0.4"
 AUTO_REGION_MANIFEST_VERSION = "paper2md-manifest-v0.5"
+HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
 
 
 def sha256_file(path: Path) -> str:
@@ -56,6 +57,7 @@ def build_manifest(
     physical_document: dict[str, Any] | None = None,
     manifest_version: str = MANIFEST_VERSION,
     region_render_policy: dict[str, Any] | None = None,
+    layout_review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -81,6 +83,8 @@ def build_manifest(
         manifest["physical_document"] = physical_document
     if region_render_policy is not None:
         manifest["region_render_policy"] = region_render_policy
+    if layout_review is not None:
+        manifest["layout_review"] = layout_review
     validate_manifest(manifest)
     return manifest
 
@@ -104,18 +108,24 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "degraded",
         "physical_document",
         "region_render_policy",
+        "layout_review",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
     if value["manifest_version"] not in {
         MANIFEST_VERSION,
         AUTO_REGION_MANIFEST_VERSION,
+        HYBRID_LAYOUT_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
     if value["manifest_version"] == MANIFEST_VERSION:
-        if "region_render_policy" in value:
-            raise ContractValidationError("manifest v0.4 不允许 region_render_policy")
-    else:
+        if "region_render_policy" in value or "layout_review" in value:
+            raise ContractValidationError(
+                "manifest v0.4 不允许扩展处理策略"
+            )
+    elif value["manifest_version"] == AUTO_REGION_MANIFEST_VERSION:
+        if "layout_review" in value:
+            raise ContractValidationError("manifest v0.5 不允许 layout_review")
         policy = value.get("region_render_policy")
         if not isinstance(policy, dict) or set(policy) != {
             "mode",
@@ -139,6 +149,63 @@ def validate_manifest(value: dict[str, Any]) -> None:
             or policy["max_candidates_per_document"] <= 0
         ):
             raise ContractValidationError("manifest region_render_policy 上限非法")
+    else:
+        if "region_render_policy" in value:
+            raise ContractValidationError(
+                "manifest v0.6 不允许 region_render_policy"
+            )
+        review = value.get("layout_review")
+        required_review = {
+            "mode",
+            "prompt_version",
+            "candidate_generator_version",
+            "feature_schema_version",
+            "provenance_path",
+            "provenance_sha256",
+            "ocr_used",
+            "pages",
+        }
+        if not isinstance(review, dict) or set(review) != required_review:
+            raise ContractValidationError("manifest v0.6 缺少 layout_review")
+        if review["mode"] != "hybrid-reviewed" or review["ocr_used"] is not False:
+            raise ContractValidationError("manifest layout_review 模式非法")
+        provenance_path = Path(review["provenance_path"])
+        if provenance_path.is_absolute() or ".." in provenance_path.parts:
+            raise ContractValidationError(
+                "manifest layout_review provenance 路径非法"
+            )
+        if len(review["provenance_sha256"]) != 64:
+            raise ContractValidationError(
+                "manifest layout_review provenance 哈希非法"
+            )
+        if not isinstance(review["pages"], list):
+            raise ContractValidationError("manifest layout_review pages 必须是数组")
+        page_indices: set[int] = set()
+        for page in review["pages"]:
+            if set(page) != {
+                "page_index",
+                "task_sha256",
+                "final_layout_sha256",
+                "reviewer",
+                "region_count",
+            }:
+                raise ContractValidationError(
+                    "manifest layout_review page 字段非法"
+                )
+            if (
+                not isinstance(page["page_index"], int)
+                or page["page_index"] < 0
+                or page["page_index"] in page_indices
+                or len(page["task_sha256"]) != 64
+                or len(page["final_layout_sha256"]) != 64
+                or not page["reviewer"]
+                or not isinstance(page["region_count"], int)
+                or page["region_count"] < 0
+            ):
+                raise ContractValidationError(
+                    "manifest layout_review page 内容非法"
+                )
+            page_indices.add(page["page_index"])
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
         raise ContractValidationError("manifest source_sha256 非法")

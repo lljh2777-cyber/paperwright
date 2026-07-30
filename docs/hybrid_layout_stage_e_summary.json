@@ -1,0 +1,46 @@
+{
+  "schema_version": "paper2md-hybrid-layout-validation-v0.1",
+  "candidate_generator_version": "paper2md-whitespace-candidates-v0.3",
+  "ocr_used": false,
+  "external_ai_used": false,
+  "documents": [
+    {
+      "document_id": "sha256:b699e4cfe8050b7ff54382db4077916a01f2e708c670f89d75f445d018160c6f",
+      "display_name": "Topological domains in mammalian genomes identified by analysis of chromatin interactions",
+      "page_count": 5,
+      "candidate_count": 41,
+      "separator_count": 37,
+      "peripheral_candidate_count": 17,
+      "mixed_candidate_count": 4,
+      "max_candidates_per_page": 9,
+      "visually_reviewed_pages": [1, 2, 3, 4, 5],
+      "determinism": {
+        "runs": 2,
+        "files_per_run": 21,
+        "sha256_mismatch_count": 0
+      }
+    },
+    {
+      "document_id": "sha256:021147f9c563de8609c31d341f54f4116cc9bed36a20793b1dbf7f2f40a54459",
+      "display_name": "Pan-cancer spatial atlas of tertiary lymphoid",
+      "page_count": 24,
+      "candidate_count": 134,
+      "separator_count": 93,
+      "peripheral_candidate_count": 65,
+      "mixed_candidate_count": 9,
+      "max_candidates_per_page": 13,
+      "visually_reviewed_pages": [2, 3, 5],
+      "determinism": {
+        "runs": 2,
+        "files_per_run": 97,
+        "sha256_mismatch_count": 0
+      }
+    }
+  ],
+  "conclusion": "candidate_generation_pass_for_ai_review",
+  "limitations": [
+    "No AI-authored final-layout.json was produced in this stage.",
+    "Candidate regions may require AI merge, split, resize, reorder, and caption attachment.",
+    "Preview evidence contains copyrighted article pages and must not be committed."
+  ]
+}

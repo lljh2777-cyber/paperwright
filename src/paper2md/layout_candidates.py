@@ -1,0 +1,1006 @@
+"""Deterministic page-layout candidate generation.
+
+This stage proposes reviewable regions from native PDF geometry.  It performs
+no OCR and makes no semantic claim that a candidate is body text, a figure, or
+a table.  Those decisions belong to the review and validation stages.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+from collections import defaultdict
+from dataclasses import dataclass
+from statistics import median
+from typing import Iterable, Sequence
+
+from .layout_models import (
+    LayoutCandidate,
+    LayoutPage,
+    LayoutSeparator,
+    LayoutTask,
+    NormalizedBBox,
+)
+from .models import BBox, Element, Page, PhysicalDocument
+
+CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.3"
+FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
+
+_PAGE_NUMBER = re.compile(
+    r"^\s*(?:page\s+)?(?:\d+|[ivxlcdm]+)(?:\s+(?:of|/)\s+\d+)?\s*$",
+    re.IGNORECASE,
+)
+_FIGURE_PREFIX = re.compile(r"^\s*(?:fig(?:ure)?\.?)\s*\d", re.IGNORECASE)
+_TABLE_PREFIX = re.compile(r"^\s*table\s*\d", re.IGNORECASE)
+_PANEL_LABEL = re.compile(r"^\s*[A-J]\s*$")
+_NUMBER_TOKEN = re.compile(r"^[+\-−]?(?:\d+(?:[.,]\d+)?|\.\d+)%?$")
+
+
+@dataclass(frozen=True)
+class CandidateGenerationConfig:
+    header_footer_ratio: float = 0.07
+    page_number_ratio: float = 0.04
+    repeated_page_fraction: float = 0.5
+    horizontal_gap_line_ratio: float = 0.9
+    horizontal_gap_page_ratio: float = 0.006
+    vertical_gap_line_ratio: float = 0.8
+    vertical_gap_page_ratio: float = 0.012
+    graphics_cluster_line_ratio: float = 0.6
+    max_split_depth: int = 8
+
+    def __post_init__(self) -> None:
+        ratios = (
+            self.header_footer_ratio,
+            self.page_number_ratio,
+            self.repeated_page_fraction,
+            self.horizontal_gap_line_ratio,
+            self.horizontal_gap_page_ratio,
+            self.vertical_gap_line_ratio,
+            self.vertical_gap_page_ratio,
+            self.graphics_cluster_line_ratio,
+        )
+        if any(not math.isfinite(item) or item <= 0 for item in ratios):
+            raise ValueError("候选生成阈值必须是正有限数")
+        if self.header_footer_ratio >= 0.25:
+            raise ValueError("header_footer_ratio 过大")
+        if not 0 < self.repeated_page_fraction <= 1:
+            raise ValueError("repeated_page_fraction 必须位于 (0,1]")
+        if self.max_split_depth < 1:
+            raise ValueError("max_split_depth 必须为正")
+
+
+@dataclass(frozen=True)
+class _Atom:
+    atom_id: str
+    bbox: BBox
+    element_ids: tuple[str, ...]
+    kinds: tuple[str, ...]
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class _Leaf:
+    atoms: tuple[_Atom, ...]
+    band_index: int
+    column_index: int
+
+
+def _union_bbox(boxes: Iterable[BBox]) -> BBox:
+    values = tuple(boxes)
+    left = min(item.x for item in values)
+    top = min(item.y for item in values)
+    right = max(item.right for item in values)
+    bottom = max(item.bottom for item in values)
+    return BBox(left, top, right - left, bottom - top)
+
+
+def _gap(a: BBox, b: BBox) -> tuple[float, float]:
+    return (
+        max(a.x - b.right, b.x - a.right, 0.0),
+        max(a.y - b.bottom, b.y - a.bottom, 0.0),
+    )
+
+
+def _overlap_length(a0: float, a1: float, b0: float, b1: float) -> float:
+    return max(0.0, min(a1, b1) - max(a0, b0))
+
+
+def _text_for(element: Element) -> str:
+    native_line = element.metadata.get("native_line_text")
+    if isinstance(native_line, str) and native_line.strip():
+        return native_line.strip()
+    return (element.text or "").strip()
+
+
+def _text_atoms(page: Page) -> list[_Atom]:
+    text = [
+        item for item in page.elements if item.kind == "text" and _text_for(item)
+    ]
+    by_group: dict[int, list[Element]] = defaultdict(list)
+    ungrouped: list[Element] = []
+    for item in text:
+        group = item.metadata.get("line_group")
+        if isinstance(group, int):
+            by_group[group].append(item)
+        else:
+            ungrouped.append(item)
+
+    grouped: list[list[Element]] = list(by_group.values())
+    for element in sorted(
+        ungrouped,
+        key=lambda item: (
+            item.bbox.y + item.bbox.height / 2,
+            item.bbox.x,
+            item.element_id,
+        ),
+    ):
+        selected: list[Element] | None = None
+        center = element.bbox.y + element.bbox.height / 2
+        for group in reversed(grouped[-24:]):
+            group_box = _union_bbox(item.bbox for item in group)
+            group_center = group_box.y + group_box.height / 2
+            if abs(center - group_center) > max(
+                2.5,
+                min(element.bbox.height, group_box.height) * 0.45,
+            ):
+                continue
+            horizontal_gap = max(
+                group_box.x - element.bbox.right,
+                element.bbox.x - group_box.right,
+                0.0,
+            )
+            if horizontal_gap <= max(
+                10.0,
+                min(element.bbox.height, group_box.height) * 1.5,
+            ):
+                selected = group
+                break
+        if selected is None:
+            grouped.append([element])
+        else:
+            selected.append(element)
+
+    atoms: list[_Atom] = []
+    ordered_groups = sorted(
+        grouped,
+        key=lambda group: (
+            min(item.bbox.y for item in group),
+            min(item.bbox.x for item in group),
+            min(item.element_id for item in group),
+        ),
+    )
+    for index, group in enumerate(ordered_groups):
+        ordered = sorted(group, key=lambda item: (item.bbox.x, item.element_id))
+        atoms.append(
+            _Atom(
+                atom_id=f"line-{index:05d}",
+                bbox=_union_bbox(item.bbox for item in ordered),
+                element_ids=tuple(item.element_id for item in ordered),
+                kinds=("text",),
+                text=" ".join(_text_for(item) for item in ordered).strip(),
+            )
+        )
+    return atoms
+
+
+class _DisjointSet:
+    def __init__(self, count: int) -> None:
+        self.parent = list(range(count))
+
+    def find(self, item: int) -> int:
+        while self.parent[item] != item:
+            self.parent[item] = self.parent[self.parent[item]]
+            item = self.parent[item]
+        return item
+
+    def union(self, left: int, right: int) -> None:
+        left_root = self.find(left)
+        right_root = self.find(right)
+        if left_root != right_root:
+            self.parent[right_root] = left_root
+
+
+def _graphics_atoms(page: Page, proximity: float) -> list[_Atom]:
+    graphics = [
+        item for item in page.elements if item.kind in {"image", "vector"}
+    ]
+    if not graphics:
+        return []
+
+    cell_size = max(12.0, proximity * 3)
+    grid: dict[tuple[int, int], list[int]] = defaultdict(list)
+    disjoint = _DisjointSet(len(graphics))
+    for index, item in enumerate(graphics):
+        left = max(0.0, item.bbox.x - proximity)
+        top = max(0.0, item.bbox.y - proximity)
+        right = min(page.width, item.bbox.right + proximity)
+        bottom = min(page.height, item.bbox.bottom + proximity)
+        cells = {
+            (x, y)
+            for x in range(
+                int(left // cell_size),
+                int(right // cell_size) + 1,
+            )
+            for y in range(
+                int(top // cell_size),
+                int(bottom // cell_size) + 1,
+            )
+        }
+        compared: set[int] = set()
+        for cell in cells:
+            for other_index in grid[cell]:
+                if other_index in compared:
+                    continue
+                compared.add(other_index)
+                other = graphics[other_index]
+                x_gap, y_gap = _gap(item.bbox, other.bbox)
+                if x_gap <= proximity and y_gap <= proximity:
+                    disjoint.union(index, other_index)
+        for cell in cells:
+            grid[cell].append(index)
+
+    groups: dict[int, list[Element]] = defaultdict(list)
+    for index, item in enumerate(graphics):
+        groups[disjoint.find(index)].append(item)
+    result: list[_Atom] = []
+    ordered_groups = sorted(
+        groups.values(),
+        key=lambda group: (
+            min(item.bbox.y for item in group),
+            min(item.bbox.x for item in group),
+            min(item.element_id for item in group),
+        ),
+    )
+    for index, group in enumerate(ordered_groups):
+        ordered = sorted(group, key=lambda item: item.element_id)
+        result.append(
+            _Atom(
+                atom_id=f"graphic-{index:05d}",
+                bbox=_union_bbox(item.bbox for item in ordered),
+                element_ids=tuple(item.element_id for item in ordered),
+                kinds=tuple(sorted({item.kind for item in ordered})),
+            )
+        )
+    return result
+
+
+def _other_atoms(page: Page) -> list[_Atom]:
+    return [
+        _Atom(
+            atom_id=f"other-{index:05d}",
+            bbox=item.bbox,
+            element_ids=(item.element_id,),
+            kinds=(item.kind,),
+        )
+        for index, item in enumerate(
+            sorted(
+                (
+                    item
+                    for item in page.elements
+                    if item.kind not in {"text", "image", "vector"}
+                ),
+                key=lambda item: (item.bbox.y, item.bbox.x, item.element_id),
+            )
+        )
+    ]
+
+
+def _line_height(page: Page, text_atoms: Sequence[_Atom]) -> float:
+    heights = [
+        item.bbox.height
+        for item in text_atoms
+        if 0 < item.bbox.height < page.height * 0.15
+    ]
+    return median(heights) if heights else max(6.0, page.height * 0.012)
+
+
+def _furniture_signature(value: str) -> str:
+    compact = " ".join(value.casefold().split())
+    return re.sub(r"\d+", "#", compact)
+
+
+def _furniture_element_ids(
+    document: PhysicalDocument,
+    config: CandidateGenerationConfig,
+) -> tuple[dict[int, set[str]], dict[int, dict[str, str]]]:
+    lines_by_page = {page.page_index: _text_atoms(page) for page in document.pages}
+    signatures: dict[str, set[int]] = defaultdict(set)
+    eligible: dict[int, list[_Atom]] = defaultdict(list)
+    for page in document.pages:
+        for line in lines_by_page[page.page_index]:
+            center = line.bbox.y + line.bbox.height / 2
+            if (
+                center <= page.height * config.header_footer_ratio
+                or center >= page.height * (1 - config.header_footer_ratio)
+            ):
+                signature = _furniture_signature(line.text)
+                if signature:
+                    signatures[signature].add(page.page_index)
+                    eligible[page.page_index].append(line)
+
+    required = max(
+        2,
+        math.ceil(len(document.pages) * config.repeated_page_fraction),
+    )
+    furniture: dict[int, set[str]] = defaultdict(set)
+    reasons: dict[int, dict[str, str]] = defaultdict(dict)
+    for page in document.pages:
+        for line in eligible[page.page_index]:
+            center = line.bbox.y + line.bbox.height / 2
+            signature = _furniture_signature(line.text)
+            repeated = len(signatures.get(signature, ())) >= required
+            outer_page_number = (
+                _PAGE_NUMBER.fullmatch(line.text) is not None
+                and (
+                    center <= page.height * config.page_number_ratio
+                    or center >= page.height * (1 - config.page_number_ratio)
+                )
+            )
+            if not repeated and not outer_page_number:
+                continue
+            reason = (
+                "repeated_header_footer"
+                if repeated
+                else "outer_page_number"
+            )
+            for element_id in line.element_ids:
+                furniture[page.page_index].add(element_id)
+                reasons[page.page_index][element_id] = reason
+    return furniture, reasons
+
+
+def _merged_intervals(
+    intervals: Iterable[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    ordered = sorted(intervals)
+    merged: list[list[float]] = []
+    for start, end in ordered:
+        if not merged or start > merged[-1][1] + 1e-6:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(item[0], item[1]) for item in merged]
+
+
+def _best_gap(
+    atoms: Sequence[_Atom],
+    *,
+    axis: str,
+    minimum: float,
+    maximum_occupancy: float = 0.12,
+) -> tuple[float, float] | None:
+    """Find a low-occupancy corridor, tolerating sparse crossing elements."""
+
+    if len(atoms) < 2:
+        return None
+    if axis == "y":
+        start = min(item.bbox.y for item in atoms)
+        end = max(item.bbox.bottom for item in atoms)
+        orthogonal_start = min(item.bbox.x for item in atoms)
+        orthogonal_end = max(item.bbox.right for item in atoms)
+    else:
+        start = min(item.bbox.x for item in atoms)
+        end = max(item.bbox.right for item in atoms)
+        orthogonal_start = min(item.bbox.y for item in atoms)
+        orthogonal_end = max(item.bbox.bottom for item in atoms)
+    extent = end - start
+    orthogonal_extent = orthogonal_end - orthogonal_start
+    if extent <= 0 or orthogonal_extent <= 0:
+        return None
+    step = max(0.5, extent / 1024)
+    samples: list[tuple[float, float]] = []
+    position = start + step / 2
+    while position < end:
+        if axis == "y":
+            intervals = [
+                (item.bbox.x, item.bbox.right)
+                for item in atoms
+                if item.bbox.y <= position <= item.bbox.bottom
+            ]
+        else:
+            intervals = [
+                (item.bbox.y, item.bbox.bottom)
+                for item in atoms
+                if item.bbox.x <= position <= item.bbox.right
+            ]
+        occupied = sum(
+            interval_end - interval_start
+            for interval_start, interval_end in _merged_intervals(intervals)
+        )
+        samples.append((position, occupied / orthogonal_extent))
+        position += step
+
+    corridors: list[tuple[float, float, float]] = []
+    run: list[tuple[float, float]] = []
+    for sample in samples:
+        if sample[1] <= maximum_occupancy:
+            run.append(sample)
+            continue
+        if run:
+            corridor_start = max(start, run[0][0] - step / 2)
+            corridor_end = min(end, run[-1][0] + step / 2)
+            if corridor_end - corridor_start >= minimum:
+                corridors.append(
+                    (
+                        corridor_start,
+                        corridor_end,
+                        sum(item[1] for item in run) / len(run),
+                    )
+                )
+            run = []
+    if run:
+        corridor_start = max(start, run[0][0] - step / 2)
+        corridor_end = min(end, run[-1][0] + step / 2)
+        if corridor_end - corridor_start >= minimum:
+            corridors.append(
+                (
+                    corridor_start,
+                    corridor_end,
+                    sum(item[1] for item in run) / len(run),
+                )
+            )
+    internal = [
+        item
+        for item in corridors
+        if item[0] > start + step and item[1] < end - step
+    ]
+    if not internal:
+        return None
+    selected = max(
+        internal,
+        key=lambda item: (
+            (item[1] - item[0]) * (1.0 - item[2]),
+            -item[2],
+            -item[0],
+        ),
+    )
+    return selected[0], selected[1]
+
+
+def _split_at_gap(
+    atoms: Sequence[_Atom],
+    *,
+    axis: str,
+    gap: tuple[float, float],
+) -> tuple[tuple[_Atom, ...], tuple[_Atom, ...]] | None:
+    midpoint = (gap[0] + gap[1]) / 2
+    if axis == "y":
+        before = tuple(
+            item
+            for item in atoms
+            if item.bbox.y + item.bbox.height / 2 < midpoint
+        )
+        after = tuple(item for item in atoms if item not in before)
+    else:
+        before = tuple(
+            item
+            for item in atoms
+            if item.bbox.x + item.bbox.width / 2 < midpoint
+        )
+        after = tuple(item for item in atoms if item not in before)
+    if not before or not after:
+        return None
+    return before, after
+
+
+def _horizontal_bands(
+    atoms: Sequence[_Atom],
+    *,
+    minimum_gap: float,
+    max_depth: int,
+) -> list[tuple[_Atom, ...]]:
+    def visit(items: tuple[_Atom, ...], depth: int) -> list[tuple[_Atom, ...]]:
+        if depth >= max_depth:
+            return [items]
+        gap = _best_gap(items, axis="y", minimum=minimum_gap)
+        if gap is None:
+            return [items]
+        split = _split_at_gap(items, axis="y", gap=gap)
+        if split is None:
+            return [items]
+        return visit(split[0], depth + 1) + visit(split[1], depth + 1)
+
+    return sorted(
+        visit(tuple(atoms), 0),
+        key=lambda items: (
+            min(item.bbox.y for item in items),
+            min(item.bbox.x for item in items),
+        ),
+    )
+
+
+def _vertical_columns(
+    atoms: Sequence[_Atom],
+    *,
+    minimum_gap: float,
+    max_depth: int,
+) -> list[tuple[_Atom, ...]]:
+    def visit(items: tuple[_Atom, ...], depth: int) -> list[tuple[_Atom, ...]]:
+        if depth >= max_depth:
+            return [items]
+        gap = _best_gap(items, axis="x", minimum=minimum_gap)
+        if gap is None:
+            return [items]
+        # Sparse full-width rules, affiliations, and other spanning objects may
+        # cross an otherwise valid column gutter.  Assigning such an atom to a
+        # side by its centre makes that side's candidate bbox cover both
+        # columns, even though the text atoms were separated correctly.  Keep
+        # true gutter-crossing atoms as their own horizontally grouped
+        # candidates so review sees honest geometry.
+        crossing = tuple(
+            item
+            for item in items
+            if item.bbox.x < gap[0] and item.bbox.right > gap[1]
+        )
+        remaining = tuple(item for item in items if item not in crossing)
+        split = _split_at_gap(remaining, axis="x", gap=gap)
+        if split is None:
+            return [items]
+        spanning_groups = (
+            _horizontal_bands(
+                crossing,
+                minimum_gap=minimum_gap,
+                max_depth=max(1, max_depth - depth),
+            )
+            if crossing
+            else []
+        )
+        return (
+            visit(split[0], depth + 1)
+            + visit(split[1], depth + 1)
+            + spanning_groups
+        )
+
+    return sorted(
+        visit(tuple(atoms), 0),
+        key=lambda items: (
+            min(item.bbox.x for item in items),
+            min(item.bbox.y for item in items),
+        ),
+    )
+
+
+def _rectangle_union_area(boxes: Sequence[BBox]) -> float:
+    if not boxes:
+        return 0.0
+    xs = sorted({item.x for item in boxes} | {item.right for item in boxes})
+    area = 0.0
+    for left, right in zip(xs, xs[1:]):
+        if right <= left:
+            continue
+        intervals = [
+            (item.y, item.bottom)
+            for item in boxes
+            if item.x < right and item.right > left
+        ]
+        height = sum(end - start for start, end in _merged_intervals(intervals))
+        area += (right - left) * height
+    return area
+
+
+def _variance(values: Sequence[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    return sum((item - mean) ** 2 for item in values) / len(values)
+
+
+def _line_features(elements: Sequence[Element]) -> tuple[int, float]:
+    text = [
+        item for item in elements if item.kind == "text" and _text_for(item)
+    ]
+    if not text:
+        return 0, 0.0
+    grouped: dict[tuple[str, int | str], list[Element]] = defaultdict(list)
+    for item in text:
+        line_group = item.metadata.get("line_group")
+        key: tuple[str, int | str]
+        if isinstance(line_group, int):
+            key = ("line_group", line_group)
+        else:
+            key = ("element", item.element_id)
+        grouped[key].append(item)
+    lines = sorted(
+        (
+            _Atom(
+                atom_id=str(key),
+                bbox=_union_bbox(item.bbox for item in group),
+                element_ids=tuple(item.element_id for item in group),
+                kinds=("text",),
+            )
+            for key, group in grouped.items()
+        ),
+        key=lambda item: (item.bbox.y, item.bbox.x),
+    )
+    heights = [item.bbox.height for item in lines]
+    centers = [item.bbox.y + item.bbox.height / 2 for item in lines]
+    gaps = [
+        max(0.0, following - previous)
+        for previous, following in zip(centers, centers[1:])
+    ]
+    height_mean = max(sum(heights) / len(heights), 1e-6)
+    height_cv = math.sqrt(_variance(heights)) / height_mean
+    if gaps:
+        gap_mean = max(sum(gaps) / len(gaps), 1e-6)
+        gap_cv = math.sqrt(_variance(gaps)) / gap_mean
+    else:
+        gap_cv = 1.0
+    count_factor = min(1.0, len(lines) / 4)
+    regularity = count_factor * max(0.0, 1.0 - min(1.0, (height_cv + gap_cv) / 2))
+    return len(lines), regularity
+
+
+def _candidate_features(
+    page: Page,
+    bbox: BBox,
+    element_ids: Sequence[str],
+    *,
+    page_has_native_text: bool,
+    peripheral_hint: bool,
+    furniture_reason: str | None,
+    band_index: int,
+    column_index: int,
+) -> dict[str, object]:
+    selected_ids = set(element_ids)
+    elements = [item for item in page.elements if item.element_id in selected_ids]
+    area = bbox.width * bbox.height
+    page_area = page.width * page.height
+    text = [item for item in elements if item.kind == "text"]
+    images = [item for item in elements if item.kind == "image"]
+    vectors = [item for item in elements if item.kind == "vector"]
+    text_coverage = (
+        _rectangle_union_area([item.bbox for item in text]) / area
+        if page_has_native_text
+        else None
+    )
+    line_count, line_regularity = _line_features(text)
+    font_names = {
+        value
+        for item in text
+        if isinstance((value := item.metadata.get("font_name")), str) and value
+    }
+    font_sizes = [
+        float(value)
+        for item in text
+        if isinstance((value := item.metadata.get("font_size")), (int, float))
+        and math.isfinite(float(value))
+    ]
+    text_value = " ".join(_text_for(item) for item in text).strip()
+    tokens = text_value.split()
+    numeric_tokens = sum(bool(_NUMBER_TOKEN.fullmatch(item)) for item in tokens)
+    features: dict[str, object] = {
+        "width_ratio": bbox.width / page.width,
+        "height_ratio": bbox.height / page.height,
+        "area_ratio": area / page_area,
+        "aspect_ratio": bbox.width / bbox.height,
+        "distance_left": bbox.x / page.width,
+        "distance_right": (page.width - bbox.right) / page.width,
+        "distance_top": bbox.y / page.height,
+        "distance_bottom": (page.height - bbox.bottom) / page.height,
+        "generation_band": band_index,
+        "generation_column": column_index,
+        "page_native_text_available": page_has_native_text,
+        "region_has_native_text": bool(text),
+        "native_text_coverage": text_coverage,
+        "regular_line_coverage": (
+            text_coverage * line_regularity
+            if text_coverage is not None
+            else None
+        ),
+        "scattered_text_coverage": (
+            text_coverage * (1.0 - line_regularity)
+            if text_coverage is not None
+            else None
+        ),
+        "text_line_count": line_count,
+        "line_regularity": line_regularity,
+        "font_count": len(font_names),
+        "font_size_mean": (
+            sum(font_sizes) / len(font_sizes) if font_sizes else None
+        ),
+        "font_size_variance": _variance(font_sizes) if font_sizes else None,
+        "bold_ratio": (
+            sum(
+                "bold" in str(item.metadata.get("font_name", "")).casefold()
+                for item in text
+            )
+            / len(text)
+            if text
+            else None
+        ),
+        "image_count": len(images),
+        "image_coverage": _rectangle_union_area(
+            [item.bbox for item in images]
+        )
+        / area,
+        "drawing_count": len(vectors),
+        "drawing_coverage": _rectangle_union_area(
+            [item.bbox for item in vectors]
+        )
+        / area,
+        "starts_with_figure": bool(_FIGURE_PREFIX.match(text_value)),
+        "starts_with_table": bool(_TABLE_PREFIX.match(text_value)),
+        "panel_label_count": sum(
+            bool(_PANEL_LABEL.fullmatch(_text_for(item))) for item in text
+        ),
+        "numeric_token_ratio": numeric_tokens / len(tokens) if tokens else 0.0,
+        "peripheral_hint": peripheral_hint,
+        "furniture_reason": furniture_reason,
+    }
+    return features
+
+
+def _candidate_from_leaf(
+    page: Page,
+    leaf: _Leaf,
+    *,
+    candidate_id: str,
+    page_has_native_text: bool,
+    peripheral_hint: bool = False,
+    furniture_reason: str | None = None,
+) -> LayoutCandidate:
+    bbox = _union_bbox(item.bbox for item in leaf.atoms)
+    element_ids = tuple(
+        sorted(
+            {
+                element_id
+                for atom in leaf.atoms
+                for element_id in atom.element_ids
+            }
+        )
+    )
+    kinds = tuple(
+        sorted({kind for atom in leaf.atoms for kind in atom.kinds})
+    )
+    return LayoutCandidate(
+        candidate_id=candidate_id,
+        bbox=NormalizedBBox.from_pdf_bbox(
+            bbox,
+            page_width=page.width,
+            page_height=page.height,
+        ),
+        source_element_ids=element_ids,
+        element_kinds=kinds,
+        features=_candidate_features(
+            page,
+            bbox,
+            element_ids,
+            page_has_native_text=page_has_native_text,
+            peripheral_hint=peripheral_hint,
+            furniture_reason=furniture_reason,
+            band_index=leaf.band_index,
+            column_index=leaf.column_index,
+        ),
+    )
+
+
+def _candidate_separators(
+    candidates: Sequence[LayoutCandidate],
+) -> tuple[LayoutSeparator, ...]:
+    content = [
+        item
+        for item in candidates
+        if not bool(item.features.get("peripheral_hint"))
+    ]
+    separators: list[tuple[str, str, str, NormalizedBBox, dict[str, object]]] = []
+    for index, left in enumerate(content):
+        for right in content[index + 1 :]:
+            a = left.bbox
+            b = right.bbox
+            x_overlap = _overlap_length(a.x, a.right, b.x, b.right)
+            y_overlap = _overlap_length(a.y, a.bottom, b.y, b.bottom)
+            x_gap = max(a.x - b.right, b.x - a.right, 0.0)
+            y_gap = max(a.y - b.bottom, b.y - a.bottom, 0.0)
+            if y_gap > 0 and x_overlap / min(a.width, b.width) >= 0.25:
+                top = min(a.bottom, b.bottom)
+                bottom = max(a.y, b.y)
+                bbox = NormalizedBBox(
+                    max(a.x, b.x),
+                    top,
+                    x_overlap,
+                    bottom - top,
+                )
+                separators.append(
+                    (
+                        "horizontal",
+                        left.candidate_id,
+                        right.candidate_id,
+                        bbox,
+                        {
+                            "gap_ratio": y_gap,
+                            "orthogonal_overlap_ratio": x_overlap
+                            / min(a.width, b.width),
+                        },
+                    )
+                )
+            elif x_gap > 0 and y_overlap / min(a.height, b.height) >= 0.25:
+                left_edge = min(a.right, b.right)
+                right_edge = max(a.x, b.x)
+                bbox = NormalizedBBox(
+                    left_edge,
+                    max(a.y, b.y),
+                    right_edge - left_edge,
+                    y_overlap,
+                )
+                separators.append(
+                    (
+                        "vertical",
+                        left.candidate_id,
+                        right.candidate_id,
+                        bbox,
+                        {
+                            "gap_ratio": x_gap,
+                            "orthogonal_overlap_ratio": y_overlap
+                            / min(a.height, b.height),
+                        },
+                    )
+                )
+    ordered = sorted(
+        separators,
+        key=lambda item: (
+            item[3].y,
+            item[3].x,
+            item[0],
+            item[1],
+            item[2],
+        ),
+    )
+    return tuple(
+        LayoutSeparator(
+            separator_id=f"S{index:03d}",
+            orientation=orientation,
+            bbox=bbox,
+            adjacent_candidate_ids=(left, right),
+            features=features,
+        )
+        for index, (orientation, left, right, bbox, features) in enumerate(
+            ordered,
+            start=1,
+        )
+    )
+
+
+def generate_layout_tasks(
+    document: PhysicalDocument,
+    *,
+    config: CandidateGenerationConfig | None = None,
+) -> tuple[LayoutTask, ...]:
+    """Generate one deterministic, AI-reviewable layout task per page."""
+
+    settings = config or CandidateGenerationConfig()
+    furniture, furniture_reasons = _furniture_element_ids(document, settings)
+    tasks: list[LayoutTask] = []
+    for page in document.pages:
+        text_atoms = _text_atoms(page)
+        line_height = _line_height(page, text_atoms)
+        atoms = (
+            text_atoms
+            + _graphics_atoms(
+                page,
+                proximity=line_height * settings.graphics_cluster_line_ratio,
+            )
+            + _other_atoms(page)
+        )
+        peripheral_ids = furniture.get(page.page_index, set())
+        content_atoms: list[_Atom] = []
+        peripheral_atoms: list[_Atom] = []
+        for atom in atoms:
+            if atom.element_ids and set(atom.element_ids).issubset(peripheral_ids):
+                peripheral_atoms.append(atom)
+            else:
+                content_atoms.append(atom)
+
+        horizontal_gap = max(
+            line_height * settings.horizontal_gap_line_ratio,
+            page.height * settings.horizontal_gap_page_ratio,
+        )
+        vertical_gap = max(
+            line_height * settings.vertical_gap_line_ratio,
+            page.width * settings.vertical_gap_page_ratio,
+        )
+        leaves: list[_Leaf] = []
+        for band_index, band in enumerate(
+            _horizontal_bands(
+                content_atoms,
+                minimum_gap=horizontal_gap,
+                max_depth=settings.max_split_depth,
+            )
+            if content_atoms
+            else []
+        ):
+            columns = _vertical_columns(
+                band,
+                minimum_gap=vertical_gap,
+                max_depth=settings.max_split_depth,
+            )
+            leaves.extend(
+                _Leaf(tuple(column), band_index, column_index)
+                for column_index, column in enumerate(columns)
+            )
+
+        page_has_native_text = bool(text_atoms)
+        ordered_leaves = sorted(
+            leaves,
+            key=lambda leaf: (
+                leaf.band_index,
+                leaf.column_index,
+                min(item.bbox.y for item in leaf.atoms),
+                min(item.bbox.x for item in leaf.atoms),
+            ),
+        )
+        candidates: list[LayoutCandidate] = []
+        for index, leaf in enumerate(ordered_leaves, start=1):
+            candidates.append(
+                _candidate_from_leaf(
+                    page,
+                    leaf,
+                    candidate_id=f"C{index:03d}",
+                    page_has_native_text=page_has_native_text,
+                )
+            )
+        next_index = len(candidates) + 1
+        for offset, atom in enumerate(
+            sorted(
+                peripheral_atoms,
+                key=lambda item: (item.bbox.y, item.bbox.x, item.atom_id),
+            )
+        ):
+            reasons = {
+                furniture_reasons.get(page.page_index, {}).get(element_id)
+                for element_id in atom.element_ids
+            }
+            reasons.discard(None)
+            candidates.append(
+                _candidate_from_leaf(
+                    page,
+                    _Leaf((atom,), -1, offset),
+                    candidate_id=f"C{next_index + offset:03d}",
+                    page_has_native_text=page_has_native_text,
+                    peripheral_hint=True,
+                    furniture_reason=(
+                        sorted(reasons)[0] if reasons else "peripheral"
+                    ),
+                )
+            )
+
+        content_boxes = [
+            item.bbox
+            for item in candidates
+            if not bool(item.features.get("peripheral_hint"))
+        ]
+        content_bbox = (
+            _union_bbox(
+                item.to_pdf_bbox(
+                    page_width=page.width,
+                    page_height=page.height,
+                )
+                for item in content_boxes
+            )
+            if content_boxes
+            else None
+        )
+        task = LayoutTask(
+            source_sha256=document.source_sha256,
+            page=LayoutPage.from_page(page),
+            candidate_generator_version=CANDIDATE_GENERATOR_VERSION,
+            feature_schema_version=FEATURE_SCHEMA_VERSION,
+            candidates=tuple(candidates),
+            separators=_candidate_separators(candidates),
+            metadata={
+                "content_bbox": (
+                    NormalizedBBox.from_pdf_bbox(
+                        content_bbox,
+                        page_width=page.width,
+                        page_height=page.height,
+                    ).to_dict()
+                    if content_bbox is not None
+                    else None
+                ),
+                "horizontal_gap_threshold_pdf_points": horizontal_gap,
+                "vertical_gap_threshold_pdf_points": vertical_gap,
+                "line_height_median_pdf_points": line_height,
+                "ocr_used": False,
+            },
+        )
+        tasks.append(task)
+    return tuple(tasks)

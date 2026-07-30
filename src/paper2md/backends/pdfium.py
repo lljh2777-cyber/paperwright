@@ -339,6 +339,52 @@ class PDFiumBackend:
         )
         return BackendResult(physical, tuple(assets), tuple(warnings))
 
+    def render_page_preview(
+        self,
+        source: Path,
+        page_index: int,
+        *,
+        scale: float = 1.5,
+        max_pixels: int = 16_000_000,
+    ) -> Any:
+        """Render one complete page for layout review, without OCR."""
+
+        if not math.isfinite(scale) or scale <= 0:
+            raise BackendExecutionError("layout preview scale 必须是正有限数")
+        if max_pixels <= 0:
+            raise BackendExecutionError("layout preview max_pixels 必须为正")
+        document = self._pdfium.PdfDocument(source)
+        try:
+            if not 0 <= page_index < len(document):
+                raise BackendExecutionError("layout preview 页码越界")
+            page = document[page_index]
+            try:
+                width_px = int(math.ceil(float(page.get_width()) * scale))
+                height_px = int(math.ceil(float(page.get_height()) * scale))
+                if width_px * height_px > max_pixels:
+                    raise BackendExecutionError("layout preview 超过像素上限")
+                bitmap = page.render(
+                    scale=scale,
+                    rotation=0,
+                    may_draw_forms=False,
+                    draw_annots=False,
+                    rev_byteorder=True,
+                )
+                try:
+                    return bitmap.to_pil().convert("RGB")
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        except BackendExecutionError:
+            raise
+        except Exception as exc:
+            raise BackendExecutionError(
+                f"PDFium layout preview 失败: {exc}"
+            ) from exc
+        finally:
+            document.close()
+
     def render_region(
         self,
         source: Path,
