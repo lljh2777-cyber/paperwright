@@ -1,4 +1,28 @@
-# Paper2MD v2 / Phase 4 auto region-render 复现说明
+# Paper2MD v2 复现说明
+
+当前候选为 Phase 5 Alpha。Phase 4 的复现说明保留在下文；Alpha 的安装、
+批处理、全量回归和 Windows 复测说明见
+[`phase5_alpha/REPRODUCE.md`](phase5_alpha/REPRODUCE.md)。
+
+Alpha 权威基线：
+`5656eeff3d95ed7a3f025c5763bd94c5be565abe`。
+
+## Phase 5 Alpha 快速验证
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src:tests python tools/run_phase5_batch_checks.py \
+  --repo . --output-root /isolated/phase5-batch \
+  --summary phase5_alpha/batch_test_summary.json
+PYTHONPATH=src:tests python tools/run_phase5_install_checks.py \
+  --repo . --output-root /isolated/phase5-install \
+  --summary phase5_alpha/install_test_summary.json
+python tools/check_phase5_summary.py
+```
+
+构建出的 wheel/sdist 只用于隔离安装验证，不进入 Git 或 source-only 交付包。
+
+## Phase 4 auto region-render 复现说明
 
 ## 环境
 

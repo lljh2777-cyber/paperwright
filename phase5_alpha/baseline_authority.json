@@ -1,0 +1,48 @@
+{
+  "schema_version": "paper2md-phase5-alpha-baseline-authority-v1",
+  "verified_at_utc": "2026-07-30T06:28:15Z",
+  "git": {
+    "remote": "https://github.com/lljh2777-cyber/Paper2MD.git",
+    "branch": "agent/v2-rebuild",
+    "commit": "5656eeff3d95ed7a3f025c5763bd94c5be565abe",
+    "clean_before_changes": true
+  },
+  "preserved_evidence": [
+    {
+      "path": "phase4_auto_region/auto_region_summary.json",
+      "size_bytes": 4978,
+      "sha256": "d8022d4a0237d25cf50814c90115a8f0482c56292f220204db351c18f89fbb82"
+    },
+    {
+      "path": "phase4_auto_region/test_summary.json",
+      "size_bytes": 1473,
+      "sha256": "68d36509ae29656fa6a474819ce80ddf2b46360a0aef18bb9b1aab49fdb1af9b"
+    },
+    {
+      "path": "phase4_auto_region/report_zh.md",
+      "size_bytes": 4857,
+      "sha256": "167a76defb2d5d34c20af248c9909df1719e44b4134747276f1d6d75b9cbc9f1"
+    },
+    {
+      "path": "realworld/oa_sources.json",
+      "size_bytes": 10535,
+      "sha256": "f8cb752715d49dd8a15e6208dfffaae1ec06f8b8fb729e2fd78b2fcfe25a611c"
+    },
+    {
+      "path": "src/paper2md/region_render.py",
+      "size_bytes": 26043,
+      "sha256": "111ee10acedbc8113f56b0e933152164b349e6579aa47caa43ec5bb2ff86f7d1"
+    },
+    {
+      "path": "src/paper2md/schemas/manifest.schema.json",
+      "size_bytes": 9333,
+      "sha256": "d315e5e68df5d842d38bf2b8989207eb400813e81d9e004d33bc9e5b0a914d7d"
+    }
+  ],
+  "phase4_algorithm_reimplemented_or_modified": false,
+  "rw2_regression_authority": {
+    "source": "phase4_auto_region/auto_region_summary.json",
+    "default_outputs_byte_identical": "8/8",
+    "scope": "reused; no network download and no large-output rebuild"
+  }
+}

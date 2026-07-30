@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import Paper2MDConfig
-from .exceptions import PathSafetyError
+from .exceptions import OutputConflictError, PathSafetyError, UnsupportedInputError
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
@@ -26,15 +26,15 @@ def validate_conversion_paths(
     if not source.exists() or not source.is_file():
         raise PathSafetyError(f"输入 PDF 不存在或不是文件: {source}")
     if source.suffix.lower() != ".pdf":
-        raise PathSafetyError("输入文件扩展名必须是 .pdf")
+        raise UnsupportedInputError("输入文件扩展名必须是 .pdf")
     if destination == source:
-        raise PathSafetyError("输出目录不能与输入文件冲突")
+        raise OutputConflictError("输出目录不能与输入文件冲突")
     if destination in source.parents:
-        raise PathSafetyError("输出目录不能包含输入 PDF")
+        raise OutputConflictError("输出目录不能包含输入 PDF")
     if config.workspace_root is not None:
         root = config.workspace_root.expanduser().resolve()
         if not _is_relative_to(destination, root):
             raise PathSafetyError("输出目录越出 workspace_root")
     if destination.exists() and not config.output.allow_existing_directory:
-        raise PathSafetyError(f"输出目录已存在，拒绝覆盖: {destination}")
+        raise OutputConflictError(f"输出目录已存在，拒绝覆盖: {destination}")
     return source, destination

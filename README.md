@@ -16,8 +16,9 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前候选源码将 Phase 4 技术 spike 扩展为**默认关闭、显式 opt-in 的通用
-auto region-render 候选识别**：
+当前候选源码是 **Phase 5 Alpha**：在 Phase 4 默认关闭、显式 opt-in 的
+通用 auto region-render 之上，增加标准源码安装、批处理、机器可读诊断和
+可复现验证：
 
 - 可调用的单文件 CLI/API；
 - pypdfium2/PDFium 薄适配器；
@@ -33,6 +34,10 @@ auto region-render 候选识别**：
 - 原生位图/组合资产始终保留作追溯；拒绝时保留旧资产并记录 degraded
   reason，不把局部裁剪冒充完整 Figure；
 - 自生成 born-digital PDF fixture、路径安全、原子输出及逐字节确定性测试。
+- `paper2md batch` 非递归、确定性排序、逐文档原子隔离；
+- batch summary 对 corrupt/unsupported/backend unavailable/output
+  conflict/path safety/configuration/internal 分类；
+- wheel 与 sdist 仅用于临时安装测试，不随 source-only 交付提交。
 
 PDFBox 仍只是显式不可用的对照/回退边界。本 spike 不默认打开区域渲染，
 也不实现 OCR、语义表格、公式 LaTeX、纯矢量语义解析或深层图像理解。
@@ -54,9 +59,21 @@ Phase 3 的实现、8 篇复核结果和限制见
 [`phase4_auto_region/report_zh.md`](phase4_auto_region/report_zh.md)。
 auto 仍默认关闭，也不代表发布级能力或真实出版商总体泛化。
 
-## 快速开始
+## Alpha 快速开始
 
-要求 Python 3.10+、`pypdfium2==5.3.0` 和 `Pillow==12.2.0`。
+支持 Python 3.10–3.13，核心依赖锁定为 `pypdfium2==5.3.0` 和
+`Pillow==12.2.0`。
+
+```bash
+python -m pip install .
+paper2md --version
+paper2md --help
+paper2md convert input.pdf output-dir
+paper2md batch batch-output --input-dir papers --continue-on-error
+paper2md validate-model physical_document.json
+```
+
+从源码直接开发：
 
 ```bash
 python -m unittest discover -s tests -v
@@ -68,15 +85,14 @@ PYTHONPATH=src python -m paper2md validate-model \
   tests/fixtures/physical_document.minimal.json
 ```
 
-开发安装：
-
-```bash
-python -m pip install -e .
-paper2md --version
-```
-
 完整复现命令见 [REPRODUCE.md](REPRODUCE.md)，架构边界见
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+更完整的 Linux/PowerShell 示例、配置与故障排查：
+
+- [Alpha Quickstart](docs/QUICKSTART_ALPHA.md)
+- [配置参考](docs/CONFIGURATION.md)
+- [故障排查](docs/TROUBLESHOOTING.md)
 
 ## 仓库存储边界
 
@@ -95,7 +111,8 @@ paper2md --version
 - PDFium、JAR 或其他二进制文件
 - 凭据或令牌
 
-后续产品开发应在评审分支中进行，不直接修改 `main`。
+后续产品开发应在评审分支中进行，不直接修改 `main`。Alpha 不是正式
+release，不包含 OCR、服务端、GUI 或二进制分发。
 
 ## 许可证状态
 

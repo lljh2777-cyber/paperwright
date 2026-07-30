@@ -1,0 +1,246 @@
+{
+  "artifacts": [
+    {
+      "contents": {
+        "forbidden_members": 0,
+        "member_count": 25,
+        "required_schemas_present": true,
+        "total_uncompressed_bytes": 177292
+      },
+      "filename": "paper2md-0.6.0a0-py3-none-any.whl",
+      "kind": "wheel",
+      "sha256": "916d719017f4a3c83b69ec46d0588323c01c6b20ae6937c1e30090daae12d60e",
+      "size_bytes": 51257
+    },
+    {
+      "contents": {
+        "forbidden_members": 0,
+        "regular_file_count": 41,
+        "unsafe_members": 0
+      },
+      "filename": "paper2md-0.6.0a0.tar.gz",
+      "kind": "sdist",
+      "sha256": "3fcefb3a95bc55dc0f8b1007835f0d80953240ae2a8f2217a0fe7f56a5591364",
+      "size_bytes": 59016
+    }
+  ],
+  "artifacts_are_runtime_only_not_for_source_package": true,
+  "command_check_count": 12,
+  "failure_count": 0,
+  "install_count": 2,
+  "installs": [
+    {
+      "batch_deterministic_content_sha256": "1e9c6af536d5e7f12cf61d68eb08f75b8020e0b3d56c114939e24e675c0351eb",
+      "batch_output_tree": {
+        "0001-a/article.md": "4543cd0fdf07a62bb4011f9484019d08ccdb682a1bd18a613cb3a1c52e0f7ae6",
+        "0001-a/images/page-001-image-001.png": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+        "0001-a/manifest.json": "523b9b18002c040a52dc20c17d11342b1f763a1e762cc650d9ce08b1a2419811",
+        "0001-a/physical_document.json": "afe6fc9a469b5ef93bcc9d9c644efeafa970cb2ec8c976a32074373dbcc488ff",
+        "0002-b/article.md": "451a20827b72c6588a8515fbd6ca9c8093139aa233d54ca239d10eb0e6005c82",
+        "0002-b/images/page-001-image-001.png": "5d9905cf36dfcfc0aa7c9d62ce607d30c673d0363fc65e2df5f44dc4fc81497e",
+        "0002-b/manifest.json": "8f075c5b0b92a3c5e4fddda608e10049a1628fd7d6dfabc8762ac10d863e4f6b",
+        "0002-b/physical_document.json": "9e123884cd9e8424f03109da0150eecdb85cbf41cda18d3b1dd26cc46ad0b3d0"
+      },
+      "checks": [
+        {
+          "check_id": "install",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/python",
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "<runtime>/dist/paper2md-0.6.0a0-py3-none-any.whl"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "9d83109ff3fa21931b65cecbe3b602a57035c826a58b8c0c9e1056582dc9606a",
+          "stdout_size_bytes": 132
+        },
+        {
+          "check_id": "version",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/paper2md",
+            "--version"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "3903c5305b3f16dc455085d5d779260da8431714d26139438218450a3a2f522d",
+          "stdout_size_bytes": 17
+        },
+        {
+          "check_id": "help",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/paper2md",
+            "--help"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "c77590509d6210a78aeb8832dd9c7164af82090a6a35e1daa0f0cc22cac63e13",
+          "stdout_size_bytes": 520
+        },
+        {
+          "check_id": "convert",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/paper2md",
+            "convert",
+            "<runtime>/fixtures/a.pdf",
+            "<runtime>/wheel-single"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "50debb00c2b641c324cc5ebf577aaf77c5fc8c294e9affecdc55bd00da1d7818",
+          "stdout_size_bytes": 231
+        },
+        {
+          "check_id": "batch",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/paper2md",
+            "batch",
+            "<runtime>/wheel-batch",
+            "--input-dir",
+            "<runtime>/fixtures"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "fd443a4649ce2d4a9e03bc89f5c6f14f8f1aec3e9ec9de1a60dbaf38180c9686",
+          "stdout_size_bytes": 224
+        },
+        {
+          "check_id": "validate_model",
+          "command_argv": [
+            "<runtime>/venv-wheel/bin/paper2md",
+            "validate-model",
+            "<runtime>/source/tests/fixtures/physical_document.minimal.json"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "4087815da30c3a57134ce60357a3604c0b81afaf7b1df2ae25a14f252b4ce530",
+          "stdout_size_bytes": 184
+        }
+      ],
+      "dependency_access": "isolated venv and installed distribution; locked PDFium/Pillow are read from the pre-verified Work runtime without download",
+      "failure_count": 0,
+      "kind": "wheel",
+      "pass_count": 6,
+      "skip_count": 0,
+      "venv_system_site_packages": true
+    },
+    {
+      "batch_deterministic_content_sha256": "1e9c6af536d5e7f12cf61d68eb08f75b8020e0b3d56c114939e24e675c0351eb",
+      "batch_output_tree": {
+        "0001-a/article.md": "4543cd0fdf07a62bb4011f9484019d08ccdb682a1bd18a613cb3a1c52e0f7ae6",
+        "0001-a/images/page-001-image-001.png": "5fdc1b2a9a0760f8ca8e528710d231ee64575dab1836ed6ee15cefa089844428",
+        "0001-a/manifest.json": "523b9b18002c040a52dc20c17d11342b1f763a1e762cc650d9ce08b1a2419811",
+        "0001-a/physical_document.json": "afe6fc9a469b5ef93bcc9d9c644efeafa970cb2ec8c976a32074373dbcc488ff",
+        "0002-b/article.md": "451a20827b72c6588a8515fbd6ca9c8093139aa233d54ca239d10eb0e6005c82",
+        "0002-b/images/page-001-image-001.png": "5d9905cf36dfcfc0aa7c9d62ce607d30c673d0363fc65e2df5f44dc4fc81497e",
+        "0002-b/manifest.json": "8f075c5b0b92a3c5e4fddda608e10049a1628fd7d6dfabc8762ac10d863e4f6b",
+        "0002-b/physical_document.json": "9e123884cd9e8424f03109da0150eecdb85cbf41cda18d3b1dd26cc46ad0b3d0"
+      },
+      "checks": [
+        {
+          "check_id": "install",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/python",
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-build-isolation",
+            "<runtime>/dist/paper2md-0.6.0a0.tar.gz"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "58658ed80a139159af578646e98f58fa446131680f761532fbb5b316d827d863",
+          "stdout_size_bytes": 771
+        },
+        {
+          "check_id": "version",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/paper2md",
+            "--version"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "3903c5305b3f16dc455085d5d779260da8431714d26139438218450a3a2f522d",
+          "stdout_size_bytes": 17
+        },
+        {
+          "check_id": "help",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/paper2md",
+            "--help"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "c77590509d6210a78aeb8832dd9c7164af82090a6a35e1daa0f0cc22cac63e13",
+          "stdout_size_bytes": 520
+        },
+        {
+          "check_id": "convert",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/paper2md",
+            "convert",
+            "<runtime>/fixtures/a.pdf",
+            "<runtime>/sdist-single"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "1fe77054ff1577da7c82030ce0d880c025b1715f802a8306d2b7b134e1e94ec0",
+          "stdout_size_bytes": 231
+        },
+        {
+          "check_id": "batch",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/paper2md",
+            "batch",
+            "<runtime>/sdist-batch",
+            "--input-dir",
+            "<runtime>/fixtures"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "fd443a4649ce2d4a9e03bc89f5c6f14f8f1aec3e9ec9de1a60dbaf38180c9686",
+          "stdout_size_bytes": 224
+        },
+        {
+          "check_id": "validate_model",
+          "command_argv": [
+            "<runtime>/venv-sdist/bin/paper2md",
+            "validate-model",
+            "<runtime>/source/tests/fixtures/physical_document.minimal.json"
+          ],
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_size_bytes": 0,
+          "stdout_sha256": "4087815da30c3a57134ce60357a3604c0b81afaf7b1df2ae25a14f252b4ce530",
+          "stdout_size_bytes": 184
+        }
+      ],
+      "dependency_access": "isolated venv and installed distribution; locked PDFium/Pillow are read from the pre-verified Work runtime without download",
+      "failure_count": 0,
+      "kind": "sdist",
+      "pass_count": 6,
+      "skip_count": 0,
+      "venv_system_site_packages": true
+    }
+  ],
+  "pass_count": 12,
+  "platform_scope": "Linux Work cloud only; Windows remains for local review",
+  "python": "3.12.13 (main, Mar  3 2026, 14:59:34) [Clang 21.1.4 ]",
+  "schema_version": "paper2md-phase5-install-test-summary-v1",
+  "skip_count": 0,
+  "wheel_sdist_outputs_deterministic": true
+}

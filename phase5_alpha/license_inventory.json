@@ -1,0 +1,143 @@
+{
+  "schema_version": "paper2md-phase5-alpha-license-inventory-v1",
+  "review_scope": "source Alpha and current Linux Work local installation; not a release approval or legal opinion",
+  "components": [
+    {
+      "component_id": "paper2md",
+      "name": "Paper2MD",
+      "version": "0.6.0a0",
+      "relationship": "product_source",
+      "license_expression": "NOASSERTION",
+      "evidence": "pyproject.toml has no declared project license",
+      "source_delivery": "included",
+      "binary_distribution_gate": "blocked_pending_project_license"
+    },
+    {
+      "component_id": "python",
+      "name": "CPython",
+      "version": "3.10-3.13 supported; 3.12.13 tested",
+      "relationship": "runtime",
+      "license_expression": "PSF-2.0",
+      "evidence": "runtime version record; Python is not bundled",
+      "source_delivery": "not_included",
+      "binary_distribution_gate": "outside_current_source_package"
+    },
+    {
+      "component_id": "pypdfium2",
+      "name": "pypdfium2",
+      "version": "5.3.0",
+      "relationship": "direct_runtime_dependency",
+      "license_expression": "BSD-3-Clause OR Apache-2.0; dependency licenses apply",
+      "metadata_sha256": "5bad06feb6d54b0b53017e986c1c1eb7ac1580cd83b1c46cf245799657bf641d",
+      "license_evidence": [
+        {
+          "package_relative_path": "licenses/LICENSES/Apache-2.0.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "package_relative_path": "licenses/LICENSES/BSD-3-Clause.txt",
+          "sha256": "a6d11f0694c0137e9b02924b9d33a159f6c72f220fa4655bb2e1ea3654377d39"
+        }
+      ],
+      "source_delivery": "dependency_spec_only",
+      "binary_distribution_gate": "blocked_pending_full_bundled_dependency_notice_review"
+    },
+    {
+      "component_id": "pdfium",
+      "name": "PDFium",
+      "version": "145.0.7616.0",
+      "relationship": "runtime_bundled_with_pypdfium2_platform_wheel",
+      "license_expression": "BSD-3-Clause AND bundled third-party licenses",
+      "binary_sha256_linux_x64": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+      "license_evidence": [
+        {
+          "package_relative_path": "licenses/data/linux_x64/BUILD_LICENSES/pdfium.txt",
+          "sha256": "961eacd9633fff6d051db7208b755e9210e30efac7adec3e6a6d52798f0ccf0e"
+        },
+        {
+          "package_relative_path": "licenses/data/linux_x64/BUILD_LICENSES/pdfium-binaries.txt",
+          "sha256": "ba26c1263131696b86c10496b5066b918a20b7161822a80c274d0080105f6c93"
+        }
+      ],
+      "source_delivery": "not_included",
+      "binary_distribution_gate": "blocked_pending_platform_specific_SBOM_NOTICE"
+    },
+    {
+      "component_id": "agg23",
+      "name": "Anti-Grain Geometry 2.3",
+      "version": "2.3",
+      "relationship": "PDFium bundled transitive component",
+      "license_expression": "LicenseRef-agg23-permissive-text; SPDX NOASSERTION",
+      "license_evidence": [
+        {
+          "package_relative_path": "licenses/data/linux_x64/BUILD_LICENSES/agg23.txt",
+          "sha256": "c110d3ea2ad77467ce0dcff7d3337e6c8be8049a5103f4b9bd5fd911a77972e5",
+          "observation": "non-standard permissive notice grants copy/use/modify/sell/distribute; no SPDX decision is asserted here"
+        }
+      ],
+      "source_delivery": "not_included",
+      "local_alpha_gate": "not_blocked",
+      "binary_distribution_gate": "blocked_pending_legal_and_notice_review"
+    },
+    {
+      "component_id": "pillow",
+      "name": "Pillow",
+      "version": "12.2.0",
+      "relationship": "direct_runtime_dependency",
+      "license_expression": "MIT-CMU",
+      "metadata_sha256": "f921b97ad0d1c94e6e0fe84ac579c998f2c285a8b35f7f934d3fa0c2657e65ab",
+      "license_evidence": [
+        {
+          "package_relative_path": "licenses/LICENSE",
+          "sha256": "13e1d5014de0064b4b1ca4d837111797673cc91a116616e3dde555009243aaf6"
+        }
+      ],
+      "source_delivery": "dependency_spec_only",
+      "binary_distribution_gate": "notice_required"
+    },
+    {
+      "component_id": "setuptools",
+      "name": "setuptools",
+      "version": ">=68; 82.0.1 tested",
+      "relationship": "build_dependency",
+      "license_expression": "MIT",
+      "metadata_sha256_tested": "75683f40e1121ebccbbca4d679ae2dbf8a0be0ba91531df285b28abe927a43f8",
+      "source_delivery": "build_spec_only",
+      "binary_distribution_gate": "not_runtime_bundled"
+    },
+    {
+      "component_id": "wheel",
+      "name": "wheel",
+      "version": "0.47.0 tested",
+      "relationship": "build_tool_in_test_environment",
+      "license_expression": "MIT",
+      "metadata_sha256_tested": "d6e8cbbfa21513ed46be4027e61784b131b12c5cafacbde6913ce5ad01767643",
+      "source_delivery": "not_included",
+      "binary_distribution_gate": "not_runtime_bundled"
+    },
+    {
+      "component_id": "pdfbox-interface",
+      "name": "Apache PDFBox",
+      "version": "interface only; no JAR bound",
+      "relationship": "unavailable_fallback_interface",
+      "license_expression": "Apache-2.0 upstream; no artifact included",
+      "evidence": "src/paper2md/backends/pdfbox.py explicitly raises BackendUnavailableError",
+      "source_delivery": "interface_source_only",
+      "binary_distribution_gate": "not_evaluated_for_alpha_distribution"
+    }
+  ],
+  "counts": {
+    "components": 9,
+    "direct_runtime_dependencies": 2,
+    "runtime_engine_components": 2,
+    "build_dependencies_or_tools": 2,
+    "unavailable_interfaces": 1,
+    "binary_distribution_open_gates": 4
+  },
+  "conclusion": {
+    "source_alpha_local_install": "may_continue",
+    "formal_binary_distribution": "not_approved",
+    "known_actual_license_conflict": false,
+    "legal_review_required": true
+  }
+}

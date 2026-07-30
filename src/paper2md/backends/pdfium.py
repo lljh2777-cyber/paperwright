@@ -16,7 +16,11 @@ from typing import Any
 from PIL import ImageStat
 
 from ..config import Paper2MDConfig
-from ..exceptions import BackendExecutionError, BackendUnavailableError
+from ..exceptions import (
+    BackendExecutionError,
+    BackendUnavailableError,
+    CorruptInputError,
+)
 from ..models import BBox, Element, Page, PhysicalDocument, Provenance
 from ..region_render import RegionRenderRequest, RegionRenderResult
 from .base import (
@@ -201,7 +205,7 @@ class PDFiumBackend:
         try:
             document = pdfium.PdfDocument(source)
         except Exception as exc:
-            raise BackendExecutionError(f"PDFium 无法打开 PDF: {exc}") from exc
+            raise CorruptInputError(f"PDFium 无法打开 PDF: {exc}") from exc
 
         try:
             if len(document) > config.limits.max_pages:

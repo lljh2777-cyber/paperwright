@@ -1,0 +1,181 @@
+{
+  "case_count": 8,
+  "cases": [
+    {
+      "actual_exit": 0,
+      "case_id": "deterministic_success_run_1",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/success-1",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs"
+      ],
+      "expected_exit": 0,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "d435dc8c142740e5b02cb3af396850f12d1e0e2b84cf450994488feee182f2e5",
+      "stdout_size_bytes": 224
+    },
+    {
+      "actual_exit": 0,
+      "case_id": "deterministic_success_run_2",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/success-2",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs"
+      ],
+      "expected_exit": 0,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "d435dc8c142740e5b02cb3af396850f12d1e0e2b84cf450994488feee182f2e5",
+      "stdout_size_bytes": 224
+    },
+    {
+      "actual_exit": 3,
+      "case_id": "continue_on_error",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/continue",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/partial-inputs",
+        "--continue-on-error"
+      ],
+      "expected_exit": 3,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "ed21409a220e6561ef457e2231eba1c5873253a6e9632531caaa945fd9dd92da",
+      "stdout_size_bytes": 236
+    },
+    {
+      "actual_exit": 3,
+      "case_id": "stop_on_error",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/stop",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/partial-inputs"
+      ],
+      "expected_exit": 3,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "327dfcf905b771f7dc48aabf2fc5b9320594cde80a0ce364258069acf96ce878",
+      "stdout_size_bytes": 231
+    },
+    {
+      "actual_exit": 0,
+      "case_id": "auto_opt_in",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/auto",
+        "--input-file",
+        "<workspace>/phase5-alpha-runtime/batch-v2/mixed.pdf",
+        "--region-render-mode",
+        "auto",
+        "--region-render-max-candidates",
+        "2"
+      ],
+      "expected_exit": 0,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "2b4d1b461c5fe461dcf599f276c5847e4c4b020770ec9400482ce72b0cf70e76",
+      "stdout_size_bytes": 224
+    },
+    {
+      "actual_exit": 3,
+      "case_id": "pdfbox_unavailable",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/pdfbox",
+        "--input-file",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs/Alpha.pdf",
+        "--backend",
+        "pdfbox",
+        "--continue-on-error"
+      ],
+      "expected_exit": 3,
+      "pass": true,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_sha256": "44fa5f28f94c73a0bbe5265f63c8ee7fad4472b915d3db44fe7b6fa2a7e450fa",
+      "stdout_size_bytes": 236
+    },
+    {
+      "actual_exit": 2,
+      "case_id": "output_conflict",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/conflict",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs"
+      ],
+      "expected_exit": 2,
+      "pass": true,
+      "stderr_sha256": "86aa5cc46fd8de7c1194e20a553dd343e2e0d6e2c9102c894e83f5bd44bbc7b0",
+      "stderr_size_bytes": 87,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    },
+    {
+      "actual_exit": 2,
+      "case_id": "nested_output_rejected",
+      "command_argv": [
+        "<python>",
+        "-m",
+        "paper2md",
+        "batch",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs/nested",
+        "--input-dir",
+        "<workspace>/phase5-alpha-runtime/batch-v2/normal-inputs"
+      ],
+      "expected_exit": 2,
+      "pass": true,
+      "stderr_sha256": "83f61b52f3155097fdd7b238ed5e9f90f68d53259097c3890f92aef009986330",
+      "stderr_size_bytes": 97,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    }
+  ],
+  "content_assertions": {
+    "auto_opt_in_manifest_v05": true,
+    "conflict_preserves_existing_data": true,
+    "continue_isolates_failure": true,
+    "deterministic_sort": true,
+    "nested_output_not_created": true,
+    "pdfbox_explicit_failure": true,
+    "runtime_excluded_from_content_hash": true,
+    "stop_marks_remaining_not_run": true,
+    "two_run_output_tree_identical": true
+  },
+  "failure_count": 0,
+  "pass_count": 8,
+  "runtime_payload": "external_runtime_only_not_for_source_package",
+  "schema_version": "paper2md-phase5-batch-test-summary-v1",
+  "skip_count": 0
+}

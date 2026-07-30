@@ -1,0 +1,62 @@
+{
+  "schema_version": "paper2md-phase5-alpha-windows-validation-v1",
+  "validated_on": "2026-07-30",
+  "status": "PASS_WITH_LIMITATIONS",
+  "baseline_commit": "5656eeff3d95ed7a3f025c5763bd94c5be565abe",
+  "runtime": {
+    "platform": "Windows",
+    "python": "3.11.2",
+    "pypdfium2": "5.3.0",
+    "pdfium": "145.0.7616.0",
+    "pillow": "12.2.0",
+    "wheel": "0.47.0"
+  },
+  "unit_tests": {
+    "total": 94,
+    "passed": 94,
+    "failed": 0,
+    "skipped": 0
+  },
+  "batch_checks": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "content_assertions_passed": true,
+    "deterministic": true
+  },
+  "install_checks": {
+    "artifacts_installed": 2,
+    "command_checks": 12,
+    "passed": 12,
+    "failed": 0,
+    "wheel_sdist_outputs_deterministic": true
+  },
+  "compatibility_fixes": [
+    {
+      "scope": "tests",
+      "issue": "Windows default GBK decoding of UTF-8 JSON",
+      "resolution": "Declare UTF-8 explicitly for text reads"
+    },
+    {
+      "scope": "Phase 5 validation tools",
+      "issue": "Windows default GBK decoding of UTF-8 subprocess output",
+      "resolution": "Declare UTF-8 explicitly for subprocess text mode"
+    },
+    {
+      "scope": "preserved-baseline checker",
+      "issue": "Git core.autocrlf changed LF checkouts to CRLF",
+      "resolution": "Normalize CRLF to LF before exact size and SHA-256 checks"
+    }
+  ],
+  "failed_attempts_retained_outside_repository": [
+    "Initial unit run: 91 passed and 3 UTF-8 decoding errors",
+    "Initial batch harness run: subprocess output decoding error",
+    "Initial install harness run: wheel build command unavailable"
+  ],
+  "limitations": [
+    "Formal binary distribution remains not approved",
+    "Project-level license remains NOASSERTION",
+    "Temporary validation runtimes are excluded from Git and require local cleanup"
+  ],
+  "runtime_evidence_location": "%LOCALAPPDATA%/Temp/paper2md-phase5-windows-runtime"
+}

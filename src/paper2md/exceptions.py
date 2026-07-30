@@ -13,6 +13,18 @@ class PathSafetyError(Paper2MDError):
     """Input/output path violates the configured safety policy."""
 
 
+class OutputConflictError(PathSafetyError):
+    """An output path already exists or conflicts with an input."""
+
+
+class UnsupportedInputError(Paper2MDError):
+    """Input type is outside the Alpha product boundary."""
+
+
+class CorruptInputError(Paper2MDError):
+    """The selected backend cannot open the supplied PDF."""
+
+
 class ContractValidationError(Paper2MDError):
     """PhysicalDocument or manifest violates the stable contract."""
 

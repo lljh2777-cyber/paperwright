@@ -40,11 +40,15 @@ class MVPPipelineTests(unittest.TestCase):
             set(path.name for path in output.iterdir()),
             {"article.md", "images", "manifest.json", "physical_document.json"},
         )
-        manifest = json.loads((output / "manifest.json").read_text())
+        manifest = json.loads(
+            (output / "manifest.json").read_text(encoding="utf-8")
+        )
         validate_manifest(manifest)
         self.assertEqual(manifest["source_sha256"], self.fixture_info["sha256"])
         physical = PhysicalDocument.from_dict(
-            json.loads((output / "physical_document.json").read_text())
+            json.loads(
+                (output / "physical_document.json").read_text(encoding="utf-8")
+            )
         )
         self.assertEqual(len(physical.pages), 2)
         self.assertEqual(
@@ -84,9 +88,11 @@ class MVPPipelineTests(unittest.TestCase):
 
     def test_table_is_degraded_without_fabricated_markdown_grid(self):
         result = self.convert()
-        markdown = result.article_path.read_text() if hasattr(result, "article_path") else (
-            result.output_dir / "article.md"
-        ).read_text(encoding="utf-8")
+        markdown = (
+            result.article_path.read_text(encoding="utf-8")
+            if hasattr(result, "article_path")
+            else (result.output_dir / "article.md").read_text(encoding="utf-8")
+        )
         self.assertIn("degraded", markdown)
         self.assertIn("Alpha", markdown)
         self.assertNotIn("| Group | Value |", markdown)
