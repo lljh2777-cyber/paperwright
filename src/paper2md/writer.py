@@ -71,6 +71,46 @@ def _join_fragments(fragments: list[str]) -> str:
     return re.sub(r"[ \t]+", " ", value).strip()
 
 
+def _join_line_elements(elements: list[Element]) -> str:
+    native_values = {
+        item.metadata["native_line_text"]
+        for item in elements
+        if isinstance(item.metadata.get("native_line_text"), str)
+        and item.metadata["native_line_text"].strip()
+    }
+    if len(native_values) == 1:
+        native, _ = _clean_text(native_values.pop())
+        return re.sub(r"\s+", " ", native).strip()
+
+    value = ""
+    previous: Element | None = None
+    for element in sorted(elements, key=lambda item: (item.bbox.x, item.bbox.y)):
+        fragment, _ = _clean_text((element.text or "").strip())
+        if not fragment:
+            continue
+        if not value:
+            value = fragment
+        elif value.endswith(("-", "\u2010", "\u2011", "/")):
+            value += fragment
+        elif fragment[0] in ",.;:!?)]}%\u00b2\u00b3\u2020*":
+            value += fragment
+        else:
+            assert previous is not None
+            gap = max(0.0, element.bbox.x - previous.bbox.right)
+            compact_limit = max(
+                0.75, min(previous.bbox.height, element.bbox.height) * 0.12
+            )
+            if (
+                gap <= compact_limit
+                and not value.endswith((",", ".", ";", ":", "!", "?"))
+            ):
+                value += fragment
+            else:
+                value += " " + fragment
+        previous = element
+    return re.sub(r"[ \t]+", " ", value).strip()
+
+
 def _page_text_lines(document: PhysicalDocument) -> list[list[Element]]:
     groups: dict[int, list[Element]] = {}
     ungrouped = 1_000_000
@@ -106,7 +146,7 @@ def _title(document: PhysicalDocument) -> tuple[str, set[str]]:
         else None
     )
     lines = _page_text_lines(document)
-    line_text = [_join_fragments([item.text or "" for item in line]) for line in lines]
+    line_text = [_join_line_elements(line) for line in lines]
     trusted_metadata = (
         isinstance(metadata_title, str)
         and len(metadata_title.strip()) >= 15
@@ -125,6 +165,14 @@ def _title(document: PhysicalDocument) -> tuple[str, set[str]]:
                         for line in lines[start : start + count]
                         for item in line
                     }
+                window = [
+                    item
+                    for line in lines[start : start + count]
+                    for item in line
+                ]
+                candidate = _join_line_elements(window)
+                if _normalized_title_match(candidate) == target:
+                    return title, {item.element_id for item in window}
         return title, set()
 
     if not lines:
@@ -184,8 +232,26 @@ def _title(document: PhysicalDocument) -> tuple[str, set[str]]:
     }
 
 
+def _dominant_font(elements: list[Element]) -> str | None:
+    widths: dict[str, float] = {}
+    for element in elements:
+        value = element.metadata.get("font_name")
+        if isinstance(value, str) and value:
+            widths[value] = widths.get(value, 0.0) + element.bbox.width
+    return max(widths, key=widths.get) if widths else None
+
+
+def _looks_like_heading(text: str) -> bool:
+    letters = [character for character in text if character.isalpha()]
+    return (
+        len(text) <= 80
+        and bool(letters)
+        and sum(character.isupper() for character in letters) / len(letters) >= 0.85
+    )
+
+
 def _markdown_text_groups(elements: tuple[Element, ...]) -> list[tuple[list[str], str]]:
-    result: list[tuple[list[str], str]] = []
+    line_groups: list[list[Element]] = []
     current_key: object = object()
     current: list[Element] = []
     for element in elements:
@@ -193,22 +259,73 @@ def _markdown_text_groups(elements: tuple[Element, ...]) -> list[tuple[list[str]
             continue
         key = element.metadata.get("line_group", element.element_id)
         if current and key != current_key:
-            result.append(
-                (
-                    [item.element_id for item in current],
-                    _join_fragments([item.text or "" for item in current]),
-                )
-            )
+            line_groups.append(current)
             current = []
         current_key = key
         current.append(element)
     if current:
-        result.append(
-            (
-                [item.element_id for item in current],
-                _join_fragments([item.text or "" for item in current]),
-            )
+        line_groups.append(current)
+
+    paragraphs: list[list[list[Element]]] = []
+    for line in line_groups:
+        if not paragraphs:
+            paragraphs.append([line])
+            continue
+        previous = paragraphs[-1][-1]
+        previous_text = _join_line_elements(previous)
+        current_text = _join_line_elements(line)
+        previous_top = min(item.bbox.y for item in previous)
+        previous_bottom = max(item.bbox.bottom for item in previous)
+        current_top = min(item.bbox.y for item in line)
+        previous_height = previous_bottom - previous_top
+        current_height = max(item.bbox.bottom for item in line) - current_top
+        vertical_gap = current_top - previous_bottom
+        indent_delta = abs(
+            min(item.bbox.x for item in line)
+            - min(item.bbox.x for item in previous)
         )
+        previous_font = _dominant_font(previous)
+        current_font = _dominant_font(line)
+        same_font = (
+            previous_font is None
+            or current_font is None
+            or previous_font == current_font
+        )
+        continues = (
+            -1.0 <= vertical_gap <= max(5.0, min(previous_height, current_height) * 0.9)
+            and indent_delta <= max(14.0, min(previous_height, current_height) * 2.0)
+            and same_font
+            and not _looks_like_heading(previous_text)
+            and not _looks_like_heading(current_text)
+        )
+        if continues:
+            paragraphs[-1].append(line)
+        else:
+            paragraphs.append([line])
+
+    result: list[tuple[list[str], str]] = []
+    for paragraph in paragraphs:
+        element_ids = [
+            item.element_id for line in paragraph for item in line
+        ]
+        text = ""
+        for index, line in enumerate(paragraph):
+            line_text = _join_line_elements(line)
+            if not line_text:
+                continue
+            if not text:
+                text = line_text
+                continue
+            previous_line = paragraph[index - 1]
+            has_soft_break_marker = any(
+                any(
+                    unicodedata.category(character) == "Cc"
+                    for character in (item.text or "")
+                )
+                for item in previous_line
+            )
+            text += ("" if has_soft_break_marker else " ") + line_text
+        result.append((element_ids, re.sub(r"[ \t]+", " ", text).strip()))
     return result
 
 

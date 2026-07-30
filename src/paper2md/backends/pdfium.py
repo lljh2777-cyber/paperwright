@@ -121,6 +121,51 @@ def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
         else:
             match.append(item)
 
+    # Tiny control-glyph objects can enlarge a group's vertical bounds enough
+    # to split an otherwise continuous native line.  Merge only groups that
+    # are visibly co-linear and separated by a sub-word horizontal gap.  This
+    # is deliberately much stricter than the first-pass line grouping so it
+    # cannot bridge a real column gutter.
+    merged_groups: list[list[Element]] = []
+    for group in sorted(
+        line_groups,
+        key=lambda values: (
+            min(item.bbox.y for item in values),
+            min(item.bbox.x for item in values),
+        ),
+    ):
+        group_left = min(item.bbox.x for item in group)
+        group_top = min(item.bbox.y for item in group)
+        group_right = max(item.bbox.right for item in group)
+        group_bottom = max(item.bbox.bottom for item in group)
+        match_index: int | None = None
+        for index in range(len(merged_groups) - 1, max(-1, len(merged_groups) - 8), -1):
+            candidate = merged_groups[index]
+            candidate_left = min(item.bbox.x for item in candidate)
+            candidate_top = min(item.bbox.y for item in candidate)
+            candidate_right = max(item.bbox.right for item in candidate)
+            candidate_bottom = max(item.bbox.bottom for item in candidate)
+            overlap = min(group_bottom, candidate_bottom) - max(
+                group_top, candidate_top
+            )
+            smaller_height = min(
+                group_bottom - group_top, candidate_bottom - candidate_top
+            )
+            horizontal_gap = max(
+                candidate_left - group_right,
+                group_left - candidate_right,
+                0.0,
+            )
+            gap_limit = max(1.0, min(2.5, smaller_height * 0.35))
+            if overlap >= smaller_height * 0.45 and horizontal_gap <= gap_limit:
+                match_index = index
+                break
+        if match_index is None:
+            merged_groups.append(list(group))
+        else:
+            merged_groups[match_index].extend(group)
+    line_groups = merged_groups
+
     def line_bbox(group: list[Element]) -> tuple[float, float, float, float]:
         left = min(item.bbox.x for item in group)
         top = min(item.bbox.y for item in group)
@@ -253,6 +298,7 @@ class PDFiumBackend:
                 ),
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v1",
+                "text_line_reconstruction": "pdfium_union_bounded_text_v1",
             },
         )
         return BackendResult(physical, tuple(assets), tuple(warnings))
@@ -490,10 +536,55 @@ class PDFiumBackend:
                         )
                     )
                     vector_index += 1
+            ordered = _reading_order(elements, width)
+            text_groups: dict[int, list[Element]] = {}
+            for item in ordered:
+                line_group = item.metadata.get("line_group")
+                if item.kind == "text" and isinstance(line_group, int):
+                    text_groups.setdefault(line_group, []).append(item)
+            native_line_text: dict[int, str] = {}
+            for line_group, group in text_groups.items():
+                left = min(item.bbox.x for item in group)
+                right = max(item.bbox.right for item in group)
+                top = min(item.bbox.y for item in group)
+                bottom = max(item.bbox.bottom for item in group)
+                value = textpage.get_text_bounded(
+                    left,
+                    height - bottom,
+                    right,
+                    height - top,
+                )
+                value = " ".join(value.replace("\r", "\n").split())
+                if value:
+                    native_line_text[line_group] = value
+            ordered = [
+                Element(
+                    element_id=item.element_id,
+                    kind=item.kind,
+                    page_index=item.page_index,
+                    bbox=item.bbox,
+                    provenance=item.provenance,
+                    text=item.text,
+                    source_object_id=item.source_object_id,
+                    metadata={
+                        **item.metadata,
+                        **(
+                            {"native_line_text": native_line_text[line_group]}
+                            if isinstance(
+                                (line_group := item.metadata.get("line_group")),
+                                int,
+                            )
+                            and line_group in native_line_text
+                            and item.metadata.get("line_position") == 0
+                            else {}
+                        ),
+                    },
+                )
+                for item in ordered
+            ]
         finally:
             textpage.close()
 
-        ordered = _reading_order(elements, width)
         normalized = [
             Element(
                 element_id=item.element_id,

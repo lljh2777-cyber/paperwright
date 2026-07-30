@@ -1,5 +1,6 @@
 import hashlib
 import unittest
+from dataclasses import replace
 
 from paper2md.backends.pdfium import _reading_order
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
@@ -25,6 +26,76 @@ def text(element_id, x, y, width, height, value):
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_native_union_line_text_wins_over_overlapping_object_text(self):
+        items = _reading_order(
+            [
+                text("a", 37, 100, 190, 7.4, "limiting a unifi"),
+                text("b", 226.5, 100, 60, 7.4, "fied view"),
+            ],
+            594,
+        )
+        items = [
+            replace(
+                item,
+                metadata={
+                    **item.metadata,
+                    "native_line_text": "limiting a unified view",
+                },
+            )
+            for item in items
+        ]
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "limiting a unified view",
+        )
+
+    def test_control_glyph_does_not_split_one_visual_line(self):
+        items = [
+            text("a", 37.2, 471.0, 86.2, 7.4, "prognosis. Cross-cohor"),
+            text("b", 123.7, 471.0, 157.4, 7.4, "t analyses, validations"),
+            text("soft", 281.6, 474.5, 2.0, 0.7, "\u0002"),
+        ]
+        ordered = _reading_order(items, 594)
+        self.assertEqual({item.metadata["line_group"] for item in ordered}, {0})
+        self.assertEqual(
+            _markdown_text_groups(tuple(ordered))[0][1],
+            "prognosis. Cross-cohort analyses, validations",
+        )
+
+    def test_lines_are_reconstructed_into_paragraph_and_soft_break_word(self):
+        ordered = _reading_order(
+            [
+                text("l1", 37, 155, 240, 7.4, "INTRODUCTION: A spatial"),
+                text("l2", 37, 165.5, 238, 7.4, "atlas spans several"),
+                text("l3", 37, 176, 230, 7.4, "cancer types and artificial intelli"),
+                text("soft", 267.5, 179.5, 2, 0.7, "\u0002"),
+                text("l4", 37, 186.5, 210, 7.4, "gence methods."),
+                text("heading", 37, 207.5, 48, 6.2, "RESULTS:"),
+            ],
+            594,
+        )
+        groups = _markdown_text_groups(tuple(ordered))
+        self.assertEqual(
+            groups[0][1],
+            "INTRODUCTION: A spatial atlas spans several cancer types and "
+            "artificial intelligence methods.",
+        )
+        self.assertEqual(groups[1][1], "RESULTS:")
+
+    def test_compact_native_fragments_do_not_gain_spaces(self):
+        items = _reading_order(
+            [
+                text("a", 37, 100, 45.4, 7.4, "context-"),
+                text("b", 82.8, 100, 4.4, 6.1, "d"),
+                text("c", 87.6, 100, 80, 7.4, "ependent"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "context-dependent",
+        )
+
     def test_fragmented_full_width_line_is_not_split_into_columns(self):
         items = [
             text("w1", 60, 100, 70, 16, "Modeling"),
