@@ -16,23 +16,31 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 
 MVP 暂定使用 PDFium 作为主后端，PDFBox 作为对照或回退。
 
-当前候选提交范围已推进到 **v2-realworld（Stage C）**：
+当前候选提交范围已推进到 **Phase 3 Figure/Caption 增强**：
 
 - 可调用的单文件 CLI/API；
 - pypdfium2/PDFium 薄适配器；
 - `PDF → PhysicalDocument → article.md + images/ + manifest.json`；
 - 可追溯元素、页码、bbox、提取方法、输出哈希；
 - 基础双栏几何顺序、嵌入位图提取和诚实的表格降级；
+- 同页 Figure 候选分组、明确 Figure/Fig. caption 的保守配对与
+  Markdown 邻接；
+- 对低置信、歧义、无 caption、跨页或未渲染矢量证据明确降级；
 - 自生成 born-digital PDF fixture、路径安全、原子输出及逐字节确定性测试。
 
 PDFBox 仍只是显式不可用的对照/回退边界。本阶段不实现 OCR、语义表格、
-公式 LaTeX 或 Figure/Caption 邻接。
+公式 LaTeX、纯矢量 Figure 重建或深层图像语义理解。
 
 Stage C 使用 8 篇新选择的 CC BY born-digital OA 论文做小规模真实版式
 验证；结果和明确限制见
 [`realworld/report_zh.md`](realworld/report_zh.md)。该 corpus 不是已丢失
 Phase 1B/2 检查点的恢复，PDF 和转换输出不会提交到仓库；8 篇结果也不
 外推为全部真实出版商版式泛化。
+
+Phase 3 的实现、8 篇复核结果和限制见
+[`phase3/report_zh.md`](phase3/report_zh.md)。尤其是 RW2-005：
+碎片对象已能确定性组合并与 caption 邻接，但混合位图/矢量的完整区域
+重建仍标为 degraded。
 
 ## 快速开始
 

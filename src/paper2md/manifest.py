@@ -10,7 +10,7 @@ from typing import Any
 
 from .exceptions import ContractValidationError
 
-MANIFEST_VERSION = "paper2md-manifest-v0.2"
+MANIFEST_VERSION = "paper2md-manifest-v0.3"
 
 
 def sha256_file(path: Path) -> str:
@@ -49,6 +49,8 @@ def build_manifest(
     warnings: list[dict[str, Any]] | None = None,
     elements: list[dict[str, Any]] | None = None,
     images: list[dict[str, Any]] | None = None,
+    figures: list[dict[str, Any]] | None = None,
+    figure_rejections: list[dict[str, Any]] | None = None,
     degraded: list[dict[str, Any]] | None = None,
     physical_document: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -66,6 +68,10 @@ def build_manifest(
         manifest["elements"] = elements
     if images is not None:
         manifest["images"] = images
+    if figures is not None:
+        manifest["figures"] = figures
+    if figure_rejections is not None:
+        manifest["figure_rejections"] = figure_rejections
     if degraded is not None:
         manifest["degraded"] = degraded
     if physical_document is not None:
@@ -85,7 +91,14 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "outputs",
         "warnings",
     }
-    optional = {"elements", "images", "degraded", "physical_document"}
+    optional = {
+        "elements",
+        "images",
+        "figures",
+        "figure_rejections",
+        "degraded",
+        "physical_document",
+    }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
     if value["manifest_version"] != MANIFEST_VERSION:
@@ -112,9 +125,59 @@ def validate_manifest(value: dict[str, Any]) -> None:
         paths.add(output["path"])
         if output["size_bytes"] < 0 or len(output["sha256"]) != 64:
             raise ContractValidationError("manifest output 大小或哈希非法")
-    for field_name in ("elements", "images", "degraded"):
+    for field_name in (
+        "elements",
+        "images",
+        "figures",
+        "figure_rejections",
+        "degraded",
+    ):
         if field_name in value and not isinstance(value[field_name], list):
             raise ContractValidationError(f"manifest {field_name} 必须是数组")
+    figure_ids: set[str] = set()
+    for figure in value.get("figures", []):
+        required_figure = {
+            "figure_id",
+            "page",
+            "bbox",
+            "member_element_ids",
+            "source_object_ids",
+            "extraction_mode",
+            "asset",
+            "caption",
+            "evidence_status",
+            "degraded_reasons",
+            "vector_evidence",
+            "markdown_placement",
+        }
+        if set(figure) != required_figure:
+            raise ContractValidationError("manifest figure 字段非法")
+        if figure["figure_id"] in figure_ids:
+            raise ContractValidationError("manifest figure_id 重复")
+        figure_ids.add(figure["figure_id"])
+        if figure["page"] <= 0 or not figure["member_element_ids"]:
+            raise ContractValidationError("manifest figure 页码或成员非法")
+        if figure["extraction_mode"] not in {"embedded", "grouped"}:
+            raise ContractValidationError("manifest figure extraction_mode 非法")
+        caption = figure["caption"]
+        if caption.get("status") not in {"matched", "ambiguous", "none"}:
+            raise ContractValidationError("manifest caption status 非法")
+        if caption["status"] == "matched" and not caption.get("element_ids"):
+            raise ContractValidationError("matched caption 缺少 evidence element IDs")
+        if caption["status"] == "matched":
+            text = caption.get("text")
+            if not isinstance(text, str) or not text:
+                raise ContractValidationError("matched caption 缺少规范化文本")
+            if hashlib.sha256(text.encode("utf-8")).hexdigest() != caption.get(
+                "text_sha256"
+            ):
+                raise ContractValidationError("matched caption 文本哈希不一致")
+        asset = figure["asset"]
+        path = Path(asset["path"])
+        if path.is_absolute() or ".." in path.parts:
+            raise ContractValidationError("manifest figure asset 路径非法")
+        if len(asset["sha256"]) != 64 or asset["size_bytes"] <= 0:
+            raise ContractValidationError("manifest figure asset 哈希或大小非法")
     if "physical_document" in value:
         reference = value["physical_document"]
         if set(reference) != {"path", "sha256"}:

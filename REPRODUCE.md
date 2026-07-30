@@ -1,4 +1,4 @@
-# v2-mvp 复现说明
+# Paper2MD v2 / Phase 3 复现说明
 
 ## 环境
 
@@ -21,6 +21,7 @@ PYTHONPATH=src python -m paper2md validate-model \
 ```bash
 python -m unittest discover -s tests -v
 python tools/check_repo_policy.py --root .
+PYTHONPATH=src:tests python tools/run_phase3_checks.py
 ```
 
 测试不以“进程退出码 0”作为唯一证据。单元测试分别断言：
@@ -50,3 +51,28 @@ PYTHONPATH=src python tools/generate_fixtures.py --check
 
 born-digital PDF fixture 由 `tests/pdf_fixture_factory.py` 在临时目录中生成，
 不会写入仓库或交付包。
+
+## Phase 3 Figure/Caption 测试
+
+冻结自生成标注位于 `phase3/fixtures/figure_caption_cases.json`，覆盖单图、
+多面板、相邻两图、双栏 caption、歧义/无 caption、跨页拒配和局部顺序。
+
+8 篇 OA PDF 不进入仓库。已有合法本地副本时，可执行：
+
+```bash
+PYTHONPATH=src:tests python tools/run_phase3_corpus.py \
+  --pdf-root /isolated/oa-pdfs \
+  --output-root /isolated/phase3-output \
+  --sources realworld/oa_sources.json \
+  --summary /isolated/phase3-run-summary.json
+
+PYTHONPATH=src python tools/analyze_phase3_results.py \
+  --output-root /isolated/phase3-output \
+  --baseline-root /isolated/stage-c-output \
+  --sources realworld/oa_sources.json \
+  --run-summary /isolated/phase3-run-summary.json \
+  --json-output /tmp/phase3_summary.json \
+  --csv-output /tmp/figure_metrics.csv
+```
+
+脚本会逐件校验冻结 SHA-256、字节数和页数；不匹配时停止，不能换样本。

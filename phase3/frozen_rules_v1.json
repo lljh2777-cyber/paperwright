@@ -1,0 +1,27 @@
+{
+  "rules_version": "paper2md-phase3-figure-caption-rules-v1",
+  "frozen_before_implementation": true,
+  "caption": {
+    "prefix_pattern": "^\\s*(?:figure|fig\\.?)\\s*([0-9]+[a-z]?)\\b[\\s.:|—-]*",
+    "case_insensitive": true,
+    "same_page_only": true,
+    "maximum_gap_below_points": 110.0,
+    "maximum_caption_lines": 8,
+    "ambiguity_score_delta": 0.08,
+    "inside_large_image_allowed": true,
+    "inside_large_image_minimum_page_area_ratio": 0.2
+  },
+  "figure": {
+    "tiny_candidate_page_area_ratio": 0.002,
+    "no_caption_minimum_page_area_ratio": 0.015,
+    "strong_group_gap_points": 12.0,
+    "maximum_composite_pixels": 16000000,
+    "cross_page_grouping": false,
+    "pure_vector_groups": false
+  },
+  "markdown": {
+    "matched_figure_placement": "immediately_before_caption",
+    "unmatched_figure_placement": "page_end",
+    "caption_lines_removed_from_normal_flow_only_when_matched": true
+  }
+}

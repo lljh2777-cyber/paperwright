@@ -18,6 +18,9 @@ PDFium         PDFBox
 PhysicalDocument
        |
        v
+Page-local Figure/Caption rules
+       |
+       v
 Deterministic writer
        |
        v
@@ -34,6 +37,8 @@ article.md + images/ + physical_document.json + manifest.json
   核心模型。
 - `paper2md.api`：输入路径验证、后端选择和输出事务边界。
 - `paper2md.manifest`：稳定 manifest 构造与契约检查。
+- `paper2md.figures`：仅使用同页文本 marker、bbox、邻近/包含关系构建
+  Figure group 与 caption association；不做图像语义理解。
 - `paper2md.writer`：把 PhysicalDocument 与内存资产确定性写入隔离临时
   目录，再原子提交。
 - `paper2md.cli`：面向用户的最小命令行；错误转为明确非零退出状态。
@@ -51,8 +56,9 @@ article.md + images/ + physical_document.json + manifest.json
 
 ## MVP 边界
 
-MVP 只对原生文本对象做确定性几何排序，支持简单双栏，不宣称语义阅读
-顺序恢复。图片按原生 image object 提取并放在对应页末，不推断 caption
-邻接。表格只保留文字并明确标为 `degraded`。不实现 OCR、语义表格、
-公式 LaTeX 或完整矢量 Figure 重建。PDFium 运行时不进入源码交付包；
-PDFBox 只是可替换接口。
+Phase 3 只在 Figure/caption 周边调整局部 Markdown 放置，不宣称完整语义
+阅读顺序恢复。高置信同页 caption 配对时，Figure 放在 caption 之前；
+歧义、无 caption 或跨页候选保持页末降级。多个原生位图可按 PDF bbox
+组合，但 `vector_evidence.rendered_into_asset=false` 时不得称为完整矢量
+重建。表格继续只保留文字并明确标为 `degraded`。不实现 OCR、语义表格
+或公式 LaTeX。PDFium 运行时不进入源码交付包；PDFBox 只是可替换接口。

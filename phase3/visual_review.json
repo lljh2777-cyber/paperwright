@@ -1,0 +1,102 @@
+{
+  "review_version": "paper2md-phase3-manual-visual-review-v1",
+  "review_scope": "eight frozen OA papers, one primary Figure per paper plus one disclosed degraded case",
+  "rendering_method": "PDFium page render at 1.35x compared side-by-side with referenced Figure assets",
+  "runtime_evidence_root": "/workspace/scratch/44a1d2333e11/paper2md-phase3-visual-final",
+  "images_in_source_package": false,
+  "samples": [
+    {
+      "paper_id": "RW2-001",
+      "page": 4,
+      "figure_ids": ["fig-p004-001"],
+      "contact_sha256": "cdbcde6d37307b06512642e759887fe25bb7bab4a0159474dcf91fedac9b0dd9",
+      "observation": "原生嵌入图包含 A–D 面板，非空、非整页截图；Figure 1 caption 配对和 Markdown 邻接正确。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-002",
+      "page": 4,
+      "figure_ids": ["fig-p004-001"],
+      "contact_sha256": "96eef9eb132eb8e2ea876f3332085e3bec70fe30c8f57254ff28721b005a79a8",
+      "observation": "FBSDE 主图完整，caption 首行由几何同行重组为 Figure 1 Overview，图与 caption 邻接。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-003",
+      "page": 2,
+      "figure_ids": ["fig-p002-001"],
+      "contact_sha256": "45d554f3784a4cf0833e06ec47e4f846789e4cf655804f387ce6a8d630d9b774",
+      "observation": "神经网络图为单一原生位图，内容与页面 Figure 1 一致；没有吞并右栏正文。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-004",
+      "page": 3,
+      "figure_ids": ["fig-p003-001"],
+      "contact_sha256": "0a93c1c26bff924b005602802baedaa642b04b31de5bf1aec180bf279fdac641",
+      "observation": "PCA 图的点、标签和图例完整；Figure 1 caption 与该图同页相邻。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-005",
+      "page": 3,
+      "figure_ids": ["fig-p003-001", "fig-p003-002", "fig-p003-003"],
+      "contact_sha256": "c33c76f2ce31f9dbe8ce98a257918913d610f6de0c6f9dc6db4cebc4ddda4c5f",
+      "observation": "baseline 的 14 个碎片改善为一个含 12 个原生对象的位图组和两个独立 plot；位图组与 Figure 1 caption 邻接，但整张 Figure 尚未合成一个资产，矢量证据也未渲染，manifest 已标 degraded。",
+      "figure_result": "partial",
+      "caption_result": "partial"
+    },
+    {
+      "paper_id": "RW2-006",
+      "page": 3,
+      "figure_ids": ["fig-p003-001"],
+      "contact_sha256": "b812ff709de1c9d83e9dbf05e03db02a07f48af95b6ec8d2268c1aaedafb2f00",
+      "observation": "ATAD1 Figure 1 的 A–G 面板在原生图中完整，caption 配对正确。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-007",
+      "page": 3,
+      "figure_ids": ["fig-p003-001"],
+      "contact_sha256": "61566f9fb617ae39db7bdc95823a9d2d2450c459495616ffd0f24cdb64eb4702",
+      "observation": "空间转录组多面板 Figure 1 是完整原生位图，caption 同页匹配，无页面截图冒充。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-008",
+      "page": 3,
+      "figure_ids": ["fig-p003-001"],
+      "contact_sha256": "4d5360d7c229b346257f8750cc23b1624ed043a3764b852dbc889378e57dde85",
+      "observation": "UMAP Figure 1 的九个子面板和图例完整；页眉 logo 被过滤为非 Figure 候选，caption 配对正确。",
+      "figure_result": "pass",
+      "caption_result": "pass"
+    },
+    {
+      "paper_id": "RW2-005",
+      "page": 7,
+      "figure_ids": ["fig-p007-001", "fig-p007-002", "fig-p007-003"],
+      "contact_sha256": "ecdf5ef6f6313961963f314c20411e822ee7f41b75996f13bf30488857fa15aa",
+      "observation": "同一页面的大 Figure 仍被分为三个组；caption 距最近对象超过冻结阈值，系统拒绝强配并页末降级放置。内容可见但重建不完整。",
+      "figure_result": "degraded",
+      "caption_result": "rejected_as_designed"
+    }
+  ],
+  "totals": {
+    "primary_papers_reviewed": 8,
+    "primary_figure_pass": 7,
+    "primary_figure_partial": 1,
+    "additional_degraded_cases_reviewed": 1,
+    "blank_or_whole_page_fake_figures_observed": 0,
+    "visually_observed_wrong_cross_page_caption_pairs": 0
+  },
+  "limits": [
+    "其余 19 个 matched association 只做了规则、页码、bbox、文本 hash 与 Markdown 邻接机器核对，没有逐一视觉确认。",
+    "视觉结果仅代表冻结的 8 篇 OA 论文，不外推为全部出版商版式。"
+  ]
+}

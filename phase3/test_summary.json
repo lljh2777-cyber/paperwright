@@ -1,0 +1,173 @@
+{
+  "base_commit": "8ecd01871eff02e700f0cef1c64cae186be8c69f",
+  "check_count": 8,
+  "checks": [
+    {
+      "check_id": "unit_tests",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:08.805194Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:08.554267Z",
+      "stderr_path": "phase3/test_evidence/unit_tests.stderr.txt",
+      "stderr_sha256": "6e977eeff6d67d2e61c9908597e35cf617d551327c105b37da2007289ac5eee6",
+      "stderr_size_bytes": 6119,
+      "stdout_path": "phase3/test_evidence/unit_tests.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    },
+    {
+      "check_id": "fixture_check",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/generate_fixtures.py",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:08.868317Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:08.805575Z",
+      "stderr_path": "phase3/test_evidence/fixture_check.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/fixture_check.stdout.txt",
+      "stdout_sha256": "c06234adcaf9481bffecef34aaf387c78bfc50a1f09999c9393cda05285755e6",
+      "stdout_size_bytes": 20
+    },
+    {
+      "check_id": "content_smoke",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/run_stage_b_smoke.py"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:08.995220Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:08.868724Z",
+      "stderr_path": "phase3/test_evidence/content_smoke.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/content_smoke.stdout.txt",
+      "stdout_sha256": "d615e64bfe4c16bf0548343aa158b20056f807bebcb532fd79f3afcea24af9e9",
+      "stdout_size_bytes": 3283
+    },
+    {
+      "check_id": "stage_c_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_stage_c_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:09.022677Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:08.995585Z",
+      "stderr_path": "phase3/test_evidence/stage_c_summary.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/stage_c_summary.stdout.txt",
+      "stdout_sha256": "0ddc2e28ce80ed0be20ffd23cc56cacc888ae0dcb65e19088ae588ebda785263",
+      "stdout_size_bytes": 490
+    },
+    {
+      "check_id": "phase3_summary",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_phase3_summary.py"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:09.042646Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:09.023036Z",
+      "stderr_path": "phase3/test_evidence/phase3_summary.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/phase3_summary.stdout.txt",
+      "stdout_sha256": "36b4eff1a4409c467fa687d28857fb2cc664dc07117ba55923d2ce9875ff9fc9",
+      "stdout_size_bytes": 650
+    },
+    {
+      "check_id": "compileall",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "tools"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:09.076214Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:09.042985Z",
+      "stderr_path": "phase3/test_evidence/compileall.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/compileall.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    },
+    {
+      "check_id": "repo_policy",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_repo_policy.py",
+        "--root",
+        "."
+      ],
+      "ended_at_utc": "2026-07-30T03:01:09.110448Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:09.076507Z",
+      "stderr_path": "phase3/test_evidence/repo_policy.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/repo_policy.stdout.txt",
+      "stdout_sha256": "2585148ebf0b3e3ac2483915120a3f50b65232a76116339cfe61cb7c481ed595",
+      "stdout_size_bytes": 293
+    },
+    {
+      "check_id": "diff_check",
+      "command_argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T03:01:09.113145Z",
+      "exit_code": 0,
+      "pass": true,
+      "skip": false,
+      "started_at_utc": "2026-07-30T03:01:09.110767Z",
+      "stderr_path": "phase3/test_evidence/diff_check.stderr.txt",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_size_bytes": 0,
+      "stdout_path": "phase3/test_evidence/diff_check.stdout.txt",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_size_bytes": 0
+    }
+  ],
+  "failure_count": 0,
+  "frozen_annotation_case_count": 8,
+  "legacy_test_count": 43,
+  "pass_count": 8,
+  "phase3_test_method_count": 5,
+  "python": "3.12.13",
+  "skip_count": 0,
+  "summary_version": "paper2md-phase3-test-summary-v1",
+  "unit_test_count": 48
+}

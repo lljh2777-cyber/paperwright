@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paper2md.local/schemas/manifest-v0.2.json",
-  "title": "Paper2MD manifest v0.2",
+  "$id": "https://paper2md.local/schemas/manifest-v0.3.json",
+  "title": "Paper2MD manifest v0.3",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
     "warnings"
   ],
   "properties": {
-    "manifest_version": {"const": "paper2md-manifest-v0.2"},
+    "manifest_version": {"const": "paper2md-manifest-v0.3"},
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "backend": {
       "type": "object",
@@ -59,6 +59,108 @@
       "type": "array",
       "items": {"type": "object"}
     },
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "figure_id",
+          "page",
+          "bbox",
+          "member_element_ids",
+          "source_object_ids",
+          "extraction_mode",
+          "asset",
+          "caption",
+          "evidence_status",
+          "degraded_reasons",
+          "vector_evidence",
+          "markdown_placement"
+        ],
+        "properties": {
+          "figure_id": {"type": "string", "pattern": "^fig-p[0-9]{3}-[0-9]{3}$"},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"$ref": "#/$defs/bbox"},
+          "member_element_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "source_object_ids": {
+            "type": "array",
+            "items": {"type": ["string", "null"]}
+          },
+          "extraction_mode": {"enum": ["embedded", "grouped"]},
+          "asset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "size_bytes", "width_px", "height_px"],
+            "properties": {
+              "path": {"type": "string", "pattern": "^images/[^/]+\\.png$"},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "size_bytes": {"type": "integer", "minimum": 1},
+              "width_px": {"type": "integer", "minimum": 1},
+              "height_px": {"type": "integer", "minimum": 1}
+            }
+          },
+          "caption": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "confidence",
+              "reason",
+              "caption_id",
+              "element_ids",
+              "text",
+              "text_sha256",
+              "bbox",
+              "matching_rule"
+            ],
+            "properties": {
+              "status": {"enum": ["matched", "ambiguous", "none"]},
+              "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "caption_id": {"type": ["string", "null"]},
+              "element_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "text": {"type": ["string", "null"]},
+              "text_sha256": {
+                "anyOf": [
+                  {"type": "null"},
+                  {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                ]
+              },
+              "bbox": {
+                "anyOf": [
+                  {"type": "null"},
+                  {"$ref": "#/$defs/bbox"}
+                ]
+              },
+              "matching_rule": {"type": ["string", "null"]}
+            }
+          },
+          "evidence_status": {"type": "string", "minLength": 1},
+          "degraded_reasons": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "vector_evidence": {"type": "object"},
+          "markdown_placement": {
+            "enum": ["immediately-before-caption", "page-end-degraded"]
+          }
+        }
+      }
+    },
+    "figure_rejections": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
     "degraded": {
       "type": "array",
       "items": {"type": "object"}
@@ -70,6 +172,19 @@
       "properties": {
         "path": {"type": "string", "minLength": 1},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0},
+        "y": {"type": "number", "minimum": 0},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
       }
     }
   }

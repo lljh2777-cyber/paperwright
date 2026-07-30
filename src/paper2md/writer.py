@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .backends.base import ExtractedAsset
+from .figures import FigureGroup, analyze_figures, compose_group_png
 from .manifest import OutputFile, build_manifest, canonical_manifest_json, sha256_file
 from .models import Element, PhysicalDocument
 
@@ -224,10 +225,160 @@ def write_outputs(
     physical_path.write_text(document.canonical_json(), encoding="utf-8")
 
     title, title_element_ids = _title(document)
-    lines = [f"# {title}", ""]
     degraded: list[dict[str, Any]] = []
     asset_by_element = {asset.element_id: asset for asset in assets}
+    elements_by_id = {
+        element.element_id: element
+        for page in document.pages
+        for element in page.elements
+    }
     image_records: list[dict[str, Any]] = []
+
+    # Native assets are always retained, even when a deterministic Figure
+    # composite is added.  This preserves provenance and avoids lossy rewrite.
+    for page in document.pages:
+        for element in page.elements:
+            if element.kind != "image" or element.element_id not in asset_by_element:
+                continue
+            asset = asset_by_element[element.element_id]
+            image_path = images_dir / asset.suggested_name
+            image_path.write_bytes(asset.data)
+            relative = f"images/{asset.suggested_name}"
+            image_records.append(
+                {
+                    "element_id": element.element_id,
+                    "path": relative,
+                    "page": page.page_index + 1,
+                    "bbox": element.bbox.to_dict(),
+                    "source_object_id": element.source_object_id,
+                    "extraction_method": element.provenance.method,
+                    "placement": "native-retained",
+                    "figure_group_id": None,
+                    "markdown_referenced": False,
+                    "width_px": asset.width_px,
+                    "height_px": asset.height_px,
+                    "size_bytes": len(asset.data),
+                    "sha256": sha256_file(image_path),
+                }
+            )
+
+    analysis = analyze_figures(document)
+    image_record_by_element = {
+        item["element_id"]: item for item in image_records
+    }
+    figure_records: list[dict[str, Any]] = []
+    figure_by_id: dict[str, FigureGroup] = {}
+    figure_path_by_id: dict[str, str] = {}
+    figure_asset_paths: list[Path] = []
+    for group in analysis.groups:
+        figure_by_id[group.figure_id] = group
+        if group.extraction_mode == "embedded":
+            member_id = group.member_element_ids[0]
+            asset_record = image_record_by_element[member_id]
+            relative = str(asset_record["path"])
+            asset_width = int(asset_record["width_px"])
+            asset_height = int(asset_record["height_px"])
+            asset_size = int(asset_record["size_bytes"])
+            asset_hash = str(asset_record["sha256"])
+        else:
+            composite, asset_width, asset_height = compose_group_png(
+                group,
+                elements_by_id=elements_by_id,
+                assets_by_element=asset_by_element,
+            )
+            relative = f"images/{group.figure_id}.png"
+            composite_path = root / relative
+            composite_path.write_bytes(composite)
+            figure_asset_paths.append(composite_path)
+            asset_size = len(composite)
+            asset_hash = sha256_file(composite_path)
+        figure_path_by_id[group.figure_id] = relative
+        for member_id in group.member_element_ids:
+            record = image_record_by_element[member_id]
+            record["figure_group_id"] = group.figure_id
+            record["markdown_referenced"] = (
+                group.extraction_mode == "embedded"
+            )
+        caption = group.caption
+        figure_records.append(
+            {
+                "figure_id": group.figure_id,
+                "page": group.page_index + 1,
+                "bbox": group.bbox.to_dict(),
+                "member_element_ids": list(group.member_element_ids),
+                "source_object_ids": [
+                    elements_by_id[item].source_object_id
+                    for item in group.member_element_ids
+                ],
+                "extraction_mode": group.extraction_mode,
+                "asset": {
+                    "path": relative,
+                    "sha256": asset_hash,
+                    "size_bytes": asset_size,
+                    "width_px": asset_width,
+                    "height_px": asset_height,
+                },
+                "caption": {
+                    "status": group.caption_status,
+                    "confidence": group.caption_confidence,
+                    "reason": group.caption_reason,
+                    "caption_id": caption.caption_id if caption else None,
+                    "element_ids": list(caption.element_ids) if caption else [],
+                    "text": caption.text if caption else None,
+                    "text_sha256": (
+                        hashlib.sha256(caption.text.encode("utf-8")).hexdigest()
+                        if caption
+                        else None
+                    ),
+                    "bbox": caption.bbox.to_dict() if caption else None,
+                    "matching_rule": (
+                        "same_page_explicit_marker_and_geometry"
+                        if group.caption_status == "matched"
+                        else None
+                    ),
+                },
+                "evidence_status": group.evidence_status,
+                "degraded_reasons": list(group.degraded_reasons),
+                "vector_evidence": {
+                    "element_ids_sample": list(group.vector_evidence_element_ids),
+                    "count": group.vector_evidence_count,
+                    "element_ids_sha256": group.vector_evidence_sha256,
+                    "rendered_into_asset": False,
+                    "reason": (
+                        "native path bounds are provenance evidence only; "
+                        "the bitmap composite does not claim vector rendering"
+                    ),
+                },
+                "markdown_placement": (
+                    "immediately-before-caption"
+                    if group.caption_status == "matched"
+                    else "page-end-degraded"
+                ),
+            }
+        )
+
+    lines = [f"# {title}", ""]
+    emitted_figures: set[str] = set()
+    matched_by_caption_element: dict[str, str] = {}
+    for group in analysis.groups:
+        if group.caption_status == "matched" and group.caption is not None:
+            for element_id in group.caption.element_ids:
+                matched_by_caption_element[element_id] = group.figure_id
+
+    def emit_figure(group: FigureGroup, placement: str) -> None:
+        if group.figure_id in emitted_figures:
+            return
+        relative = figure_path_by_id[group.figure_id]
+        lines.extend(
+            [
+                f"<!-- figure: {group.figure_id}; page: {group.page_index + 1}; "
+                f"mode: {group.extraction_mode}; placement: {placement}; "
+                f"members: {','.join(group.member_element_ids)} -->",
+                f"![Figure from page {group.page_index + 1}]({relative})",
+                "",
+            ]
+        )
+        emitted_figures.add(group.figure_id)
 
     for page in document.pages:
         lines.extend([f"<!-- page: {page.page_index + 1} -->", ""])
@@ -248,6 +399,13 @@ def write_outputs(
         for element_ids, text in _markdown_text_groups(page.elements):
             if any(element_id in title_element_ids for element_id in element_ids):
                 continue
+            matched_ids = {
+                matched_by_caption_element[element_id]
+                for element_id in element_ids
+                if element_id in matched_by_caption_element
+            }
+            for figure_id in sorted(matched_ids):
+                emit_figure(figure_by_id[figure_id], "caption-adjacent")
             if text:
                 lines.extend(
                     [
@@ -257,45 +415,17 @@ def write_outputs(
                         "",
                     ]
                 )
-        # Image placement is page-local and explicit; caption adjacency is not
-        # inferred in this MVP.
-        for element in page.elements:
-            if element.kind != "image" or element.element_id not in asset_by_element:
-                continue
-            asset = asset_by_element[element.element_id]
-            image_path = images_dir / asset.suggested_name
-            image_path.write_bytes(asset.data)
-            relative = f"images/{asset.suggested_name}"
-            digest = sha256_file(image_path)
-            lines.extend(
-                [
-                    f"<!-- element: {element.element_id}; "
-                    f"page: {page.page_index + 1}; placement: page-end -->",
-                    f"![Extracted image from page {page.page_index + 1}]({relative})",
-                    "",
-                ]
-            )
-            image_records.append(
-                {
-                    "element_id": element.element_id,
-                    "path": relative,
-                    "page": page.page_index + 1,
-                    "bbox": element.bbox.to_dict(),
-                    "source_object_id": element.source_object_id,
-                    "extraction_method": element.provenance.method,
-                    "placement": "page-end",
-                    "width_px": asset.width_px,
-                    "height_px": asset.height_px,
-                    "size_bytes": len(asset.data),
-                    "sha256": digest,
-                }
-            )
+        for group in analysis.groups:
+            if group.page_index == page.page_index and group.figure_id not in emitted_figures:
+                emit_figure(group, "page-end-degraded")
 
     article_path = root / "article.md"
     article_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
     output_paths = [article_path, physical_path]
     output_paths.extend(root / item["path"] for item in image_records)
+    output_paths.extend(figure_asset_paths)
+    output_paths = list(dict.fromkeys(output_paths))
     outputs = [
         OutputFile(
             str(path.relative_to(root)),
@@ -339,12 +469,35 @@ def write_outputs(
                 "reason": "C0 controls are retained in PhysicalDocument provenance but omitted from Markdown",
             }
         )
-    if image_records:
+    unmatched_count = sum(
+        group.caption_status != "matched" for group in analysis.groups
+    )
+    if unmatched_count:
         warnings.append(
             {
-                "code": "image_placement_page_end",
-                "reason": "caption adjacency is not inferred in v2-mvp",
-                "count": len(image_records),
+                "code": "figure_caption_unmatched_or_ambiguous",
+                "reason": "only same-page high-confidence deterministic matches are adjacent",
+                "count": unmatched_count,
+            }
+        )
+    if analysis.rejections:
+        warnings.append(
+            {
+                "code": "figure_candidates_filtered",
+                "count": len(analysis.rejections),
+                "reason": "small unpaired native images remain in provenance but are not promoted to Figures",
+            }
+        )
+    grouped_vector_degraded = sum(
+        group.extraction_mode == "grouped" and group.vector_evidence_count > 0
+        for group in analysis.groups
+    )
+    if grouped_vector_degraded:
+        warnings.append(
+            {
+                "code": "grouped_figure_vector_evidence_not_rendered",
+                "count": grouped_vector_degraded,
+                "reason": "group composite contains native bitmap members only; vector bounds remain provenance evidence",
             }
         )
     manifest = build_manifest(
@@ -358,6 +511,8 @@ def write_outputs(
         warnings=warnings,
         elements=element_records,
         images=image_records,
+        figures=figure_records,
+        figure_rejections=list(analysis.rejections),
         degraded=degraded,
         physical_document={
             "path": "physical_document.json",

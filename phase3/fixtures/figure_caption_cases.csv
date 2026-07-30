@@ -1,0 +1,9 @@
+case_id,page_count,expected_group_count,expected_caption_statuses,coverage
+FC-001-single-caption,1,1,matched,single image plus caption
+FC-002-multipanel,1,1,matched,multiple native image objects
+FC-003-adjacent-figures,1,2,matched|matched,two figures on one page
+FC-004-two-column-captions,1,2,matched|matched,column-local matching
+FC-005-ambiguous-caption,1,1,ambiguous,conflicting caption candidates
+FC-006-no-caption,1,1,none,no caption fallback
+FC-007-cross-page-rejection,2,1,none,cross-page pairing forbidden
+FC-008-caption-local-order,1,1,matched,body figure caption body order

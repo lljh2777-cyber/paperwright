@@ -1,0 +1,118 @@
+{
+  "base_commit": "8ecd01871eff02e700f0cef1c64cae186be8c69f",
+  "base_commit_verified": true,
+  "baseline_version": "paper2md-phase3-stage-c-source-baseline-v1",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "aa6221877cf3728af66f0063448462a61a8e5e27fca049639d9a1882b8ae2a59",
+      "size_bytes": 2821
+    },
+    {
+      "path": "REPRODUCE.md",
+      "sha256": "7ce366d6ec020260af826f32e72ce63833b32f51ab5eee7796cc3c2728d2efeb",
+      "size_bytes": 1576
+    },
+    {
+      "path": "config/defaults.json",
+      "sha256": "f2a6a3917d60065c7200502f6817f8c4da4910bc886b94ed9147f5ca72889ed7",
+      "size_bytes": 270
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "8ec8167bf59e3637c571a98ddd0a16c55ed4627e48c8cf6c1e191414e28fcbc6",
+      "size_bytes": 554
+    },
+    {
+      "path": "src/paper2md/__init__.py",
+      "sha256": "b83341b545944dc71ccb6b43267fc86f5ec09dbc1d3e9ab9b973f9b495e4331b",
+      "size_bytes": 367
+    },
+    {
+      "path": "src/paper2md/__main__.py",
+      "sha256": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+      "size_bytes": 48
+    },
+    {
+      "path": "src/paper2md/api.py",
+      "sha256": "00f66f6d4ff81490087aaad5fa47bbd1b2520ca43d6f16f49e63ba3c7e1860c4",
+      "size_bytes": 3439
+    },
+    {
+      "path": "src/paper2md/backends/__init__.py",
+      "sha256": "ae6ba8ceb8c7391a6f94e535842417cd33b9b4498986fdebdbeec4b8ccd8ad2e",
+      "size_bytes": 165
+    },
+    {
+      "path": "src/paper2md/backends/base.py",
+      "sha256": "463f33c8391b5f46536dd00c3aec927d5e983fdd42f4eb9057e2b02c52a0e76d",
+      "size_bytes": 1873
+    },
+    {
+      "path": "src/paper2md/backends/pdfbox.py",
+      "sha256": "3355a2ea09514d81225dc3b1dc79145d9288b7c918cf72e56f335efe81a19a39",
+      "size_bytes": 868
+    },
+    {
+      "path": "src/paper2md/backends/pdfium.py",
+      "sha256": "1e486ce04c94df4ea160af09b7ad288892ce4f127f69635eb107caf8a39a6d12",
+      "size_bytes": 16326
+    },
+    {
+      "path": "src/paper2md/cli.py",
+      "sha256": "f06770be680ab360c1f9e97df69a0dd3cc7b0b0e895cc2676dd9181181e73993",
+      "size_bytes": 3077
+    },
+    {
+      "path": "src/paper2md/config.py",
+      "sha256": "e45201c62fdb9c0f694a92bbc30623ccdc1efe09b33c06f6e72e8a561ab511d0",
+      "size_bytes": 1680
+    },
+    {
+      "path": "src/paper2md/exceptions.py",
+      "sha256": "1145062dc4e3cc1b7430df9edb022c97f7f27544056b3135dd5413a1b840e01d",
+      "size_bytes": 658
+    },
+    {
+      "path": "src/paper2md/manifest.py",
+      "sha256": "ad36a9d293fe3bb68385a1a6909980589f81fc7fa5c3ac82aee5b932eca4e3f4",
+      "size_bytes": 5025
+    },
+    {
+      "path": "src/paper2md/models.py",
+      "sha256": "1609b533e20354095ea9f745d208e625a1eaef78675c0a11d4b6a73544916f7f",
+      "size_bytes": 9418
+    },
+    {
+      "path": "src/paper2md/paths.py",
+      "sha256": "55832c1bc4b0385e0e4f75969eced89fefc92367712b4d2f668090590c65596c",
+      "size_bytes": 1452
+    },
+    {
+      "path": "src/paper2md/schemas/manifest.schema.json",
+      "sha256": "acdf902e5c829519eae20058e53534127c74943aad99aa551f2c80191dc6a839",
+      "size_bytes": 2093
+    },
+    {
+      "path": "src/paper2md/schemas/physical_document.schema.json",
+      "sha256": "b057d9f7e86a817b9533ef304fe4eb7f8f6ec3f4be56aa2d7c23cd86f6dcae48",
+      "size_bytes": 3439
+    },
+    {
+      "path": "src/paper2md/writer.py",
+      "sha256": "fe0c8f2558713730cb5ad3e616f72cf0b37bd8dbb9955b98a5d6a09f9cc00bdc",
+      "size_bytes": 13174
+    }
+  ],
+  "runtime": {
+    "pdfium": "145.0.7616.0",
+    "pdfium_binary": {
+      "name": "libpdfium.so",
+      "sha256": "504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568",
+      "size_bytes": 6010592
+    },
+    "pillow": "12.2.0",
+    "pypdfium2": "5.3.0",
+    "python": "3.12.13"
+  }
+}
