@@ -121,49 +121,85 @@ def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
         else:
             match.append(item)
 
-    # Tiny control-glyph objects can enlarge a group's vertical bounds enough
-    # to split an otherwise continuous native line.  Merge only groups that
-    # are visibly co-linear and separated by a sub-word horizontal gap.  This
-    # is deliberately much stricter than the first-pass line grouping so it
-    # cannot bridge a real column gutter.
-    merged_groups: list[list[Element]] = []
-    for group in sorted(
-        line_groups,
-        key=lambda values: (
-            min(item.bbox.y for item in values),
-            min(item.bbox.x for item in values),
-        ),
-    ):
-        group_left = min(item.bbox.x for item in group)
-        group_top = min(item.bbox.y for item in group)
-        group_right = max(item.bbox.right for item in group)
-        group_bottom = max(item.bbox.bottom for item in group)
-        match_index: int | None = None
-        for index in range(len(merged_groups) - 1, max(-1, len(merged_groups) - 8), -1):
-            candidate = merged_groups[index]
-            candidate_left = min(item.bbox.x for item in candidate)
-            candidate_top = min(item.bbox.y for item in candidate)
-            candidate_right = max(item.bbox.right for item in candidate)
-            candidate_bottom = max(item.bbox.bottom for item in candidate)
-            overlap = min(group_bottom, candidate_bottom) - max(
-                group_top, candidate_top
-            )
-            smaller_height = min(
-                group_bottom - group_top, candidate_bottom - candidate_top
-            )
-            horizontal_gap = max(
-                candidate_left - group_right,
-                group_left - candidate_right,
-                0.0,
-            )
-            gap_limit = max(1.0, min(2.5, smaller_height * 0.35))
-            if overlap >= smaller_height * 0.45 and horizontal_gap <= gap_limit:
-                match_index = index
-                break
-        if match_index is None:
-            merged_groups.append(list(group))
+    # Native objects from one visual line may arrive in an order that causes
+    # the first pass to create two groups (for example, a later suffix is seen
+    # before the fragment that bridges it to the prefix).  Reconsider all
+    # co-linear groups until reaching a fixed point.  The ordinary threshold
+    # accepts a normal word space; consecutive native object order expands it
+    # slightly, but never enough to bridge a real column gutter.
+    def group_bounds(
+        group: list[Element],
+    ) -> tuple[float, float, float, float]:
+        return (
+            min(item.bbox.x for item in group),
+            min(item.bbox.y for item in group),
+            max(item.bbox.right for item in group),
+            max(item.bbox.bottom for item in group),
+        )
+
+    def native_range(group: list[Element]) -> tuple[int, int] | None:
+        values = [
+            value
+            for item in group
+            if isinstance((value := item.metadata.get("native_order")), int)
+        ]
+        return (min(values), max(values)) if values else None
+
+    def groups_can_merge(left_group: list[Element], right_group: list[Element]) -> bool:
+        left, left_top, left_right, left_bottom = group_bounds(left_group)
+        right, right_top, right_right, right_bottom = group_bounds(right_group)
+        overlap = min(left_bottom, right_bottom) - max(left_top, right_top)
+        smaller_height = min(
+            left_bottom - left_top,
+            right_bottom - right_top,
+        )
+        if smaller_height <= 0 or overlap < smaller_height * 0.45:
+            return False
+        horizontal_gap = max(
+            left - right_right,
+            right - left_right,
+            0.0,
+        )
+        gap_limit = max(6.0, min(10.0, smaller_height * 0.8))
+
+        if left <= right:
+            earlier, later = native_range(left_group), native_range(right_group)
         else:
-            merged_groups[match_index].extend(group)
+            earlier, later = native_range(right_group), native_range(left_group)
+        native_contiguous = (
+            earlier is not None
+            and later is not None
+            and earlier[1] + 1 == later[0]
+        )
+        if native_contiguous:
+            gap_limit = max(gap_limit, min(14.0, smaller_height * 1.2))
+        return horizontal_gap <= gap_limit
+
+    merged_groups = [list(group) for group in line_groups]
+    while True:
+        merged_groups.sort(
+            key=lambda values: (
+                min(item.bbox.y for item in values),
+                min(item.bbox.x for item in values),
+            )
+        )
+        merged = False
+        for left_index, left_group in enumerate(merged_groups):
+            for right_index in range(left_index + 1, len(merged_groups)):
+                right_group = merged_groups[right_index]
+                if min(item.bbox.y for item in right_group) > max(
+                    item.bbox.bottom for item in left_group
+                ) + 2.5:
+                    break
+                if groups_can_merge(left_group, right_group):
+                    left_group.extend(right_group)
+                    del merged_groups[right_index]
+                    merged = True
+                    break
+            if merged:
+                break
+        if not merged:
+            break
     line_groups = merged_groups
 
     def line_bbox(group: list[Element]) -> tuple[float, float, float, float]:
@@ -297,7 +333,7 @@ class PDFiumBackend:
                     "top-left/pdf-point/y-down"
                 ),
                 "source_object_identity": "unavailable_from_public_wrapper",
-                "text_order": "deterministic_basic_columns_v1",
+                "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
                 "text_line_reconstruction": "pdfium_union_bounded_text_v1",
             },
         )

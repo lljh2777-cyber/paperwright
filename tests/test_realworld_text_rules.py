@@ -26,6 +26,54 @@ def text(element_id, x, y, width, height, value):
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_iterative_merge_restores_native_contiguous_dixon_line(self):
+        values = [
+            text("p0000-text-00073", 37.21, 593.60, 61.28, 6.70, "and fluorescence"),
+            text("p0000-text-00074", 102.12, 594.27, 22.75, 6.03, "in situ"),
+            text(
+                "p0000-text-00075",
+                128.18,
+                593.60,
+                103.64,
+                8.97,
+                "hybridization (FISH) results",
+            ),
+            text("p0000-text-00076", 232.16, 593.38, 8.25, 3.42, "4–6"),
+            text("p0000-text-00077", 241.14, 594.05, 47.71, 6.29, ". Our IMR90"),
+            text(
+                "p0000-text-00078",
+                37.20,
+                604.27,
+                251.49,
+                8.97,
+                "Hi-C data show a high degree of similarity",
+            ),
+        ]
+        values = [
+            replace(
+                item,
+                metadata={
+                    **item.metadata,
+                    "native_order": int(item.element_id.rsplit("-", 1)[1]),
+                },
+            )
+            for item in values
+        ]
+        ordered = _reading_order(values, 595)
+        first_line = [
+            item
+            for item in ordered
+            if item.metadata["line_group"] == ordered[0].metadata["line_group"]
+        ]
+        self.assertEqual(
+            [item.element_id for item in first_line],
+            [f"p0000-text-{index:05d}" for index in range(73, 78)],
+        )
+        self.assertNotEqual(
+            ordered[0].metadata["line_group"],
+            ordered[-1].metadata["line_group"],
+        )
+
     def test_native_union_line_text_wins_over_overlapping_object_text(self):
         items = _reading_order(
             [
