@@ -1,0 +1,13 @@
+{
+  "backend": "pdfium",
+  "contract_version": "paper2md-physical-document-v0.2",
+  "limits": {
+    "max_pages": 2000,
+    "max_output_bytes": 536870912,
+    "timeout_seconds": 120
+  },
+  "output": {
+    "allow_existing_directory": false,
+    "atomic_write": true
+  }
+}

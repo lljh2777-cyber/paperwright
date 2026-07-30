@@ -1,0 +1,201 @@
+{
+  "base_commit": "7e559221b46d2204554c303312b2503531b351c0",
+  "check_count": 7,
+  "checks": [
+    {
+      "check_id": "fixture_check",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/generate_fixtures.py",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.471944Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.432764Z",
+      "stderr": {
+        "path": "stage_a/logs/fixture_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/fixture_check.stdout.txt",
+        "sha256": "c06234adcaf9481bffecef34aaf387c78bfc50a1f09999c9393cda05285755e6",
+        "size_bytes": 20
+      }
+    },
+    {
+      "check_id": "unit_tests",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.550857Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.472354Z",
+      "stderr": {
+        "path": "stage_a/logs/unit_tests.stderr.txt",
+        "sha256": "2b4ba88ca1c801eed827052698151b6b4e3413786a7e4695366a9372b9d05f31",
+        "size_bytes": 3085
+      },
+      "stdout": {
+        "path": "stage_a/logs/unit_tests.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "cli_version",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "paper2md",
+        "--version"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.596181Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.551394Z",
+      "stderr": {
+        "path": "stage_a/logs/cli_version.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/cli_version.stdout.txt",
+        "sha256": "6ca9ad07cbedd4daee25d4b79c5d044e6a76d6720d70eeaa7dd71afdcb2572d0",
+        "size_bytes": 17
+      }
+    },
+    {
+      "check_id": "cli_validate_model",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "paper2md",
+        "validate-model",
+        "tests/fixtures/physical_document.minimal.json"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.636957Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.596534Z",
+      "stderr": {
+        "path": "stage_a/logs/cli_validate_model.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/cli_validate_model.stdout.txt",
+        "sha256": "4087815da30c3a57134ce60357a3604c0b81afaf7b1df2ae25a14f252b4ce530",
+        "size_bytes": 184
+      }
+    },
+    {
+      "check_id": "compileall",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "tools"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.664539Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.637279Z",
+      "stderr": {
+        "path": "stage_a/logs/compileall.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/compileall.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "git_diff_check",
+      "command_argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.666324Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.664802Z",
+      "stderr": {
+        "path": "stage_a/logs/git_diff_check.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/git_diff_check.stdout.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      }
+    },
+    {
+      "check_id": "repo_policy",
+      "command_argv": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+        "tools/check_repo_policy.py",
+        "--root",
+        "."
+      ],
+      "ended_at_utc": "2026-07-30T00:22:25.695785Z",
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "pass": true,
+      "started_at_utc": "2026-07-30T00:22:25.666501Z",
+      "stderr": {
+        "path": "stage_a/logs/repo_policy.stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      "stdout": {
+        "path": "stage_a/logs/repo_policy.stdout.txt",
+        "sha256": "784de4bdad42c7bda377da3099cbfc69ab7eb5867198c3605f513fd34dcd3c62",
+        "size_bytes": 300
+      }
+    }
+  ],
+  "environment": {
+    "implementation": "CPython",
+    "platform": "Linux-6.12.13-x86_64-with-glibc2.39",
+    "python": "3.12.13 (main, Mar  3 2026, 14:59:34) [Clang 21.1.4 ]"
+  },
+  "failure_count": 0,
+  "historical_runs": [
+    {
+      "command": "PYTHONPATH=src python -m unittest discover -s tests -v",
+      "exact_utc": "not_recorded_before_runner_was_added",
+      "failure_count": 2,
+      "failures": [
+        "test_api_uses_injected_backend: test expectation incorrectly treated registry alias as engine identity",
+        "test_input_inside_output_is_rejected: expected message did not match the correct rejection category"
+      ],
+      "remediation": "tests/path error classification corrected; complete suite rerun",
+      "result": "25 passed, 2 failed"
+    }
+  ],
+  "pass_count": 7,
+  "schema_version": "paper2md-v2-bootstrap-test-summary-v1",
+  "skip_count": 0
+}

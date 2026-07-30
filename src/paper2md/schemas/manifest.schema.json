@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paper2md.local/schemas/manifest-v0.2.json",
+  "title": "Paper2MD manifest v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "source_sha256",
+    "backend",
+    "contract_version",
+    "page_count",
+    "status",
+    "outputs",
+    "warnings"
+  ],
+  "properties": {
+    "manifest_version": {"const": "paper2md-manifest-v0.2"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "contract_version": {
+      "const": "paper2md-physical-document-v0.2"
+    },
+    "page_count": {"type": "integer", "minimum": 1},
+    "status": {
+      "enum": ["success", "success_with_degradation", "failed"]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "size_bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  }
+}
