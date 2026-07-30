@@ -14,6 +14,50 @@
 
 ## 常见问题
 
+### `pip install .` 提示找不到 `pyproject.toml`
+
+当前终端不在项目根目录。先进入同时包含 `pyproject.toml`、`src/` 和
+`README.md` 的目录，再执行安装。
+
+### 找不到 `python` 或 `py`
+
+安装 64 位 Python 3.10、3.11 或 3.12。Windows 官方安装器需要启用
+Python Launcher；Linux 可能还需要发行版提供的 `python3-venv` 和
+`python3-pip`。
+
+### PowerShell 不允许激活 `.venv`
+
+只为当前 PowerShell 窗口临时放行：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+不希望改变执行策略时，直接运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m paper2md --help
+```
+
+### 安装后找不到 `paper2md`
+
+通常是虚拟环境尚未激活，或者关闭终端后没有重新激活。也可以始终使用：
+
+```bash
+python -m paper2md --help
+```
+
+### 依赖下载失败
+
+首次安装需要访问 Python Package Index。检查网络、代理和系统时间；不要从
+来源不明的网站下载 PDFium 二进制。离线安装包尚未提供。
+
+### 提示 Python 版本不兼容
+
+当前声明范围是 Python 3.10–3.12。Python 3.13、macOS 和 ARM 平台尚未完成
+项目验证。
+
 ### PDFBox 为什么失败？
 
 Alpha 只保留 PDFBox 接口，没有捆绑或执行 JAR。选择
@@ -47,5 +91,4 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 - 深层 Figure/caption 语义；
 - PDFBox 完整后端；
 - GUI、Web 服务、容器或公开 PyPI release；
-- Phase 6 云端重新验证 Windows 的声明。Phase 5 已有一次独立 Windows
-  门禁，但其他 Windows/Python 组合仍需用户侧验证。
+- macOS、Windows ARM、Linux ARM 和 Python 3.13。

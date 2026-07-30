@@ -74,7 +74,7 @@ class Phase5AlphaTests(unittest.TestCase):
         )["project"]
         self.assertEqual(project["scripts"]["paper2md"], "paper2md.cli:main")
         self.assertIn(">=3.10", project["requires-python"])
-        self.assertIn("<3.14", project["requires-python"])
+        self.assertIn("<3.13", project["requires-python"])
 
     def test_help_contains_all_alpha_commands(self):
         help_text = build_parser().format_help()

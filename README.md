@@ -3,8 +3,6 @@
 Paper2MD 是一个本地、非生成式 AI 的科研 PDF 转换工具。当前版本为
 `0.6.0a0` 源码 Alpha。
 
-输入输出：
-
 ```text
 PDF → PhysicalDocument → article.md + images/ + manifest.json
 ```
@@ -22,42 +20,112 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
 报告不可用，不会伪造转换结果。
 
-## 安装
+## 开始之前
 
-需要 Python 3.10–3.12。源码 Alpha 锁定的验证依赖为：
+需要：
 
-```text
-pypdfium2==5.3.0
-Pillow==12.2.0
-```
+- 64 位 Python 3.10、3.11 或 3.12；
+- Git，或者从 GitHub 下载并解压源码 ZIP；
+- 首次安装时能够访问 Python Package Index，以取得锁定依赖；
+- born-digital（本身含文字层）的 PDF。
 
-在项目根目录安装：
+Windows 11 / Python 3.11.2 和 Linux / Python 3.12 已实测。macOS、Windows
+ARM 和 Linux ARM 尚未验证。
 
-```bash
+## Windows PowerShell 安装
+
+```powershell
+git clone https://github.com/lljh2777-cyber/Paper2MD.git
+cd Paper2MD
+
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install .
+
 paper2md --version
 paper2md --help
 ```
 
-转换单篇 PDF：
+如果没有 Git，可在 GitHub 页面选择 **Code → Download ZIP**，解压后在包含
+`pyproject.toml` 的目录打开 PowerShell，再从创建虚拟环境开始执行。
+
+## Linux 安装
+
+某些 Linux 发行版需要先通过系统包管理器安装 `python3-venv` 和
+`python3-pip`。
+
+```bash
+git clone https://github.com/lljh2777-cyber/Paper2MD.git
+cd Paper2MD
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
+
+paper2md --version
+paper2md --help
+```
+
+`pip install .` 会根据 `pyproject.toml` 自动安装
+`pypdfium2==5.3.0` 和 `Pillow==12.2.0`，无需提前手动安装。
+
+## 转换单篇 PDF
 
 ```bash
 paper2md convert input.pdf output-dir
 ```
 
-批量转换：
+Windows 示例：
 
-```bash
-paper2md batch output-root --input-dir pdf-directory
+```powershell
+paper2md convert "C:\Papers\example.pdf" "C:\Papers\example-output"
 ```
 
-验证 PhysicalDocument：
+输出目录包含：
 
-```bash
-paper2md validate-model tests/fixtures/physical_document.minimal.json
+```text
+output-dir/
+├── article.md
+├── physical_document.json
+├── manifest.json
+└── images/
 ```
 
-更多说明：
+输出目录必须尚不存在，Paper2MD 不会覆盖已有数据。
+
+## 批量转换
+
+```bash
+paper2md batch output-root --input-dir pdf-directory --continue-on-error
+```
+
+`--input-dir` 只读取该目录第一层的 PDF，不递归扫描。每篇论文会写入独立
+子目录，并额外生成 `batch_summary.json`。
+
+## 启用保守 region-render
+
+默认关闭。需要时显式启用：
+
+```bash
+paper2md convert input.pdf output-dir --region-render-mode auto
+```
+
+该模式用于补充部分混合位图/矢量 Figure，但可能保守漏检。
+
+## 找不到 `paper2md` 命令
+
+确认虚拟环境已激活，或直接使用：
+
+```bash
+python -m paper2md --help
+python -m paper2md convert input.pdf output-dir
+```
+
+关闭终端后，需要重新激活 `.venv`。
+
+## 更多文档
 
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
@@ -72,13 +140,13 @@ paper2md validate-model tests/fixtures/physical_document.minimal.json
 - 不生成语义表格或公式 LaTeX；
 - 纯矢量且缺少可靠 Figure 证据时会保守拒绝；
 - PDFBox、GUI、Web/API 服务和容器不在当前范围；
-- macOS 尚未验证。
+- macOS 和 ARM 平台尚未验证。
 
 ## 许可证与分发
 
-当前项目级许可证仍为 `NOASSERTION`。项目所有者控制范围内的源码审阅、本地
-安装和试用可以继续，但公开 source-only 包、wheel、sdist 和包含 PDFium 的
-二进制分发尚未获批准。本仓库当前不构成正式 Release 或公开分发许可声明。
+当前项目尚未添加项目级许可证。外部用户在许可证确定之前不能把本仓库视为
+可自由复制、修改或再分发的开源软件。项目所有者控制范围内的审阅与测试可以
+继续，但不应创建正式 Release、PyPI 包或二进制附件。
 
 完整的阶段研发记录和历史验证证据保存在
 `agent/v2-rebuild` 分支。
