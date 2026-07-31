@@ -65,6 +65,113 @@ class PreparedLayoutOutput:
     physical_document_path: Path | None
 
 
+@dataclass(frozen=True)
+class NativeMatrixEquation:
+    equation_id: str
+    bbox: BBox
+    element_ids: tuple[str, ...]
+    paragraph_indexes: tuple[int, ...]
+
+
+_MATRIX_TOP = frozenset({"⎡", "⎤"})
+_MATRIX_MIDDLE = frozenset({"⎢", "⎥"})
+_MATRIX_BOTTOM = frozenset({"⎣", "⎦"})
+_MATRIX_FRAME = _MATRIX_TOP | _MATRIX_MIDDLE | _MATRIX_BOTTOM
+
+
+def _union_bbox(elements: Sequence[Element], page: Page, padding: float) -> BBox:
+    left = max(0.0, min(item.bbox.x for item in elements) - padding)
+    top = max(0.0, min(item.bbox.y for item in elements) - padding)
+    right = min(page.width, max(item.bbox.right for item in elements) + padding)
+    bottom = min(page.height, max(item.bbox.bottom for item in elements) + padding)
+    return BBox(left, top, right - left, bottom - top)
+
+
+def _detect_native_matrix_equations(
+    page: Page,
+    elements: Sequence[Element],
+    paragraphs: Sequence[Any],
+) -> tuple[NativeMatrixEquation, ...]:
+    """Find high-confidence native matrix layouts for lossless local rendering."""
+
+    frame_elements = tuple(
+        item
+        for item in elements
+        if item.text and any(character in _MATRIX_FRAME for character in item.text)
+    )
+    if len(frame_elements) < 6:
+        return ()
+
+    clusters: list[list[Element]] = []
+    for item in sorted(frame_elements, key=lambda value: (value.bbox.y, value.bbox.x)):
+        if not clusters:
+            clusters.append([item])
+            continue
+        current_bottom = max(value.bbox.bottom for value in clusters[-1])
+        if item.bbox.y <= current_bottom + 3.0:
+            clusters[-1].append(item)
+        else:
+            clusters.append([item])
+
+    results: list[NativeMatrixEquation] = []
+    for cluster in clusters:
+        characters = "".join(item.text or "" for item in cluster)
+        if not (
+            any(character in _MATRIX_TOP for character in characters)
+            and any(character in _MATRIX_BOTTOM for character in characters)
+            and len({round(item.bbox.x, 1) for item in cluster}) >= 4
+        ):
+            continue
+        frame_top = min(item.bbox.y for item in cluster)
+        frame_bottom = max(item.bbox.bottom for item in cluster)
+        frame_left = min(item.bbox.x for item in cluster)
+        frame_right = max(item.bbox.right for item in cluster)
+        members = tuple(
+            item
+            for item in elements
+            if item.text
+            and item.bbox.bottom >= frame_top - 2.0
+            and item.bbox.y <= frame_bottom + 2.0
+            and item.bbox.right >= frame_left - 4.0
+            and item.bbox.x <= frame_right + 4.0
+        )
+        member_ids = frozenset(item.element_id for item in members)
+        paragraph_indexes: list[int] = []
+        partial_overlap = False
+        for paragraph_index, paragraph in enumerate(paragraphs):
+            paragraph_ids = frozenset(paragraph.element_ids)
+            if not paragraph_ids & member_ids:
+                continue
+            if not paragraph_ids <= member_ids:
+                partial_overlap = True
+                break
+            paragraph_indexes.append(paragraph_index)
+        contiguous = bool(paragraph_indexes) and paragraph_indexes == list(
+            range(paragraph_indexes[0], paragraph_indexes[-1] + 1)
+        )
+        if partial_overlap or len(paragraph_indexes) < 2 or not contiguous:
+            continue
+        results.append(
+            NativeMatrixEquation(
+                equation_id=f"E{len(results) + 1:03d}",
+                bbox=_union_bbox(members, page, padding=4.0),
+                element_ids=tuple(
+                    item.element_id
+                    for item in sorted(
+                        members,
+                        key=lambda value: (
+                            value.bbox.y,
+                            value.bbox.x,
+                            value.element_id,
+                        ),
+                    )
+                ),
+                paragraph_indexes=tuple(paragraph_indexes),
+            )
+        )
+    return tuple(results)
+
+
 def _trace_digest(element_ids: Sequence[str]) -> str:
     return hashlib.sha256(
         "\n".join(element_ids).encode("utf-8")
@@ -300,6 +407,38 @@ def _region_request(
     )
 
 
+def _equation_request(
+    *,
+    page: Page,
+    equation: NativeMatrixEquation,
+    region_id: str,
+    scale: float,
+) -> RegionRenderRequest:
+    return RegionRenderRequest(
+        figure_id=f"{region_id}-{equation.equation_id}",
+        page_index=page.page_index,
+        bbox=equation.bbox,
+        caption_top=page.height + 1.0,
+        caption_id=f"{region_id}-{equation.equation_id}-none",
+        caption_element_ids=(),
+        caption_text="",
+        caption_bbox=BBox(0, max(0.0, page.height - 1.0), 1.0, 1.0),
+        caption_reason="native_matrix_equation_has_no_caption",
+        caption_confidence=1.0,
+        member_element_ids=equation.element_ids,
+        vector_evidence_element_ids=(),
+        vector_evidence_count=0,
+        vector_evidence_sha256=hashlib.sha256(b"").hexdigest(),
+        fallback_reason="native_matrix_equation_render",
+        bbox_rule="native_matrix_frame_union_plus_4pt",
+        scale=scale,
+        dpi=72.0 * scale,
+        max_page_area_ratio=0.25,
+        min_variance=0.5,
+        caption_guard=0.0,
+    )
+
+
 def _ordered_text_elements(
     page: Page,
     region: LayoutRegion,
@@ -443,6 +582,7 @@ def write_layout_outputs(
     reconstruction_events: list[dict[str, Any]] = []
     reconstruction_warnings: list[dict[str, Any]] = []
     visual_index = 0
+    equation_index = 0
 
     for page, task, review, materialized in zip(
         document.pages,
@@ -582,6 +722,17 @@ def write_layout_outputs(
                     }
                 )
             paragraphs = _markdown_text_groups_detailed(text_elements)
+            equations = _detect_native_matrix_equations(
+                page,
+                text_elements,
+                paragraphs,
+            )
+            equation_by_paragraph = {
+                paragraph_index: equation
+                for equation in equations
+                for paragraph_index in equation.paragraph_indexes
+            }
+            equation_records: list[dict[str, object]] = []
             paragraph_records: list[dict[str, object]] = []
             for paragraph_index, paragraph in enumerate(paragraphs):
                 element_ids = list(paragraph.element_ids)
@@ -603,12 +754,16 @@ def write_layout_outputs(
                     if is_reference
                     else "omit_back_matter"
                 )
+                equation = equation_by_paragraph.get(paragraph_index)
                 paragraph_records.append(
                     {
                         "paragraph_index": paragraph_index,
                         "source_element_ids": element_ids,
                         "elements_sha256": _trace_digest(element_ids),
                         "markdown_destination": destination,
+                        "rendered_as": (
+                            "equation_image" if equation is not None else "text"
+                        ),
                         "text_reconstruction": {
                             "version": TEXT_RECONSTRUCTION_VERSION,
                             "events": [
@@ -644,6 +799,80 @@ def write_layout_outputs(
                             "code": "text_reconstruction_suspicious_unicode",
                         }
                     )
+                if equation is not None:
+                    target_lines: list[str] | None
+                    if destination == "article":
+                        target_lines = lines
+                    elif destination == "separate":
+                        target_lines = reference_lines
+                    else:
+                        target_lines = None
+                    if paragraph_index == equation.paragraph_indexes[0]:
+                        equation_record: dict[str, object] = {
+                            "equation_id": equation.equation_id,
+                            "bbox": equation.bbox.to_dict(),
+                            "source_element_ids": list(equation.element_ids),
+                            "elements_sha256": _trace_digest(
+                                equation.element_ids
+                            ),
+                            "paragraph_indexes": list(
+                                equation.paragraph_indexes
+                            ),
+                            "asset": None,
+                            "markdown_destination": destination,
+                            "method": "native_matrix_frame_local_render",
+                        }
+                        if target_lines is not None:
+                            equation_index += 1
+                            request = _equation_request(
+                                page=page,
+                                equation=equation,
+                                region_id=region.region_id,
+                                scale=visual_scale,
+                            )
+                            rendered = region_renderer.render_region(
+                                source,
+                                request,
+                                expected_source_sha256=document.source_sha256,
+                            )
+                            filename = f"equation-{equation_index:04d}.png"
+                            image_path = images_dir / filename
+                            image_path.write_bytes(rendered.data)
+                            visual_paths.append(image_path)
+                            relative = f"images/{filename}"
+                            image_record = {
+                                "region_id": region.region_id,
+                                "equation_id": equation.equation_id,
+                                "role": "equation",
+                                "page": page.page_index + 1,
+                                "path": relative,
+                                "bbox": rendered.bbox.to_dict(),
+                                "width_px": rendered.width_px,
+                                "height_px": rendered.height_px,
+                                "size_bytes": len(rendered.data),
+                                "sha256": rendered.sha256,
+                                "renderer_version": rendered.renderer_version,
+                                "source_pdf_sha256": rendered.source_sha256,
+                                "ocr_used": False,
+                            }
+                            image_records.append(image_record)
+                            equation_record["asset"] = image_record
+                            target_lines.extend(
+                                [
+                                    _region_trace_comment(
+                                        region_id=region.region_id,
+                                        role="equation",
+                                        page_number=page.page_index + 1,
+                                        element_ids=equation.element_ids,
+                                        paragraph_index=paragraph_index,
+                                    ),
+                                    f"![equation from page "
+                                    f"{page.page_index + 1}]({relative})",
+                                    "",
+                                ]
+                            )
+                        equation_records.append(equation_record)
+                    continue
                 prefix = (
                     "## "
                     if region.role == "heading" and paragraph_index == 0
@@ -698,6 +927,7 @@ def write_layout_outputs(
                     "execution": "extract_native_text",
                     "asset": None,
                     "paragraphs": paragraph_records,
+                    "equations": equation_records,
                     "non_text_diagnostics": non_text_diagnostics,
                 }
             )

@@ -13,7 +13,10 @@ from paper2md.layout_models import (
     LayoutTask,
     NormalizedBBox,
 )
-from paper2md.layout_writer import _text_region_non_text_diagnostics
+from paper2md.layout_writer import (
+    _detect_native_matrix_equations,
+    _text_region_non_text_diagnostics,
+)
 from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
 from paper2md.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
@@ -21,6 +24,7 @@ from paper2md.manifest import (
     validate_manifest,
 )
 from paper2md.models import BBox, Element, Page, Provenance
+from paper2md.text_reconstruction import ReconstructedText
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -88,6 +92,65 @@ def _write_fixture_reviews(review_root: Path) -> None:
 
 
 class LayoutStageDTests(unittest.TestCase):
+    def test_native_matrix_equation_is_detected_from_frame_geometry(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        elements = []
+        rows = (("⎡", "⎤"), ("⎢", "⎥"), ("⎣", "⎦"))
+        for row_index, (left, right) in enumerate(rows):
+            y = 20.0 + row_index * 8.0
+            for matrix_index, x in enumerate((10.0, 35.0, 60.0)):
+                elements.extend(
+                    (
+                        Element(
+                            f"l-{row_index}-{matrix_index}",
+                            "text",
+                            0,
+                            BBox(x, y, 2, 7),
+                            provenance,
+                            text=left,
+                        ),
+                        Element(
+                            f"v-{row_index}-{matrix_index}",
+                            "text",
+                            0,
+                            BBox(x + 5, y + 1, 4, 5),
+                            provenance,
+                            text=str(row_index + matrix_index),
+                        ),
+                        Element(
+                            f"r-{row_index}-{matrix_index}",
+                            "text",
+                            0,
+                            BBox(x + 12, y, 2, 7),
+                            provenance,
+                            text=right,
+                        ),
+                    )
+                )
+        paragraphs = tuple(
+            ReconstructedText(
+                text=f"row {row_index}",
+                element_ids=tuple(
+                    item.element_id
+                    for item in elements
+                    if item.element_id.split("-")[1] == str(row_index)
+                ),
+            )
+            for row_index in range(3)
+        )
+
+        equations = _detect_native_matrix_equations(
+            Page(0, 100, 100, 0, tuple(elements)),
+            tuple(elements),
+            paragraphs,
+        )
+
+        self.assertEqual(len(equations), 1)
+        self.assertEqual(equations[0].paragraph_indexes, (0, 1, 2))
+        self.assertEqual(len(equations[0].element_ids), len(elements))
+        self.assertLess(equations[0].bbox.x, 10.0)
+        self.assertGreater(equations[0].bbox.right, 74.0)
+
     def test_text_regions_ignore_rules_and_heading_backgrounds_only(self):
         provenance = Provenance("fixture", "native", "fixture")
         elements = (
