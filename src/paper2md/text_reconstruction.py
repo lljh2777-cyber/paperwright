@@ -181,6 +181,13 @@ def _font_style(font: str | None) -> str | None:
     return "roman"
 
 
+def _is_greek_letter(character: str) -> bool:
+    return bool(character) and (
+        "GREEK" in unicodedata.name(character, "")
+        and unicodedata.category(character).startswith("L")
+    )
+
+
 def _needs_geometric_word_space(
     value: str,
     fragment: str,
@@ -193,15 +200,30 @@ def _needs_geometric_word_space(
         return False
     if value.endswith(("%", "+")) and fragment[0].isalpha():
         return True
-    left_style = _font_style(_font_key(left))
-    right_style = _font_style(_font_key(right))
+    left_font = _font_key(left)
+    right_font = _font_key(right)
+    left_style = _font_style(left_font)
+    right_style = _font_style(right_font)
+    signed_gap = right.bbox.x - left.bbox.right
+    smaller_height = min(left.bbox.height, right.bbox.height)
+    if (
+        _is_greek_letter(value[-1])
+        and fragment[0].isascii()
+        and fragment[0].isalpha()
+        and left_font is not None
+        and right_font is not None
+        and left_font != right_font
+        and _vertical_overlap_ratio(left, right) >= 0.65
+        and signed_gap >= -0.5
+    ):
+        return True
     return (
         value[-1].isalnum()
         and left_style is not None
         and right_style is not None
         and left_style != right_style
         and _vertical_overlap_ratio(left, right) >= 0.65
-        and right.bbox.x - left.bbox.right >= -0.5
+        and signed_gap >= -min(1.0, smaller_height * 0.15)
     )
 
 

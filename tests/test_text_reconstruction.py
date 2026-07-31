@@ -94,6 +94,24 @@ class TextReconstructionTests(unittest.TestCase):
             {event.code for event in result.events},
         )
 
+    def test_italic_overhang_does_not_hide_scientific_word_boundary(self):
+        result = join_line_elements(
+            [
+                text("gene", 10, 10, 20, "MKI67", font_name="Body-Italic"),
+                text("prose", 29.4, 10, 20, "and", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "MKI67 and")
+
+    def test_math_font_greek_symbol_followed_by_prose_gets_space(self):
+        result = join_line_elements(
+            [
+                text("greek", 10, 10, 4, "α", font_name="Math-Regular"),
+                text("prose", 14.15, 10, 30, "responses", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "α responses")
+
     def test_percent_followed_by_word_gets_space(self):
         result = join_line_elements(
             [
