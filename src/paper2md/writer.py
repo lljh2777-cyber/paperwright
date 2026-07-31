@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +19,12 @@ from .manifest import (
 )
 from .models import Element, PhysicalDocument
 from .region_render import plan_region_renders
+from .text_reconstruction import (
+    ReconstructedText,
+    clean_text,
+    join_line_elements,
+    reconstruct_text_groups,
+)
 
 
 @dataclass(frozen=True)
@@ -44,14 +49,7 @@ _TITLE_BOILERPLATE = {
 
 
 def _clean_text(text: str) -> tuple[str, int]:
-    removed = 0
-    output = []
-    for character in unicodedata.normalize("NFC", text):
-        if unicodedata.category(character) == "Cc" and character not in "\t\n":
-            removed += 1
-            continue
-        output.append(character)
-    return "".join(output).replace("\u00a0", " "), removed
+    return clean_text(text)
 
 
 def _join_fragments(fragments: list[str]) -> str:
@@ -71,134 +69,8 @@ def _join_fragments(fragments: list[str]) -> str:
     return re.sub(r"[ \t]+", " ", value).strip()
 
 
-def _intersection_over_smaller(left: Element, right: Element) -> float:
-    width = max(
-        0.0,
-        min(left.bbox.right, right.bbox.right)
-        - max(left.bbox.x, right.bbox.x),
-    )
-    height = max(
-        0.0,
-        min(left.bbox.bottom, right.bbox.bottom)
-        - max(left.bbox.y, right.bbox.y),
-    )
-    smaller = min(
-        left.bbox.width * left.bbox.height,
-        right.bbox.width * right.bbox.height,
-    )
-    return width * height / smaller if smaller > 0 else 0.0
-
-
-def _deduplicate_overlapping_text_objects(
-    elements: list[Element],
-) -> list[Element]:
-    """Drop near-coincident native text duplicates within one visual line."""
-
-    kept: list[Element] = []
-    for element in sorted(
-        elements,
-        key=lambda item: (
-            item.bbox.x,
-            item.bbox.y,
-            item.metadata.get("native_order", 0),
-            item.element_id,
-        ),
-    ):
-        value, _ = _clean_text((element.text or "").strip())
-        normalized = re.sub(r"\s+", " ", value).casefold()
-        if not normalized:
-            kept.append(element)
-            continue
-        duplicate_index: int | None = None
-        replacement = False
-        for index, existing in enumerate(kept):
-            if _intersection_over_smaller(existing, element) < 0.85:
-                continue
-            existing_value, _ = _clean_text((existing.text or "").strip())
-            existing_normalized = re.sub(
-                r"\s+", " ", existing_value
-            ).casefold()
-            if normalized == existing_normalized:
-                duplicate_index = index
-                break
-            if normalized in existing_normalized:
-                duplicate_index = index
-                break
-            if existing_normalized in normalized:
-                duplicate_index = index
-                replacement = True
-                break
-        if duplicate_index is None:
-            kept.append(element)
-        elif replacement:
-            kept[duplicate_index] = element
-    return sorted(kept, key=lambda item: (item.bbox.x, item.bbox.y))
-
-
-def _suffix_prefix_overlap(left: str, right: str) -> int:
-    for size in range(min(len(left), len(right)), 1, -1):
-        if left[-size:].casefold() == right[:size].casefold():
-            return size
-    return 0
-
-
 def _join_line_elements(elements: list[Element]) -> str:
-    native_values = {
-        item.metadata["native_line_text"]
-        for item in elements
-        if isinstance(item.metadata.get("native_line_text"), str)
-        and item.metadata["native_line_text"].strip()
-    }
-    if len(native_values) == 1:
-        native, _ = _clean_text(native_values.pop())
-        return re.sub(r"\s+", " ", native).strip()
-
-    value = ""
-    previous: Element | None = None
-    for element in _deduplicate_overlapping_text_objects(elements):
-        fragment, _ = _clean_text((element.text or "").strip())
-        if not fragment:
-            continue
-        if not value:
-            value = fragment
-        elif value.endswith(("-", "\u2010", "\u2011", "/")):
-            value += fragment
-        elif fragment[0] in ",.;:!?)]}%\u00b2\u00b3\u2020*":
-            value += fragment
-        else:
-            assert previous is not None
-            previous_fragment, _ = _clean_text(
-                (previous.text or "").strip()
-            )
-            signed_gap = element.bbox.x - previous.bbox.right
-            gap = max(0.0, signed_gap)
-            overlap = (
-                _suffix_prefix_overlap(value, fragment)
-                if signed_gap < 0
-                else 0
-            )
-            if overlap:
-                value += fragment[overlap:]
-                previous = element
-                continue
-            compact_limit = max(
-                0.75, min(previous.bbox.height, element.bbox.height) * 0.12
-            )
-            if (
-                re.fullmatch(r"\d+(?:,\d+)*", previous_fragment)
-                and previous.bbox.height < element.bbox.height * 0.75
-                and fragment[0].isalpha()
-            ):
-                value += " " + fragment
-            elif (
-                gap <= compact_limit
-                and not value.endswith((",", ".", ";", ":", "!", "?"))
-            ):
-                value += fragment
-            else:
-                value += " " + fragment
-        previous = element
-    return re.sub(r"[ \t]+", " ", value).strip()
+    return join_line_elements(elements).text
 
 
 def _page_text_lines(document: PhysicalDocument) -> list[list[Element]]:
@@ -322,15 +194,6 @@ def _title(document: PhysicalDocument) -> tuple[str, set[str]]:
     }
 
 
-def _dominant_font(elements: list[Element]) -> str | None:
-    widths: dict[str, float] = {}
-    for element in elements:
-        value = element.metadata.get("font_name")
-        if isinstance(value, str) and value:
-            widths[value] = widths.get(value, 0.0) + element.bbox.width
-    return max(widths, key=widths.get) if widths else None
-
-
 _BOLD_FONT_MARKERS = ("bold", "semibold", "demibold", "black", "heavy")
 
 
@@ -363,104 +226,19 @@ def _format_markdown_paragraph(
     return text
 
 
-def _looks_like_heading(text: str) -> bool:
-    letters = [character for character in text if character.isalpha()]
-    return (
-        len(text) <= 80
-        and bool(letters)
-        and sum(character.isupper() for character in letters) / len(letters) >= 0.85
-    )
+def _markdown_text_groups_detailed(
+    elements: tuple[Element, ...],
+) -> list[ReconstructedText]:
+    return reconstruct_text_groups(elements)
 
 
-def _markdown_text_groups(elements: tuple[Element, ...]) -> list[tuple[list[str], str]]:
-    line_groups: list[list[Element]] = []
-    current_key: object = object()
-    current: list[Element] = []
-    for element in elements:
-        if element.kind != "text" or not element.text:
-            continue
-        key = element.metadata.get("line_group", element.element_id)
-        if current and key != current_key:
-            line_groups.append(current)
-            current = []
-        current_key = key
-        current.append(element)
-    if current:
-        line_groups.append(current)
-
-    paragraphs: list[list[list[Element]]] = []
-    for line in line_groups:
-        if not paragraphs:
-            paragraphs.append([line])
-            continue
-        previous = paragraphs[-1][-1]
-        previous_text = _join_line_elements(previous)
-        current_text = _join_line_elements(line)
-        previous_top = min(item.bbox.y for item in previous)
-        previous_bottom = max(item.bbox.bottom for item in previous)
-        current_top = min(item.bbox.y for item in line)
-        previous_height = previous_bottom - previous_top
-        current_height = max(item.bbox.bottom for item in line) - current_top
-        vertical_gap = current_top - previous_bottom
-        indent_delta = abs(
-            min(item.bbox.x for item in line)
-            - min(item.bbox.x for item in previous)
-        )
-        previous_font = _dominant_font(previous)
-        current_font = _dominant_font(line)
-        same_font = (
-            previous_font is None
-            or current_font is None
-            or previous_font == current_font
-        )
-        continues = (
-            -1.0 <= vertical_gap <= max(5.0, min(previous_height, current_height) * 0.9)
-            and indent_delta <= max(14.0, min(previous_height, current_height) * 2.0)
-            and same_font
-            and not _looks_like_heading(previous_text)
-            and not _looks_like_heading(current_text)
-        )
-        if continues:
-            paragraphs[-1].append(line)
-        else:
-            paragraphs.append([line])
-
-    result: list[tuple[list[str], str]] = []
-    for paragraph in paragraphs:
-        element_ids = [
-            item.element_id for line in paragraph for item in line
-        ]
-        text = ""
-        for index, line in enumerate(paragraph):
-            line_text = _join_line_elements(line)
-            if not line_text:
-                continue
-            if not text:
-                text = line_text
-                continue
-            previous_line = paragraph[index - 1]
-            has_soft_break_marker = any(
-                any(
-                    unicodedata.category(character) == "Cc"
-                    for character in (item.text or "")
-                )
-                for item in previous_line
-            )
-            if has_soft_break_marker:
-                next_token = line_text.split(maxsplit=1)[0]
-                joiner = (
-                    "-"
-                    if "-" in next_token
-                    and text
-                    and text[-1].isalnum()
-                    and line_text[0].isalnum()
-                    else ""
-                )
-            else:
-                joiner = " "
-            text += joiner + line_text
-        result.append((element_ids, re.sub(r"[ \t]+", " ", text).strip()))
-    return result
+def _markdown_text_groups(
+    elements: tuple[Element, ...],
+) -> list[tuple[list[str], str]]:
+    return [
+        (list(item.element_ids), item.text)
+        for item in _markdown_text_groups_detailed(elements)
+    ]
 
 
 def _table_degradation(page_elements: tuple[Element, ...]) -> bool:

@@ -47,7 +47,13 @@ from .references import (
     validate_reference_mode,
 )
 from .region_render import RegionRenderRequest
-from .writer import _format_markdown_paragraph, _markdown_text_groups, _title
+from .text_reconstruction import TEXT_RECONSTRUCTION_VERSION
+from .writer import (
+    _format_markdown_paragraph,
+    _markdown_text_groups,
+    _markdown_text_groups_detailed,
+    _title,
+)
 
 
 @dataclass(frozen=True)
@@ -360,6 +366,8 @@ def write_layout_outputs(
     visual_paths: list[Path] = []
     provenance_pages: list[dict[str, Any]] = []
     quality_paragraphs: list[dict[str, Any]] = []
+    reconstruction_events: list[dict[str, Any]] = []
+    reconstruction_warnings: list[dict[str, Any]] = []
     visual_index = 0
 
     for page, task, review, materialized in zip(
@@ -496,9 +504,11 @@ def write_layout_outputs(
                         "count": non_text_count,
                     }
                 )
-            paragraphs = _markdown_text_groups(text_elements)
+            paragraphs = _markdown_text_groups_detailed(text_elements)
             paragraph_records: list[dict[str, object]] = []
-            for paragraph_index, (element_ids, text) in enumerate(paragraphs):
+            for paragraph_index, paragraph in enumerate(paragraphs):
+                element_ids = list(paragraph.element_ids)
+                text = paragraph.text
                 if not text:
                     continue
                 paragraph_key = (
@@ -522,8 +532,41 @@ def write_layout_outputs(
                         "source_element_ids": element_ids,
                         "elements_sha256": _trace_digest(element_ids),
                         "markdown_destination": destination,
+                        "text_reconstruction": {
+                            "version": TEXT_RECONSTRUCTION_VERSION,
+                            "events": [
+                                item.to_dict() for item in paragraph.events
+                            ],
+                            "warnings": [
+                                item.to_dict() for item in paragraph.warnings
+                            ],
+                        },
                     }
                 )
+                for event in paragraph.events:
+                    reconstruction_events.append(
+                        {
+                            "page": page.page_index + 1,
+                            "region_id": region.region_id,
+                            "paragraph_index": paragraph_index,
+                            **event.to_dict(),
+                        }
+                    )
+                for warning in paragraph.warnings:
+                    record = {
+                        "page": page.page_index + 1,
+                        "region_id": region.region_id,
+                        "paragraph_index": paragraph_index,
+                        **warning.to_dict(),
+                    }
+                    reconstruction_warnings.append(record)
+                    warnings.append(
+                        {
+                            **record,
+                            "detail_code": record["code"],
+                            "code": "text_reconstruction_suspicious_unicode",
+                        }
+                    )
                 prefix = (
                     "## "
                     if region.role == "heading" and paragraph_index == 0
@@ -613,6 +656,21 @@ def write_layout_outputs(
         "image_links": analyze_image_links(article_path, images_dir),
         "layout_element_coverage": element_quality["coverage"],
         "layout_element_uniqueness": element_quality["uniqueness"],
+        "text_reconstruction": {
+            "status": "warning" if reconstruction_warnings else "pass",
+            "version": TEXT_RECONSTRUCTION_VERSION,
+            "repair_count": len(reconstruction_events),
+            "warning_count": len(reconstruction_warnings),
+            "repairs_by_code": {
+                code: sum(
+                    item["code"] == code for item in reconstruction_events
+                )
+                for code in sorted(
+                    {item["code"] for item in reconstruction_events}
+                )
+            },
+            "findings": reconstruction_warnings[:100],
+        },
     }
     quality_warning_codes = {
         "markdown_text": "quality_markdown_text_suspicions",
@@ -621,6 +679,7 @@ def write_layout_outputs(
         "image_links": "quality_image_links_invalid",
         "layout_element_coverage": "quality_unassigned_text_objects",
         "layout_element_uniqueness": "quality_duplicate_region_objects",
+        "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
     }
     for name, result in quality_checks.items():
         if result["status"] != "pass":

@@ -365,10 +365,15 @@ class LayoutStageDTests(unittest.TestCase):
                     "layout_element_coverage",
                     "layout_element_uniqueness",
                     "manifest_inventory",
+                    "text_reconstruction",
                 },
             )
             self.assertEqual(
                 validation["quality_checks"]["image_links"]["status"],
+                "pass",
+            )
+            self.assertEqual(
+                validation["quality_checks"]["text_reconstruction"]["status"],
                 "pass",
             )
             self.assertTrue(
