@@ -40,7 +40,7 @@ from .references import (
     validate_reference_mode,
 )
 from .region_render import RegionRenderRequest
-from .writer import _markdown_text_groups, _title
+from .writer import _format_markdown_paragraph, _markdown_text_groups, _title
 
 
 @dataclass(frozen=True)
@@ -521,6 +521,15 @@ def write_layout_outputs(
                     if region.role == "heading" and paragraph_index == 0
                     else ""
                 )
+                markdown_text = (
+                    text
+                    if prefix
+                    else _format_markdown_paragraph(
+                        text,
+                        element_ids,
+                        text_elements,
+                    )
+                )
                 target_lines: list[str] | None
                 if destination == "article":
                     target_lines = lines
@@ -540,7 +549,7 @@ def write_layout_outputs(
                                 element_ids=element_ids,
                                 paragraph_index=paragraph_index,
                             ),
-                            prefix + text,
+                            prefix + markdown_text,
                             "",
                         ]
                     )

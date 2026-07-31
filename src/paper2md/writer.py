@@ -331,6 +331,38 @@ def _dominant_font(elements: list[Element]) -> str | None:
     return max(widths, key=widths.get) if widths else None
 
 
+_BOLD_FONT_MARKERS = ("bold", "semibold", "demibold", "black", "heavy")
+
+
+def _is_bold_text_element(element: Element) -> bool:
+    if element.kind != "text" or not element.text:
+        return False
+    font_name = element.metadata.get("font_name")
+    if not isinstance(font_name, str) or not font_name.strip():
+        return False
+    normalized = font_name.casefold().replace(" ", "")
+    return any(marker in normalized for marker in _BOLD_FONT_MARKERS)
+
+
+def _format_markdown_paragraph(
+    text: str,
+    element_ids: list[str],
+    elements: tuple[Element, ...],
+) -> str:
+    """Preserve unambiguous whole-paragraph bold from native PDF fonts."""
+    selected_ids = set(element_ids)
+    selected = [
+        element
+        for element in elements
+        if element.element_id in selected_ids
+        and element.kind == "text"
+        and element.text
+    ]
+    if selected and all(_is_bold_text_element(element) for element in selected):
+        return f"**{text}**"
+    return text
+
+
 def _looks_like_heading(text: str) -> bool:
     letters = [character for character in text if character.isalpha()]
     return (
@@ -851,11 +883,16 @@ def write_outputs(
             for figure_id in sorted(matched_ids):
                 emit_figure(figure_by_id[figure_id], "caption-adjacent")
             if text:
+                markdown_text = _format_markdown_paragraph(
+                    text,
+                    element_ids,
+                    page.elements,
+                )
                 lines.extend(
                     [
                         f"<!-- elements: {','.join(element_ids)}; "
                         f"page: {page.page_index + 1} -->",
-                        text,
+                        markdown_text,
                         "",
                     ]
                 )

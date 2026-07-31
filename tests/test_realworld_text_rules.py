@@ -7,10 +7,17 @@ from paper2md.backends.pdfium import (
     _restore_missing_spaces_from_charboxes,
 )
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.writer import _markdown_text_groups, _title
+from paper2md.writer import (
+    _format_markdown_paragraph,
+    _markdown_text_groups,
+    _title,
+)
 
 
-def text(element_id, x, y, width, height, value):
+def text(element_id, x, y, width, height, value, *, font_name=None):
+    metadata = {"font_size": 1.0}
+    if font_name is not None:
+        metadata["font_name"] = font_name
     return Element(
         element_id=element_id,
         kind="text",
@@ -24,11 +31,54 @@ def text(element_id, x, y, width, height, value):
             source_ref=f"fixture:{element_id}",
             confidence=1.0,
         ),
-        metadata={"font_size": 1.0},
+        metadata=metadata,
     )
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_whole_paragraph_native_bold_is_preserved_in_markdown(self):
+        item = text(
+            "bold-heading",
+            10,
+            20,
+            180,
+            12,
+            "ST reveals the landscape of TLSs across tissues",
+            font_name="BentonSansCond-Bold",
+        )
+        self.assertEqual(
+            _format_markdown_paragraph(item.text, [item.element_id], (item,)),
+            "**ST reveals the landscape of TLSs across tissues**",
+        )
+
+    def test_mixed_or_unknown_font_paragraph_is_not_forced_bold(self):
+        bold = text(
+            "bold",
+            10,
+            20,
+            40,
+            12,
+            "Bold lead",
+            font_name="Fixture-Bold",
+        )
+        regular = text(
+            "regular",
+            50,
+            20,
+            80,
+            12,
+            "with regular text",
+            font_name="Fixture-Regular",
+        )
+        self.assertEqual(
+            _format_markdown_paragraph(
+                "Bold lead with regular text",
+                [bold.element_id, regular.element_id],
+                (bold, regular),
+            ),
+            "Bold lead with regular text",
+        )
+
     def test_missing_spaces_are_restored_from_character_geometry(self):
         value, inserted = _restore_missing_spaces_from_charboxes(
             [
