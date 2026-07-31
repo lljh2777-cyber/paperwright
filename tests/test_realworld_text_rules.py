@@ -97,6 +97,46 @@ class RealWorldTextRuleTests(unittest.TestCase):
             "limiting a unified view",
         )
 
+    def test_overlapping_native_objects_are_deduplicated(self):
+        items = _reading_order(
+            [
+                text("visible", 37, 100, 110, 7.4, "same painted text"),
+                text("overlay", 37.1, 100.1, 109.9, 7.3, "same painted text"),
+                text("suffix", 151, 100, 42, 7.4, "continues"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "same painted text continues",
+        )
+
+    def test_overlapping_fragment_suffix_is_merged_once(self):
+        items = _reading_order(
+            [
+                text("a", 37, 100, 190, 7.4, "limiting a unifi"),
+                text("b", 226.5, 100, 60, 7.4, "fied view"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "limiting a unified view",
+        )
+
+    def test_leading_affiliation_superscript_is_separated_from_text(self):
+        items = _reading_order(
+            [
+                text("number", 37, 98, 2, 4, "12"),
+                text("department", 39.5, 100, 80, 7.4, "Department of Medicine"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "12 Department of Medicine",
+        )
+
     def test_control_glyph_does_not_split_one_visual_line(self):
         items = [
             text("a", 37.2, 471.0, 86.2, 7.4, "prognosis. Cross-cohor"),

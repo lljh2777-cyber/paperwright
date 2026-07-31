@@ -71,6 +71,77 @@ def _join_fragments(fragments: list[str]) -> str:
     return re.sub(r"[ \t]+", " ", value).strip()
 
 
+def _intersection_over_smaller(left: Element, right: Element) -> float:
+    width = max(
+        0.0,
+        min(left.bbox.right, right.bbox.right)
+        - max(left.bbox.x, right.bbox.x),
+    )
+    height = max(
+        0.0,
+        min(left.bbox.bottom, right.bbox.bottom)
+        - max(left.bbox.y, right.bbox.y),
+    )
+    smaller = min(
+        left.bbox.width * left.bbox.height,
+        right.bbox.width * right.bbox.height,
+    )
+    return width * height / smaller if smaller > 0 else 0.0
+
+
+def _deduplicate_overlapping_text_objects(
+    elements: list[Element],
+) -> list[Element]:
+    """Drop near-coincident native text duplicates within one visual line."""
+
+    kept: list[Element] = []
+    for element in sorted(
+        elements,
+        key=lambda item: (
+            item.bbox.x,
+            item.bbox.y,
+            item.metadata.get("native_order", 0),
+            item.element_id,
+        ),
+    ):
+        value, _ = _clean_text((element.text or "").strip())
+        normalized = re.sub(r"\s+", " ", value).casefold()
+        if not normalized:
+            kept.append(element)
+            continue
+        duplicate_index: int | None = None
+        replacement = False
+        for index, existing in enumerate(kept):
+            if _intersection_over_smaller(existing, element) < 0.85:
+                continue
+            existing_value, _ = _clean_text((existing.text or "").strip())
+            existing_normalized = re.sub(
+                r"\s+", " ", existing_value
+            ).casefold()
+            if normalized == existing_normalized:
+                duplicate_index = index
+                break
+            if normalized in existing_normalized:
+                duplicate_index = index
+                break
+            if existing_normalized in normalized:
+                duplicate_index = index
+                replacement = True
+                break
+        if duplicate_index is None:
+            kept.append(element)
+        elif replacement:
+            kept[duplicate_index] = element
+    return sorted(kept, key=lambda item: (item.bbox.x, item.bbox.y))
+
+
+def _suffix_prefix_overlap(left: str, right: str) -> int:
+    for size in range(min(len(left), len(right)), 1, -1):
+        if left[-size:].casefold() == right[:size].casefold():
+            return size
+    return 0
+
+
 def _join_line_elements(elements: list[Element]) -> str:
     native_values = {
         item.metadata["native_line_text"]
@@ -84,7 +155,7 @@ def _join_line_elements(elements: list[Element]) -> str:
 
     value = ""
     previous: Element | None = None
-    for element in sorted(elements, key=lambda item: (item.bbox.x, item.bbox.y)):
+    for element in _deduplicate_overlapping_text_objects(elements):
         fragment, _ = _clean_text((element.text or "").strip())
         if not fragment:
             continue
@@ -96,11 +167,30 @@ def _join_line_elements(elements: list[Element]) -> str:
             value += fragment
         else:
             assert previous is not None
-            gap = max(0.0, element.bbox.x - previous.bbox.right)
+            previous_fragment, _ = _clean_text(
+                (previous.text or "").strip()
+            )
+            signed_gap = element.bbox.x - previous.bbox.right
+            gap = max(0.0, signed_gap)
+            overlap = (
+                _suffix_prefix_overlap(value, fragment)
+                if signed_gap < 0
+                else 0
+            )
+            if overlap:
+                value += fragment[overlap:]
+                previous = element
+                continue
             compact_limit = max(
                 0.75, min(previous.bbox.height, element.bbox.height) * 0.12
             )
             if (
+                re.fullmatch(r"\d+(?:,\d+)*", previous_fragment)
+                and previous.bbox.height < element.bbox.height * 0.75
+                and fragment[0].isalpha()
+            ):
+                value += " " + fragment
+            elif (
                 gap <= compact_limit
                 and not value.endswith((",", ".", ";", ":", "!", "?"))
             ):

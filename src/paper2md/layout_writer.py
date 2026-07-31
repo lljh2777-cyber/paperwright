@@ -34,6 +34,31 @@ class PreparedLayoutOutput:
     physical_document_path: Path
 
 
+def _trace_digest(element_ids: Sequence[str]) -> str:
+    return hashlib.sha256(
+        "\n".join(element_ids).encode("utf-8")
+    ).hexdigest()
+
+
+def _region_trace_comment(
+    *,
+    region_id: str,
+    role: str,
+    page_number: int,
+    element_ids: Sequence[str],
+    paragraph_index: int | None = None,
+) -> str:
+    reference = f"page/{page_number}/region/{region_id}"
+    if paragraph_index is not None:
+        reference += f"/paragraph/{paragraph_index}"
+    return (
+        f"<!-- layout-region: {region_id}; role: {role}; "
+        f"page: {page_number}; element-count: {len(element_ids)}; "
+        f"elements-sha256: {_trace_digest(element_ids)}; "
+        f"provenance-ref: {reference} -->"
+    )
+
+
 def _intersection_area(left: BBox, right: BBox) -> float:
     width = max(0.0, min(left.right, right.right) - max(left.x, right.x))
     height = max(0.0, min(left.bottom, right.bottom) - max(left.y, right.y))
@@ -293,9 +318,12 @@ def write_layout_outputs(
                 image_records.append(image_record)
                 lines.extend(
                     [
-                        f"<!-- layout-region: {region.region_id}; "
-                        f"role: {region.role}; page: {page.page_index + 1}; "
-                        f"elements: {','.join(region.source_element_ids)} -->",
+                        _region_trace_comment(
+                            region_id=region.region_id,
+                            role=region.role,
+                            page_number=page.page_index + 1,
+                            element_ids=region.source_element_ids,
+                        ),
                         f"![{region.role} from page {page.page_index + 1}]"
                         f"({relative})",
                         "",
@@ -339,9 +367,17 @@ def write_layout_outputs(
                     }
                 )
             paragraphs = _markdown_text_groups(text_elements)
+            paragraph_records: list[dict[str, object]] = []
             for paragraph_index, (element_ids, text) in enumerate(paragraphs):
                 if not text:
                     continue
+                paragraph_records.append(
+                    {
+                        "paragraph_index": paragraph_index,
+                        "source_element_ids": element_ids,
+                        "elements_sha256": _trace_digest(element_ids),
+                    }
+                )
                 prefix = (
                     "## "
                     if region.role == "heading" and paragraph_index == 0
@@ -349,9 +385,13 @@ def write_layout_outputs(
                 )
                 lines.extend(
                     [
-                        f"<!-- layout-region: {region.region_id}; "
-                        f"role: {region.role}; page: {page.page_index + 1}; "
-                        f"elements: {','.join(element_ids)} -->",
+                        _region_trace_comment(
+                            region_id=region.region_id,
+                            role=region.role,
+                            page_number=page.page_index + 1,
+                            element_ids=element_ids,
+                            paragraph_index=paragraph_index,
+                        ),
                         prefix + text,
                         "",
                     ]
@@ -361,6 +401,7 @@ def write_layout_outputs(
                     **region.to_dict(),
                     "execution": "extract_native_text",
                     "asset": None,
+                    "paragraphs": paragraph_records,
                 }
             )
 

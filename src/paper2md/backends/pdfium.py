@@ -334,7 +334,8 @@ class PDFiumBackend:
                 ),
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
-                "text_line_reconstruction": "pdfium_union_bounded_text_v1",
+                "text_object_extraction": "pdfium_native_text_object_v2",
+                "text_line_reconstruction": "native_object_geometry_v2",
             },
         )
         return BackendResult(physical, tuple(assets), tuple(warnings))
@@ -512,7 +513,24 @@ class PDFiumBackend:
                     continue
                 source_ref = f"page:{page_index}:native-object-index:{raw_index}"
                 if isinstance(obj, pdfium.PdfTextObj):
-                    text = textpage.get_text_bounded(*obj.get_bounds()).strip()
+                    # A bounded query returns every glyph touching the
+                    # rectangle.  On tight scientific layouts this leaks
+                    # descenders and superscripts from neighbouring lines.
+                    # Extract the native object's own text instead.
+                    try:
+                        obj.textpage = textpage
+                        text = obj.extract().strip()
+                        extraction_method = "native_text_object_exact_text"
+                    except Exception:
+                        text = textpage.get_text_bounded(*obj.get_bounds()).strip()
+                        extraction_method = "native_text_object_bounded_text"
+                        warnings.append(
+                            {
+                                "code": "native_text_object_extract_fallback_bounded",
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                            }
+                        )
                     if not text:
                         continue
                     try:
@@ -529,7 +547,7 @@ class PDFiumBackend:
                             source_object_id=None,
                             provenance=Provenance(
                                 backend="pdfium",
-                                method="native_text_object_bounded_text",
+                                method=extraction_method,
                                 source_ref=source_ref,
                                 confidence=1.0,
                                 unavailable_reason=(
@@ -619,51 +637,6 @@ class PDFiumBackend:
                     )
                     vector_index += 1
             ordered = _reading_order(elements, width)
-            text_groups: dict[int, list[Element]] = {}
-            for item in ordered:
-                line_group = item.metadata.get("line_group")
-                if item.kind == "text" and isinstance(line_group, int):
-                    text_groups.setdefault(line_group, []).append(item)
-            native_line_text: dict[int, str] = {}
-            for line_group, group in text_groups.items():
-                left = min(item.bbox.x for item in group)
-                right = max(item.bbox.right for item in group)
-                top = min(item.bbox.y for item in group)
-                bottom = max(item.bbox.bottom for item in group)
-                value = textpage.get_text_bounded(
-                    left,
-                    height - bottom,
-                    right,
-                    height - top,
-                )
-                value = " ".join(value.replace("\r", "\n").split())
-                if value:
-                    native_line_text[line_group] = value
-            ordered = [
-                Element(
-                    element_id=item.element_id,
-                    kind=item.kind,
-                    page_index=item.page_index,
-                    bbox=item.bbox,
-                    provenance=item.provenance,
-                    text=item.text,
-                    source_object_id=item.source_object_id,
-                    metadata={
-                        **item.metadata,
-                        **(
-                            {"native_line_text": native_line_text[line_group]}
-                            if isinstance(
-                                (line_group := item.metadata.get("line_group")),
-                                int,
-                            )
-                            and line_group in native_line_text
-                            and item.metadata.get("line_position") == 0
-                            else {}
-                        ),
-                    },
-                )
-                for item in ordered
-            ]
         finally:
             textpage.close()
 

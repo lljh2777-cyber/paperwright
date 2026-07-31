@@ -142,6 +142,25 @@ class LayoutStageDTests(unittest.TestCase):
                 "layout-region:",
                 (output / "article.md").read_text(encoding="utf-8"),
             )
+            article = (output / "article.md").read_text(encoding="utf-8")
+            comments = [
+                line
+                for line in article.splitlines()
+                if line.startswith("<!-- layout-region:")
+            ]
+            self.assertTrue(comments)
+            self.assertTrue(all(len(line) < 260 for line in comments))
+            self.assertTrue(all("element-count:" in line for line in comments))
+            self.assertTrue(all("elements-sha256:" in line for line in comments))
+            self.assertNotIn("; elements: ", article)
+            provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
+            self.assertTrue(
+                any(
+                    region["source_element_ids"]
+                    for page in provenance_value["pages"]
+                    for region in page["regions"]
+                )
+            )
 
     def test_layout_apply_is_byte_deterministic(self):
         with tempfile.TemporaryDirectory() as temp:
