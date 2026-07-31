@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .models import Element
 
 
-TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v1"
+TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v2"
 
 _LIGATURES = str.maketrans(
     {
@@ -173,6 +173,38 @@ def _vertical_overlap_ratio(left: Element, right: Element) -> float:
     return overlap / height if height > 0 else 0.0
 
 
+def _font_style(font: str | None) -> str | None:
+    if font is None:
+        return None
+    if "italic" in font or "oblique" in font:
+        return "italic"
+    return "roman"
+
+
+def _needs_geometric_word_space(
+    value: str,
+    fragment: str,
+    left: Element,
+    right: Element,
+) -> bool:
+    """Detect an omitted visible word gap without consulting vocabulary."""
+
+    if not value or not fragment or not fragment[0].isalnum():
+        return False
+    if value.endswith(("%", "+")) and fragment[0].isalpha():
+        return True
+    left_style = _font_style(_font_key(left))
+    right_style = _font_style(_font_key(right))
+    return (
+        value[-1].isalnum()
+        and left_style is not None
+        and right_style is not None
+        and left_style != right_style
+        and _vertical_overlap_ratio(left, right) >= 0.65
+        and right.bbox.x - left.bbox.right >= -0.5
+    )
+
+
 def _letter_spaced_boundaries(
     elements: list[Element], fragments: list[str]
 ) -> set[int]:
@@ -324,8 +356,16 @@ def join_line_elements(elements: list[Element]) -> ReconstructedText:
                 previous = element
                 previous_fragment = fragment
                 continue
-            compact_limit = max(
-                0.75, min(previous.bbox.height, element.bbox.height) * 0.12
+            smaller_height = min(previous.bbox.height, element.bbox.height)
+            old_compact_limit = max(0.75, smaller_height * 0.12)
+            same_font = (
+                _font_key(previous) is not None
+                and _font_key(previous) == _font_key(element)
+            )
+            compact_limit = (
+                max(0.90, smaller_height * 0.16)
+                if same_font
+                else old_compact_limit
             )
             if (
                 re.fullmatch(r"\d+(?:,\d+)*", previous_fragment)
@@ -333,11 +373,42 @@ def join_line_elements(elements: list[Element]) -> ReconstructedText:
                 and fragment[0].isalpha()
             ):
                 value += " " + fragment
+            elif _needs_geometric_word_space(
+                value,
+                fragment,
+                previous,
+                element,
+            ):
+                before = value[-80:] + fragment[:80]
+                value += " " + fragment
+                events.append(
+                    ReconstructionEvent(
+                        "inserted_geometric_word_space",
+                        before,
+                        value[-(len(before) + 1) :],
+                        (previous.element_id, element.element_id),
+                    )
+                )
             elif (
                 gap <= compact_limit
+                and _vertical_overlap_ratio(previous, element) >= 0.65
                 and not value.endswith((",", ".", ";", ":", "!", "?"))
             ):
                 value += fragment
+                if (
+                    same_font
+                    and old_compact_limit < gap <= compact_limit
+                    and previous_fragment[-1:].isalnum()
+                    and fragment[0].isalnum()
+                ):
+                    events.append(
+                        ReconstructionEvent(
+                            "collapsed_tight_same_font_fragment_gap",
+                            previous_fragment + " " + fragment,
+                            previous_fragment + fragment,
+                            (previous.element_id, element.element_id),
+                        )
+                    )
             else:
                 value += " " + fragment
         previous = element

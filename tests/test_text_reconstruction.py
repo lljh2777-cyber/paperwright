@@ -68,6 +68,46 @@ class TextReconstructionTests(unittest.TestCase):
         self.assertEqual(result.text, "SUPPLEMENTARY MATERIALS")
         self.assertEqual(len(result.events), 2)
 
+    def test_tight_same_font_fragments_are_joined_from_geometry(self):
+        result = join_line_elements(
+            [
+                text("left", 10, 10, 40, "adj", font_name="Body-Roman"),
+                text("right", 50.95, 10, 40, "acent", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "adjacent")
+        self.assertIn(
+            "collapsed_tight_same_font_fragment_gap",
+            {event.code for event in result.events},
+        )
+
+    def test_italic_scientific_token_followed_by_roman_prose_gets_space(self):
+        result = join_line_elements(
+            [
+                text("gene", 10, 10, 20, "IL10", font_name="Body-Italic"),
+                text("prose", 30.1, 10, 20, "and", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "IL10 and")
+        self.assertIn(
+            "inserted_geometric_word_space",
+            {event.code for event in result.events},
+        )
+
+    def test_percent_followed_by_word_gets_space(self):
+        result = join_line_elements(
+            [
+                text("number", 10, 10, 20, "80", font_name="Body-Roman"),
+                text("percent", 30.1, 10, 4, "%", font_name="Math-Regular"),
+                text("word", 34.5, 10, 30, "training", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "80% training")
+        self.assertIn(
+            "inserted_geometric_word_space",
+            {event.code for event in result.events},
+        )
+
     def test_panel_labels_and_two_acronyms_are_not_collapsed(self):
         panels = [
             text("a", 10, 10, 3, "A"),
