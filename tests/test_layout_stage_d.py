@@ -11,13 +11,16 @@ from paper2md.layout_models import (
     LayoutAction,
     LayoutRegion,
     LayoutTask,
+    NormalizedBBox,
 )
+from paper2md.layout_writer import _text_region_non_text_diagnostics
 from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
 from paper2md.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     sha256_file,
     validate_manifest,
 )
+from paper2md.models import BBox, Element, Page, Provenance
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -85,6 +88,33 @@ def _write_fixture_reviews(review_root: Path) -> None:
 
 
 class LayoutStageDTests(unittest.TestCase):
+    def test_text_regions_ignore_rules_and_heading_backgrounds_only(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        elements = (
+            Element("text", "text", 0, BBox(10, 10, 40, 8), provenance),
+            Element("rule", "vector", 0, BBox(10, 20, 50, 0.2), provenance),
+            Element("background", "vector", 0, BBox(10, 10, 50, 10), provenance),
+            Element("image", "image", 0, BBox(60, 10, 20, 20), provenance),
+        )
+        page = Page(0, 100, 100, 0, elements)
+        region = LayoutRegion(
+            region_id="R001",
+            bbox=NormalizedBBox(0.1, 0.1, 0.5, 0.1),
+            content_class="text",
+            role="heading",
+            order=1,
+            source_element_ids=("text", "rule", "background", "image"),
+        )
+
+        result = _text_region_non_text_diagnostics(page, region)
+
+        self.assertEqual(result["total_count"], 3)
+        self.assertEqual(result["ignored_decorative_count"], 2)
+        self.assertEqual(result["risk_count"], 1)
+        self.assertEqual(result["by_class"]["decorative_rule"], 1)
+        self.assertEqual(result["by_class"]["heading_background"], 1)
+        self.assertEqual(result["by_class"]["semantic_non_text"], 1)
+
     def _prepare(
         self,
         root: Path,

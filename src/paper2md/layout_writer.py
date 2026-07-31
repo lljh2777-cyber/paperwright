@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import dataclass
 import hashlib
 import json
-import shutil
-from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from typing import Any, Sequence
 
 from .backends.base import ExtractedAsset
@@ -68,6 +69,78 @@ def _trace_digest(element_ids: Sequence[str]) -> str:
     return hashlib.sha256(
         "\n".join(element_ids).encode("utf-8")
     ).hexdigest()
+
+
+def _bbox_intersection_area(left: BBox, right: BBox) -> float:
+    width = max(0.0, min(left.right, right.right) - max(left.x, right.x))
+    height = max(0.0, min(left.bottom, right.bottom) - max(left.y, right.y))
+    return width * height
+
+
+def _text_region_non_text_diagnostics(
+    page: Page,
+    region: LayoutRegion,
+) -> dict[str, object]:
+    """Separate harmless text decoration from semantic non-text content."""
+
+    selected = set(region.source_element_ids)
+    non_text = tuple(
+        item
+        for item in page.elements
+        if item.element_id in selected and item.kind != "text"
+    )
+    region_bbox = BBox(
+        x=region.bbox.x * page.width,
+        y=region.bbox.y * page.height,
+        width=region.bbox.width * page.width,
+        height=region.bbox.height * page.height,
+    )
+    thin_limit = max(1.25, min(page.width, page.height) * 0.002)
+    classes: Counter[str] = Counter()
+    objects: list[dict[str, object]] = []
+
+    for item in non_text:
+        classification = "semantic_non_text"
+        ignored = False
+        if item.kind == "vector":
+            short_side = min(item.bbox.width, item.bbox.height)
+            long_side = max(item.bbox.width, item.bbox.height)
+            aspect_ratio = long_side / max(short_side, 1e-9)
+            if short_side <= thin_limit and aspect_ratio >= 8.0:
+                classification = "decorative_rule"
+                ignored = True
+            elif region.role == "heading":
+                intersection = _bbox_intersection_area(item.bbox, region_bbox)
+                vector_area = item.bbox.width * item.bbox.height
+                region_area = region_bbox.width * region_bbox.height
+                if (
+                    intersection / max(vector_area, 1e-9) >= 0.90
+                    and intersection / max(region_area, 1e-9) >= 0.35
+                ):
+                    classification = "heading_background"
+                    ignored = True
+        classes[classification] += 1
+        objects.append(
+            {
+                "element_id": item.element_id,
+                "kind": item.kind,
+                "classification": classification,
+                "ignored_as_decoration": ignored,
+                "bbox": item.bbox.to_dict(),
+            }
+        )
+
+    ignored_count = sum(
+        bool(item["ignored_as_decoration"]) for item in objects
+    )
+    return {
+        "policy_version": "paper2md-text-region-non-text-v1",
+        "total_count": len(objects),
+        "ignored_decorative_count": ignored_count,
+        "risk_count": len(objects) - ignored_count,
+        "by_class": dict(sorted(classes.items())),
+        "objects": objects,
+    }
 
 
 def _region_trace_comment(
@@ -491,18 +564,21 @@ def write_layout_outputs(
                 for item in _ordered_text_elements(page, region)
                 if item.element_id not in title_element_ids
             )
-            non_text_count = sum(
-                item.element_id in set(region.source_element_ids)
-                and item.kind != "text"
-                for item in page.elements
+            non_text_diagnostics = _text_region_non_text_diagnostics(
+                page,
+                region,
             )
-            if non_text_count:
+            if non_text_diagnostics["risk_count"]:
                 warnings.append(
                     {
                         "code": "text_region_contains_non_text_elements",
                         "page": page.page_index + 1,
                         "region_id": region.region_id,
-                        "count": non_text_count,
+                        "count": non_text_diagnostics["risk_count"],
+                        "ignored_decorative_count": non_text_diagnostics[
+                            "ignored_decorative_count"
+                        ],
+                        "by_class": non_text_diagnostics["by_class"],
                     }
                 )
             paragraphs = _markdown_text_groups_detailed(text_elements)
@@ -622,6 +698,7 @@ def write_layout_outputs(
                     "execution": "extract_native_text",
                     "asset": None,
                     "paragraphs": paragraph_records,
+                    "non_text_diagnostics": non_text_diagnostics,
                 }
             )
 
