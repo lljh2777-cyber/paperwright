@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import shutil
 from typing import Any, Sequence
+import unicodedata
 
 from .backends.base import ExtractedAsset
 from .evidence import (
@@ -73,6 +74,118 @@ class NativeMatrixEquation:
     bbox: BBox
     element_ids: tuple[str, ...]
     paragraph_indexes: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class CrossPageParagraphBlock:
+    page_index: int
+    region_id: str
+    trace_index: int
+    text_index: int
+    text: str
+    role: str
+    is_bold: bool
+    dominant_font: str | None
+    ends_with_pdf_soft_break: bool
+    element_ids: tuple[str, ...]
+
+
+def _dominant_font_name(elements: Sequence[Element]) -> str | None:
+    widths: Counter[str] = Counter()
+    for element in elements:
+        value = element.metadata.get("font_name")
+        if isinstance(value, str) and value:
+            widths[value.casefold()] += max(element.bbox.width, 0.0)
+    return max(widths, key=widths.get) if widths else None
+
+
+def _cross_page_pair_is_continuation(
+    previous: CrossPageParagraphBlock,
+    current: CrossPageParagraphBlock,
+    page_markers: dict[int, int],
+) -> bool:
+    marker = page_markers.get(current.page_index)
+    first = current.text.lstrip()[:1]
+    return (
+        current.page_index == previous.page_index + 1
+        and marker is not None
+        and previous.text_index + 2 == marker
+        and current.trace_index == marker + 2
+        and previous.role == "body"
+        and current.role == "body"
+        and not previous.is_bold
+        and not current.is_bold
+        and bool(first)
+        and first.islower()
+        and not previous.text.rstrip().endswith((".", "!", "?", ":", ";"))
+        and previous.dominant_font is not None
+        and previous.dominant_font == current.dominant_font
+    )
+
+
+def _merge_cross_page_paragraph_blocks(
+    lines: list[str],
+    blocks: Sequence[CrossPageParagraphBlock],
+    page_markers: dict[int, int],
+) -> list[dict[str, Any]]:
+    """Merge only direct, high-confidence body continuations across pages."""
+
+    ordered = sorted(blocks, key=lambda item: item.trace_index)
+    chains: list[list[CrossPageParagraphBlock]] = []
+    index = 0
+    while index < len(ordered) - 1:
+        if not _cross_page_pair_is_continuation(
+            ordered[index], ordered[index + 1], page_markers
+        ):
+            index += 1
+            continue
+        chain = [ordered[index], ordered[index + 1]]
+        index += 1
+        while (
+            index < len(ordered) - 1
+            and _cross_page_pair_is_continuation(
+                ordered[index], ordered[index + 1], page_markers
+            )
+        ):
+            chain.append(ordered[index + 1])
+            index += 1
+        chains.append(chain)
+        index += 1
+
+    events: list[dict[str, Any]] = []
+    for chain in reversed(chains):
+        merged = chain[0].text
+        boundary_records: list[dict[str, Any]] = []
+        for previous, current in zip(chain, chain[1:]):
+            joiner = (
+                ""
+                if previous.ends_with_pdf_soft_break
+                or merged.endswith(("-", "‐", "‑"))
+                else " "
+            )
+            boundary_records.append(
+                {
+                    "code": "joined_cross_page_paragraph",
+                    "from_page": previous.page_index + 1,
+                    "to_page": current.page_index + 1,
+                    "joiner": "none" if not joiner else "space",
+                    "source_element_ids": list(
+                        previous.element_ids + current.element_ids
+                    ),
+                }
+            )
+            merged += joiner + current.text
+        traces = [lines[item.trace_index] for item in chain]
+        pages = ",".join(str(item.page_index + 1) for item in chain)
+        replacement = traces + [
+            f"<!-- cross-page-continuation: pages: {pages}; "
+            "method: native-geometry -->",
+            merged,
+            "",
+        ]
+        lines[chain[0].trace_index : chain[-1].text_index + 2] = replacement
+        events.extend(boundary_records)
+    return list(reversed(events))
 
 
 _MATRIX_TOP = frozenset({"⎡", "⎤"})
@@ -583,6 +696,8 @@ def write_layout_outputs(
     quality_paragraphs: list[dict[str, Any]] = []
     reconstruction_events: list[dict[str, Any]] = []
     reconstruction_warnings: list[dict[str, Any]] = []
+    cross_page_blocks: list[CrossPageParagraphBlock] = []
+    page_marker_indexes: dict[int, int] = {}
     visual_index = 0
     equation_index = 0
 
@@ -627,6 +742,7 @@ def write_layout_outputs(
                 )
                 shutil.copyfile(source_page_root / "page.png", page_path)
                 layout_output_paths.extend((task_path, page_path))
+        page_marker_indexes[page.page_index] = len(lines)
         lines.extend([f"<!-- page: {page.page_index + 1} -->", ""])
         page_regions: list[dict[str, Any]] = []
 
@@ -913,19 +1029,45 @@ def write_layout_outputs(
                                 ],
                             }
                         )
-                    target_lines.extend(
-                        [
-                            _region_trace_comment(
-                                region_id=region.region_id,
-                                role=region.role,
-                                page_number=page.page_index + 1,
-                                element_ids=element_ids,
-                                paragraph_index=paragraph_index,
-                            ),
-                            prefix + markdown_text,
-                            "",
-                        ]
+                    trace = _region_trace_comment(
+                        region_id=region.region_id,
+                        role=region.role,
+                        page_number=page.page_index + 1,
+                        element_ids=element_ids,
+                        paragraph_index=paragraph_index,
                     )
+                    target_lines.extend([trace, prefix + markdown_text, ""])
+                    if destination == "article":
+                        element_by_id = {
+                            item.element_id: item for item in text_elements
+                        }
+                        paragraph_elements = tuple(
+                            element_by_id[element_id]
+                            for element_id in element_ids
+                            if element_id in element_by_id
+                        )
+                        last_text = (
+                            paragraph_elements[-1].text or ""
+                            if paragraph_elements
+                            else ""
+                        )
+                        cross_page_blocks.append(
+                            CrossPageParagraphBlock(
+                                page_index=page.page_index,
+                                region_id=region.region_id,
+                                trace_index=len(lines) - 3,
+                                text_index=len(lines) - 2,
+                                text=prefix + markdown_text,
+                                role=region.role,
+                                is_bold=markdown_text.startswith("**"),
+                                dominant_font=_dominant_font_name(
+                                    paragraph_elements
+                                ),
+                                ends_with_pdf_soft_break=bool(last_text)
+                                and unicodedata.category(last_text[-1]) == "Cc",
+                                element_ids=tuple(element_ids),
+                            )
+                        )
             page_regions.append(
                 {
                     **region.to_dict(),
@@ -948,6 +1090,12 @@ def write_layout_outputs(
             }
         )
 
+    cross_page_events = _merge_cross_page_paragraph_blocks(
+        lines,
+        cross_page_blocks,
+        page_marker_indexes,
+    )
+    reconstruction_events.extend(cross_page_events)
     article_path = root / "article.md"
     article_path.write_text(
         "\n".join(lines).rstrip() + "\n",

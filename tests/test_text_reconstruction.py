@@ -112,6 +112,16 @@ class TextReconstructionTests(unittest.TestCase):
         )
         self.assertEqual(result.text, "α responses")
 
+    def test_micro_unit_symbol_remains_compact(self):
+        result = join_line_elements(
+            [
+                text("number", 10, 10, 5, "2 ", font_name="Body-Roman"),
+                text("micro", 16.0, 10, 4, "μ", font_name="Math-Regular"),
+                text("unit", 20.1, 10, 20, "g/ml", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "2 μg/ml")
+
     def test_percent_followed_by_word_gets_space(self):
         result = join_line_elements(
             [

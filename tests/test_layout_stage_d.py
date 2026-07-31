@@ -14,7 +14,9 @@ from paper2md.layout_models import (
     NormalizedBBox,
 )
 from paper2md.layout_writer import (
+    CrossPageParagraphBlock,
     _detect_native_matrix_equations,
+    _merge_cross_page_paragraph_blocks,
     _text_region_non_text_diagnostics,
 )
 from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
@@ -89,6 +91,80 @@ def _write_fixture_reviews(review_root: Path) -> None:
             layout.canonical_json(),
             encoding="utf-8",
         )
+
+
+class CrossPageParagraphTests(unittest.TestCase):
+    def _block(
+        self,
+        page_index: int,
+        trace_index: int,
+        text_index: int,
+        text: str,
+        *,
+        role: str = "body",
+        ends_soft: bool = False,
+    ) -> CrossPageParagraphBlock:
+        return CrossPageParagraphBlock(
+            page_index=page_index,
+            region_id=f"R{page_index + 1}",
+            trace_index=trace_index,
+            text_index=text_index,
+            text=text,
+            role=role,
+            is_bold=False,
+            dominant_font="fixture-roman",
+            ends_with_pdf_soft_break=ends_soft,
+            element_ids=(f"e{page_index + 1}",),
+        )
+
+    def test_direct_body_continuation_is_merged_across_page_marker(self):
+        lines = [
+            "<!-- trace p1 -->",
+            "The result continues",
+            "",
+            "<!-- page: 2 -->",
+            "",
+            "<!-- trace p2 -->",
+            "across the next page.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "The result continues"),
+                self._block(1, 5, 6, "across the next page."),
+            ),
+            {0: 0, 1: 3},
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["code"], "joined_cross_page_paragraph")
+        self.assertIn("The result continues across the next page.", lines)
+        self.assertNotIn("<!-- page: 2 -->", lines)
+
+    def test_pdf_soft_break_joins_without_space_across_page(self):
+        lines = ["t1", "inter", "", "p2", "", "t2", "action", ""]
+        _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "inter", ends_soft=True),
+                self._block(1, 5, 6, "action"),
+            ),
+            {0: 0, 1: 3},
+        )
+        self.assertIn("interaction", lines)
+
+    def test_terminal_sentence_is_not_merged_across_page(self):
+        lines = ["t1", "Complete.", "", "p2", "", "t2", "next", ""]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "Complete."),
+                self._block(1, 5, 6, "next"),
+            ),
+            {0: 0, 1: 3},
+        )
+        self.assertEqual(events, [])
+        self.assertIn("p2", lines)
 
 
 class LayoutStageDTests(unittest.TestCase):

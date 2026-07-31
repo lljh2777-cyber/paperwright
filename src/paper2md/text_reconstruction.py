@@ -206,6 +206,13 @@ def _needs_geometric_word_space(
     right_style = _font_style(right_font)
     signed_gap = right.bbox.x - left.bbox.right
     smaller_height = min(left.bbox.height, right.bbox.height)
+    compact_prefix = value.rstrip()[:-1].rstrip()
+    if (
+        value[-1] in {"μ", "µ"}
+        and compact_prefix[-1:].isdigit()
+        and fragment.casefold().startswith(("g", "l", "m", "s"))
+    ):
+        return False
     if (
         _is_greek_letter(value[-1])
         and fragment[0].isascii()
