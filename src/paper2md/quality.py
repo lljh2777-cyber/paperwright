@@ -23,6 +23,9 @@ _GLUED_SCIENTIFIC_TOKEN = re.compile(
 _GLUED_SYMBOL_WORD = re.compile(
     r"(?:\d+(?:\.\d+)?%|[A-Za-z0-9]\+)(?=[A-Za-z]{2,}\b)"
 )
+_GLUED_ACRONYM_PROSE = re.compile(
+    r"\b[A-Z]{3,}(?=(?:and|or|with|within|without|from|to|in|on|by|of)\b)"
+)
 _MAX_FINDINGS = 50
 
 
@@ -111,6 +114,7 @@ def analyze_word_spacing(
         text = record["text"]
         matches = list(_GLUED_SCIENTIFIC_TOKEN.finditer(text))
         matches.extend(_GLUED_SYMBOL_WORD.finditer(text))
+        matches.extend(_GLUED_ACRONYM_PROSE.finditer(text))
         if matches:
             finding = _finding(record, "suspected_missing_word_space")
             finding["matches"] = sorted(

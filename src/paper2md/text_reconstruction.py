@@ -31,6 +31,9 @@ _LIGATURES = str.maketrans(
 _CLOSING_PUNCTUATION = ",.;:!?)]}%\u00b2\u00b3\u2020*"
 _VISIBLE_HYPHENS = ("-", "\u2010", "\u2011")
 _NONCHARACTERS = {"\ufffe", "\uffff"}
+_PROSE_BOUNDARY_WORDS = frozenset(
+    {"and", "or", "with", "within", "without", "from", "to", "in", "on", "by", "of"}
+)
 
 
 @dataclass(frozen=True)
@@ -213,6 +216,15 @@ def _needs_geometric_word_space(
         and fragment.casefold().startswith(("g", "l", "m", "s"))
     ):
         return False
+    next_word = re.match(r"[A-Za-z]+", fragment)
+    if (
+        re.search(r"\b[A-Z]{3,}$", value)
+        and next_word is not None
+        and next_word.group(0).casefold() in _PROSE_BOUNDARY_WORDS
+        and _vertical_overlap_ratio(left, right) >= 0.65
+        and signed_gap >= -min(1.0, smaller_height * 0.15)
+    ):
+        return True
     if (
         _is_greek_letter(value[-1])
         and fragment[0].isascii()

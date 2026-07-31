@@ -9,12 +9,14 @@ from paper2md.cli import main
 from paper2md.layout_models import (
     FinalLayout,
     LayoutAction,
+    LayoutPage,
     LayoutRegion,
     LayoutTask,
     NormalizedBBox,
 )
 from paper2md.layout_writer import (
     CrossPageParagraphBlock,
+    _bind_caption_regions,
     _detect_native_matrix_equations,
     _merge_cross_page_paragraph_blocks,
     _text_region_non_text_diagnostics,
@@ -25,7 +27,7 @@ from paper2md.manifest import (
     sha256_file,
     validate_manifest,
 )
-from paper2md.models import BBox, Element, Page, Provenance
+from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
 from paper2md.text_reconstruction import ReconstructedText
 
 from pdf_fixture_factory import create_born_digital_fixture
@@ -165,6 +167,94 @@ class CrossPageParagraphTests(unittest.TestCase):
         )
         self.assertEqual(events, [])
         self.assertIn("p2", lines)
+
+
+class CaptionBindingTests(unittest.TestCase):
+    def _caption_element(self, page_index: int, element_id: str) -> Element:
+        return Element(
+            element_id,
+            "text",
+            page_index,
+            BBox(10, 70, 80, 10),
+            Provenance("fixture", "native", element_id),
+            text="Figure 1. Example caption",
+            metadata={"line_group": 0, "font_name": "fixture-roman"},
+        )
+
+    def test_same_page_caption_binds_by_geometry(self):
+        caption_element = self._caption_element(0, "caption")
+        page = Page(0, 100, 100, 0, (caption_element,))
+        document = PhysicalDocument("a" * 64, "fixture", "1", (page,))
+        layout = FinalLayout(
+            source_sha256="a" * 64,
+            page=LayoutPage.from_page(page),
+            regions=(
+                LayoutRegion(
+                    "figure",
+                    NormalizedBBox(0.1, 0.1, 0.8, 0.5),
+                    "visual",
+                    "figure",
+                    1,
+                ),
+                LayoutRegion(
+                    "caption",
+                    NormalizedBBox(0.1, 0.62, 0.8, 0.1),
+                    "text",
+                    "caption",
+                    2,
+                    source_element_ids=(caption_element.element_id,),
+                ),
+            ),
+        )
+        by_caption, _, summary = _bind_caption_regions(document, (layout,))
+        self.assertEqual(
+            by_caption[(0, "caption")].visual_region_id,
+            "figure",
+        )
+        self.assertEqual(summary["status"], "pass")
+
+    def test_full_page_figure_binds_to_next_page_top_caption(self):
+        caption_element = self._caption_element(1, "caption")
+        pages = (
+            Page(0, 100, 100, 0, ()),
+            Page(1, 100, 100, 0, (caption_element,)),
+        )
+        document = PhysicalDocument("b" * 64, "fixture", "1", pages)
+        layout_pages = tuple(LayoutPage.from_page(page) for page in pages)
+        layouts = (
+            FinalLayout(
+                source_sha256="b" * 64,
+                page=layout_pages[0],
+                regions=(
+                    LayoutRegion(
+                        "figure",
+                        NormalizedBBox(0.05, 0.05, 0.9, 0.9),
+                        "visual",
+                        "figure",
+                        1,
+                    ),
+                ),
+            ),
+            FinalLayout(
+                source_sha256="b" * 64,
+                page=layout_pages[1],
+                regions=(
+                    LayoutRegion(
+                        "caption",
+                        NormalizedBBox(0.05, 0.05, 0.9, 0.1),
+                        "text",
+                        "caption",
+                        1,
+                        source_element_ids=(caption_element.element_id,),
+                    ),
+                ),
+            ),
+        )
+        by_caption, _, summary = _bind_caption_regions(document, layouts)
+        binding = by_caption[(1, "caption")]
+        self.assertEqual(binding.visual_page_index, 0)
+        self.assertEqual(binding.method, "next_page_top_caption")
+        self.assertEqual(summary["status"], "pass")
 
 
 class LayoutStageDTests(unittest.TestCase):
@@ -529,6 +619,7 @@ class LayoutStageDTests(unittest.TestCase):
                 {
                     "markdown_text",
                     "word_spacing",
+                    "caption_binding",
                     "figure_label_leakage",
                     "title_integrity",
                     "image_links",

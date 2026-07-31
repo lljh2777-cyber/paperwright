@@ -428,6 +428,12 @@ provenance。普通行内公式不触发，也不尝试猜测 LaTeX。
 补一个空格。合并后的 Markdown 同时保留两侧 trace 注释，并记录
 `joined_cross_page_paragraph`，标题、caption、视觉块或非直接相邻块均不合并。
 
+Figure/Table 与 caption 使用一对一几何绑定。同页优先根据上下距离、水平重叠、
+阅读顺序和 `Figure`/`Table` 前缀配对；整页视觉区块还允许绑定到下一页顶部的
+首个 caption。绑定结果写入图片记录、region provenance、Markdown 注释和
+`caption_binding` 质量检查。未绑定 caption 产生 warning；没有显式 caption 的
+图形摘要等视觉块只作信息记录，不降低转换状态。
+
 文字模式识别属于启发式检查，只产生 `warning` 和可定位的片段；图片、
 manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 的对象单独计数，
 不作为正文遗漏。

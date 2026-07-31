@@ -240,7 +240,10 @@ class QualityValidationTests(unittest.TestCase):
                     "page_index": 3,
                     "region_id": "R1",
                     "paragraph_index": 0,
-                    "text": "IL10and CD24within cells used 80%training data.",
+                    "text": (
+                        "IL10and CD24within cells used 80%training data "
+                        "from TCGAand another cohort."
+                    ),
                     "reconstruction_events": [],
                 }
             ]

@@ -122,6 +122,16 @@ class TextReconstructionTests(unittest.TestCase):
         )
         self.assertEqual(result.text, "2 μg/ml")
 
+    def test_acronym_followed_by_prose_boundary_word_gets_space(self):
+        result = join_line_elements(
+            [
+                text("prefix", 10, 10, 40, "across TCG", font_name="Body-Roman"),
+                text("suffix", 50.5, 10, 5, "A", font_name="Body-Roman"),
+                text("prose", 55.45, 10, 40, "and cohorts", font_name="Body-Roman"),
+            ]
+        )
+        self.assertEqual(result.text, "across TCGA and cohorts")
+
     def test_percent_followed_by_word_gets_space(self):
         result = join_line_elements(
             [
