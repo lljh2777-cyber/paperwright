@@ -457,6 +457,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "image_links",
                     "layout_element_coverage",
                     "layout_element_uniqueness",
+                    "markdown_exclusions",
                     "manifest_inventory",
                     "native_object_diagnostics",
                     "text_reconstruction",

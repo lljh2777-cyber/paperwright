@@ -37,6 +37,7 @@ from .quality import (
     analyze_image_links,
     analyze_layout_elements,
     analyze_manifest_inventory,
+    analyze_markdown_exclusions,
     analyze_markdown_text,
     analyze_native_object_diagnostics,
     analyze_title,
@@ -964,6 +965,7 @@ def write_layout_outputs(
         "image_links": analyze_image_links(article_path, images_dir),
         "layout_element_coverage": element_quality["coverage"],
         "layout_element_uniqueness": element_quality["uniqueness"],
+        "markdown_exclusions": analyze_markdown_exclusions(document),
         "native_object_diagnostics": analyze_native_object_diagnostics(
             document
         ),
@@ -990,6 +992,7 @@ def write_layout_outputs(
         "image_links": "quality_image_links_invalid",
         "layout_element_coverage": "quality_unassigned_text_objects",
         "layout_element_uniqueness": "quality_duplicate_region_objects",
+        "markdown_exclusions": "quality_markdown_exclusions_invalid",
         "native_object_diagnostics": "quality_unplaced_native_objects",
         "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
     }

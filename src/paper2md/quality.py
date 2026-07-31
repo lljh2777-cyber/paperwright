@@ -318,3 +318,35 @@ def analyze_native_object_diagnostics(
         "counts": dict(sorted(counts.items())),
         "findings": findings[:_MAX_FINDINGS],
     }
+
+
+def analyze_markdown_exclusions(
+    document: PhysicalDocument,
+) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    reasons: Counter[str] = Counter()
+    for page in document.pages:
+        for element in page.elements:
+            reason = element.metadata.get("markdown_excluded_reason")
+            if not isinstance(reason, str) or not reason:
+                continue
+            reasons[reason] += 1
+            if len(findings) < _MAX_FINDINGS:
+                findings.append(
+                    {
+                        "code": reason,
+                        "page": page.page_index + 1,
+                        "element_id": element.element_id,
+                        "bbox": element.bbox.to_dict(),
+                        "text_codepoints": [
+                            f"U+{ord(character):04X}"
+                            for character in (element.text or "")
+                        ],
+                    }
+                )
+    return {
+        "status": "pass",
+        "excluded_count": sum(reasons.values()),
+        "by_reason": dict(sorted(reasons.items())),
+        "findings": findings,
+    }

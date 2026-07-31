@@ -16,6 +16,7 @@ from paper2md.quality import (
     analyze_image_links,
     analyze_layout_elements,
     analyze_manifest_inventory,
+    analyze_markdown_exclusions,
     analyze_markdown_text,
     analyze_native_object_diagnostics,
     analyze_title,
@@ -23,6 +24,36 @@ from paper2md.quality import (
 
 
 class QualityValidationTests(unittest.TestCase):
+    def test_markdown_exclusions_remain_auditable(self):
+        element = Element(
+            "dingbat",
+            "text",
+            0,
+            BBox(90, 20, 5, 5),
+            Provenance("fixture", "native", "fixture"),
+            text="\uf0a3",
+            metadata={
+                "markdown_excluded_reason": (
+                    "decorative_line_end_private_use_dingbat"
+                )
+            },
+        )
+        document = PhysicalDocument(
+            "d" * 64,
+            "fixture",
+            "1",
+            (Page(0, 100, 100, 0, (element,)),),
+        )
+
+        result = analyze_markdown_exclusions(document)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["excluded_count"], 1)
+        self.assertEqual(
+            result["findings"][0]["text_codepoints"],
+            ["U+F0A3"],
+        )
+
     def test_native_object_diagnostics_separate_safe_and_risky_objects(self):
         page = Page(0, 100, 100, 0, ())
         document = PhysicalDocument(

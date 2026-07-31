@@ -111,6 +111,63 @@ def _degenerate_text_class(text: str | None, *, extraction_failed: bool) -> str:
     return "nonempty_text"
 
 
+def _is_private_use_character(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0xE000 <= codepoint <= 0xF8FF
+        or 0xF0000 <= codepoint <= 0xFFFFD
+        or 0x100000 <= codepoint <= 0x10FFFD
+    )
+
+
+def _decorative_line_end_symbol_reason(
+    item: Element,
+    ordered: list[Element],
+    page_width: float,
+) -> str | None:
+    """Identify a tiny PUA dingbat appended to a punctuated native text line."""
+
+    if item.kind != "text" or not item.text or len(item.text) > 3:
+        return None
+    if not all(_is_private_use_character(value) for value in item.text):
+        return None
+    font_name = item.metadata.get("font_name")
+    if not isinstance(font_name, str) or not any(
+        marker in font_name.casefold()
+        for marker in ("wingdings", "webdings", "dingbats")
+    ):
+        return None
+    if max(item.bbox.width, item.bbox.height) > 12.0:
+        return None
+    if item.bbox.x < page_width * 0.60:
+        return None
+    line_group = item.metadata.get("line_group")
+    line_position = item.metadata.get("line_position")
+    if not isinstance(line_group, int) or not isinstance(line_position, int):
+        return None
+    previous = [
+        candidate
+        for candidate in ordered
+        if candidate.kind == "text"
+        and candidate.text
+        and candidate.metadata.get("line_group") == line_group
+        and isinstance(candidate.metadata.get("line_position"), int)
+        and candidate.metadata["line_position"] < line_position
+    ]
+    if not previous:
+        return None
+    predecessor = max(
+        previous,
+        key=lambda candidate: candidate.metadata["line_position"],
+    )
+    gap = item.bbox.x - predecessor.bbox.right
+    if not -1.0 <= gap <= 12.0:
+        return None
+    if not predecessor.text.rstrip().endswith((".", "!", "?", ":", ";")):
+        return None
+    return "decorative_line_end_private_use_dingbat"
+
+
 def _restore_missing_spaces_from_charboxes(
     characters: list[tuple[str, tuple[float, float, float, float]]],
 ) -> tuple[str, int]:
@@ -878,6 +935,18 @@ class PDFiumBackend:
                 }
             )
 
+        decorative_reasons = {
+            item.element_id: reason
+            for item in ordered
+            if (
+                reason := _decorative_line_end_symbol_reason(
+                    item,
+                    ordered,
+                    width,
+                )
+            )
+            is not None
+        }
         normalized = [
             Element(
                 element_id=item.element_id,
@@ -887,7 +956,19 @@ class PDFiumBackend:
                 provenance=item.provenance,
                 text=item.text,
                 source_object_id=item.source_object_id,
-                metadata={**item.metadata, "normalized_order": order},
+                metadata={
+                    **item.metadata,
+                    "normalized_order": order,
+                    **(
+                        {
+                            "markdown_excluded_reason": decorative_reasons[
+                                item.element_id
+                            ]
+                        }
+                        if item.element_id in decorative_reasons
+                        else {}
+                    ),
+                },
             )
             for order, item in enumerate(ordered)
         ]

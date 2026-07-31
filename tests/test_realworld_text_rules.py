@@ -36,6 +36,23 @@ def text(element_id, x, y, width, height, value, *, font_name=None):
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_markdown_omits_a_classified_decorative_symbol(self):
+        sentence = text("sentence", 10, 10, 45, 8, "Finished.")
+        dingbat = replace(
+            text("dingbat", 57, 11, 5, 5, "\uf0a3"),
+            metadata={
+                "font_name": "Subset+Wingdings2",
+                "markdown_excluded_reason": (
+                    "decorative_line_end_private_use_dingbat"
+                ),
+            },
+        )
+
+        groups = _markdown_text_groups((sentence, dingbat))
+
+        self.assertEqual([value for _, value in groups], ["Finished."])
+        self.assertNotIn("dingbat", groups[0][0])
+
     def test_whole_paragraph_native_bold_is_preserved_in_markdown(self):
         item = text(
             "bold-heading",

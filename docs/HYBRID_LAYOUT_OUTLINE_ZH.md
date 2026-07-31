@@ -407,6 +407,11 @@ PDFium 返回零面积对象时按内容风险分类：已成功读取且为空�
 括号和数字；所有原生文字对象、bbox、段落索引和渲染方法继续记录在
 provenance。普通行内公式不触发，也不尝试猜测 LaTeX。
 
+小型私用区 Dingbats 只有在位于页面右侧、与带终止标点的正文同一原生行、
+紧邻正文末端且字体明确属于 Wingdings/Webdings/Dingbats 时，才作为段末
+装饰符从 Markdown 文字流排除。原对象不删除，并通过
+`markdown_exclusions` 记录对象 ID、页码、bbox、码点和排除原因。
+
 文字模式识别属于启发式检查，只产生 `warning` 和可定位的片段；图片、
 manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 的对象单独计数，
 不作为正文遗漏。

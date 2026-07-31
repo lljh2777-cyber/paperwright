@@ -77,7 +77,11 @@ def _page_text_lines(document: PhysicalDocument) -> list[list[Element]]:
     groups: dict[int, list[Element]] = {}
     ungrouped = 1_000_000
     for element in document.pages[0].elements:
-        if element.kind != "text" or not element.text:
+        if (
+            element.kind != "text"
+            or not element.text
+            or element.metadata.get("markdown_excluded_reason")
+        ):
             continue
         key = element.metadata.get("line_group")
         if not isinstance(key, int):
@@ -229,7 +233,13 @@ def _format_markdown_paragraph(
 def _markdown_text_groups_detailed(
     elements: tuple[Element, ...],
 ) -> list[ReconstructedText]:
-    return reconstruct_text_groups(elements)
+    return reconstruct_text_groups(
+        tuple(
+            element
+            for element in elements
+            if not element.metadata.get("markdown_excluded_reason")
+        )
+    )
 
 
 def _markdown_text_groups(
