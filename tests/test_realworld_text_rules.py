@@ -2,7 +2,10 @@ import hashlib
 import unittest
 from dataclasses import replace
 
-from paper2md.backends.pdfium import _reading_order
+from paper2md.backends.pdfium import (
+    _reading_order,
+    _restore_missing_spaces_from_charboxes,
+)
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
 from paper2md.writer import _markdown_text_groups, _title
 
@@ -26,6 +29,50 @@ def text(element_id, x, y, width, height, value):
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_missing_spaces_are_restored_from_character_geometry(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("s", (0.0, 0.0, 2.7, 8.0)),
+                ("e", (3.1, 0.0, 6.4, 8.0)),
+                ("t", (6.6, 0.0, 9.2, 8.0)),
+                ("f", (11.0, 0.0, 14.3, 8.0)),
+                ("r", (13.6, 0.0, 16.6, 8.0)),
+                ("o", (16.8, 0.0, 20.8, 8.0)),
+                ("m", (21.1, 0.0, 28.2, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "set from")
+        self.assertEqual(inserted, 1)
+
+    def test_normal_kerning_and_explicit_spaces_are_preserved(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("d", (0.0, 0.0, 4.0, 8.0)),
+                ("a", (4.3, 0.0, 8.1, 8.0)),
+                ("t", (8.3, 0.0, 10.8, 8.0)),
+                ("a", (11.1, 0.0, 14.9, 8.0)),
+                (" ", (16.2, 0.0, 16.2, 8.0)),
+                ("s", (16.5, 0.0, 19.2, 8.0)),
+                ("e", (19.6, 0.0, 22.9, 8.0)),
+                ("t", (23.1, 0.0, 25.7, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "data set")
+        self.assertEqual(inserted, 0)
+
+    def test_pdfium_noncharacter_soft_break_is_normalized(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("z", (0.0, 0.0, 3.0, 8.0)),
+                ("i", (3.2, 0.0, 4.4, 8.0)),
+                ("n", (4.6, 0.0, 8.2, 8.0)),
+                ("c", (8.4, 0.0, 11.4, 8.0)),
+                ("\ufffe", (11.6, 0.0, 12.0, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "zinc\u0002")
+        self.assertEqual(inserted, 0)
+
     def test_iterative_merge_restores_native_contiguous_dixon_line(self):
         values = [
             text("p0000-text-00073", 37.21, 593.60, 61.28, 6.70, "and fluorescence"),
@@ -169,6 +216,27 @@ class RealWorldTextRuleTests(unittest.TestCase):
             "artificial intelligence methods.",
         )
         self.assertEqual(groups[1][1], "RESULTS:")
+
+    def test_soft_break_before_hyphenated_continuation_keeps_hyphen(self):
+        ordered = _reading_order(
+            [
+                text("l1", 37, 100, 80, 7.4, "the zinc"),
+                text("soft", 118, 103.5, 2, 0.7, "\u0002"),
+                text(
+                    "l2",
+                    37,
+                    110.5,
+                    120,
+                    7.4,
+                    "finger-containing protein",
+                ),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(ordered))[0][1],
+            "the zinc-finger-containing protein",
+        )
 
     def test_compact_native_fragments_do_not_gain_spaces(self):
         items = _reading_order(

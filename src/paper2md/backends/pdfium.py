@@ -6,12 +6,15 @@ PDFium.  It only normalizes native page objects into PhysicalDocument v0.2.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import importlib.metadata
 import io
 import math
 from pathlib import Path
+import statistics
 from typing import Any
+import unicodedata
 
 from PIL import ImageStat
 
@@ -76,6 +79,107 @@ def _clamped_bbox(
     if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6:
         return None
     return BBox(x0, y0, x1 - x0, y1 - y0)
+
+
+def _restore_missing_spaces_from_charboxes(
+    characters: list[tuple[str, tuple[float, float, float, float]]],
+) -> tuple[str, int]:
+    """Restore omitted spaces using only native character geometry.
+
+    Some PDFs encode visually separated words in one text object without a
+    Unicode space.  Insert a space only between two alphanumeric characters
+    whose horizontal gap is large relative to both glyph heights.
+    """
+
+    characters = [
+        ("\u0002" if character in {"\ufffe", "\uffff"} else character, box)
+        for character, box in characters
+    ]
+    pair_gaps: list[float] = []
+    previous: tuple[str, tuple[float, float, float, float]] | None = None
+    for character, box in characters:
+        if (
+            not character
+            or character.isspace()
+            or unicodedata.category(character) == "Cc"
+        ):
+            previous = None
+            continue
+        if previous is not None:
+            previous_character, previous_box = previous
+            gap = box[0] - previous_box[2]
+            if (
+                previous_character.isalpha()
+                and character.isalpha()
+                and gap >= 0
+            ):
+                pair_gaps.append(gap)
+        previous = (character, box)
+    typical_gap = statistics.median(pair_gaps) if pair_gaps else 0.0
+
+    output: list[str] = []
+    previous = None
+    inserted = 0
+    for character, box in characters:
+        if not character:
+            continue
+        if character.isspace() or unicodedata.category(character) == "Cc":
+            output.append(character)
+            previous = None
+            continue
+        if previous is not None:
+            previous_character, previous_box = previous
+            left, bottom, _, top = box
+            _, previous_bottom, previous_right, previous_top = previous_box
+            height = max(0.0, top - bottom)
+            previous_height = max(0.0, previous_top - previous_bottom)
+            vertical_overlap = min(top, previous_top) - max(
+                bottom,
+                previous_bottom,
+            )
+            threshold = max(1.20, min(height, previous_height) * 0.20)
+            threshold = max(threshold, typical_gap * 2.4)
+            gap = left - previous_right
+            if (
+                previous_character.isalpha()
+                and character.isalpha()
+                and vertical_overlap
+                >= min(height, previous_height) * 0.50
+                and gap > threshold
+            ):
+                output.append(" ")
+                inserted += 1
+        output.append(character)
+        previous = (character, box)
+    return "".join(output), inserted
+
+
+def _object_address(raw: Any) -> int:
+    return int(ctypes.cast(raw, ctypes.c_void_p).value or 0)
+
+
+def _character_runs_by_object(
+    textpage: Any,
+) -> dict[int, list[tuple[str, tuple[float, float, float, float]]]]:
+    runs: dict[
+        int,
+        list[tuple[str, tuple[float, float, float, float]]],
+    ] = {}
+    for index in range(textpage.count_chars()):
+        text_object = textpage.get_textobj(index)
+        if text_object is None:
+            continue
+        character = textpage.get_text_range(index, 1)
+        if not character:
+            continue
+        try:
+            box = tuple(float(value) for value in textpage.get_charbox(index))
+        except Exception:
+            continue
+        runs.setdefault(_object_address(text_object.raw), []).append(
+            (character, box)
+        )
+    return runs
 
 
 def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
@@ -334,7 +438,9 @@ class PDFiumBackend:
                 ),
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
-                "text_object_extraction": "pdfium_native_text_object_v2",
+                "text_object_extraction": (
+                    "pdfium_native_text_object_character_geometry_v3"
+                ),
                 "text_line_reconstruction": "native_object_geometry_v2",
             },
         )
@@ -496,6 +602,7 @@ class PDFiumBackend:
         width, height = float(page.get_width()), float(page.get_height())
         rotation = int(page.get_rotation())
         textpage = page.get_textpage()
+        character_runs = _character_runs_by_object(textpage)
         elements: list[Element] = []
         image_index = 0
         vector_index = 0
@@ -520,10 +627,25 @@ class PDFiumBackend:
                     try:
                         obj.textpage = textpage
                         text = obj.extract().strip()
-                        extraction_method = "native_text_object_exact_text"
+                        geometry_spaces_inserted = 0
+                        character_run = character_runs.get(
+                            _object_address(obj.raw)
+                        )
+                        if character_run:
+                            reconstructed, geometry_spaces_inserted = (
+                                _restore_missing_spaces_from_charboxes(
+                                    character_run
+                                )
+                            )
+                            if reconstructed.strip():
+                                text = reconstructed.strip()
+                        extraction_method = (
+                            "native_text_object_character_geometry"
+                        )
                     except Exception:
                         text = textpage.get_text_bounded(*obj.get_bounds()).strip()
                         extraction_method = "native_text_object_bounded_text"
+                        geometry_spaces_inserted = 0
                         warnings.append(
                             {
                                 "code": "native_text_object_extract_fallback_bounded",
@@ -559,6 +681,9 @@ class PDFiumBackend:
                                 "font_size": float(obj.get_font_size()),
                                 "raw_object_index": raw_index,
                                 "native_order": raw_index,
+                                "geometry_spaces_inserted": (
+                                    geometry_spaces_inserted
+                                ),
                             },
                         )
                     )

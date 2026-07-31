@@ -414,7 +414,19 @@ def _markdown_text_groups(elements: tuple[Element, ...]) -> list[tuple[list[str]
                 )
                 for item in previous_line
             )
-            text += ("" if has_soft_break_marker else " ") + line_text
+            if has_soft_break_marker:
+                next_token = line_text.split(maxsplit=1)[0]
+                joiner = (
+                    "-"
+                    if "-" in next_token
+                    and text
+                    and text[-1].isalnum()
+                    and line_text[0].isalnum()
+                    else ""
+                )
+            else:
+                joiner = " "
+            text += joiner + line_text
         result.append((element_ids, re.sub(r"[ \t]+", " ", text).strip()))
     return result
 
