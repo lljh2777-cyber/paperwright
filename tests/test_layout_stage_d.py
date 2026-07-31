@@ -452,6 +452,7 @@ class LayoutStageDTests(unittest.TestCase):
                 set(validation["quality_checks"]),
                 {
                     "markdown_text",
+                    "word_spacing",
                     "figure_label_leakage",
                     "title_integrity",
                     "image_links",

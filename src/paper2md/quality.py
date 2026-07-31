@@ -17,6 +17,12 @@ _WORD = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿΑ-ω0-9]+(?:[-'][A-Za-z0-9]+)*")
 _REPEATED_WORD = re.compile(r"\b([A-Za-z]{2,})\s+\1\b", re.IGNORECASE)
 _SPACED_CAPS = re.compile(r"\b(?:[A-Z]{1,4}\s+){2,}[A-Z]{1,4}\b")
 _PANEL_OR_NUMBER = re.compile(r"^(?:[A-Z]|\d+(?:\.\d+)?%?)$")
+_GLUED_SCIENTIFIC_TOKEN = re.compile(
+    r"(?:\b[A-Z]{2,}\d+[A-Z]?|[Α-Ωα-ω])(?=[a-z]{2,}\b)"
+)
+_GLUED_SYMBOL_WORD = re.compile(
+    r"(?:\d+(?:\.\d+)?%|[A-Za-z0-9]\+)(?=[A-Za-z]{2,}\b)"
+)
 _MAX_FINDINGS = 50
 
 
@@ -90,6 +96,56 @@ def analyze_markdown_text(
             "suspected_count": len(figure_labels),
             "findings": figure_labels[:_MAX_FINDINGS],
         },
+    }
+
+
+def analyze_word_spacing(
+    paragraphs: Sequence[dict[str, Any]],
+) -> dict[str, Any]:
+    """Audit high-confidence residual joins and provenance-backed repairs."""
+
+    glued: list[dict[str, Any]] = []
+    repairs: Counter[str] = Counter()
+    soft_breaks: list[dict[str, Any]] = []
+    for record in paragraphs:
+        text = record["text"]
+        matches = list(_GLUED_SCIENTIFIC_TOKEN.finditer(text))
+        matches.extend(_GLUED_SYMBOL_WORD.finditer(text))
+        if matches:
+            finding = _finding(record, "suspected_missing_word_space")
+            finding["matches"] = sorted(
+                {text[item.start() : item.end() + 16] for item in matches}
+            )[:10]
+            glued.append(finding)
+        raw_events = record.get("reconstruction_events", ())
+        if not isinstance(raw_events, (list, tuple)):
+            continue
+        for event in raw_events:
+            if not isinstance(event, dict):
+                continue
+            code = event.get("code")
+            if not isinstance(code, str):
+                continue
+            repairs[code] += 1
+            if code == "joined_explicit_pdf_soft_break":
+                finding = _finding(record, "ambiguous_pdf_soft_break_join")
+                finding["before"] = _snippet(str(event.get("before", "")))
+                finding["after"] = _snippet(str(event.get("after", "")))
+                soft_breaks.append(finding)
+
+    return {
+        "status": "warning" if glued else "pass",
+        "suspected_missing_space_count": len(glued),
+        "geometric_space_insertion_count": repairs[
+            "inserted_geometric_word_space"
+        ],
+        "geometric_fragment_join_count": repairs[
+            "collapsed_tight_same_font_fragment_gap"
+        ],
+        "ambiguous_soft_break_join_count": len(soft_breaks),
+        "repairs_by_code": dict(sorted(repairs.items())),
+        "findings": glued[:_MAX_FINDINGS],
+        "soft_break_findings": soft_breaks[:_MAX_FINDINGS],
     }
 
 

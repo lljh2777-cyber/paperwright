@@ -20,6 +20,7 @@ from paper2md.quality import (
     analyze_markdown_text,
     analyze_native_object_diagnostics,
     analyze_title,
+    analyze_word_spacing,
 )
 
 
@@ -231,6 +232,50 @@ class QualityValidationTests(unittest.TestCase):
         self.assertEqual(
             result["figure_label_leakage"]["suspected_count"], 1
         )
+
+    def test_word_spacing_flags_residual_glued_scientific_tokens(self):
+        result = analyze_word_spacing(
+            [
+                {
+                    "page_index": 3,
+                    "region_id": "R1",
+                    "paragraph_index": 0,
+                    "text": "IL10and CD24within cells used 80%training data.",
+                    "reconstruction_events": [],
+                }
+            ]
+        )
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["suspected_missing_space_count"], 1)
+        self.assertEqual(
+            result["findings"][0]["code"],
+            "suspected_missing_word_space",
+        )
+
+    def test_word_spacing_audits_geometric_repairs_and_soft_breaks(self):
+        result = analyze_word_spacing(
+            [
+                {
+                    "page_index": 3,
+                    "region_id": "R1",
+                    "paragraph_index": 0,
+                    "text": "IL10 and adjacent tumor",
+                    "reconstruction_events": [
+                        {"code": "inserted_geometric_word_space"},
+                        {"code": "collapsed_tight_same_font_fragment_gap"},
+                        {
+                            "code": "joined_explicit_pdf_soft_break",
+                            "before": "tumor | enriched",
+                            "after": "tumorenriched",
+                        },
+                    ],
+                }
+            ]
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["geometric_space_insertion_count"], 1)
+        self.assertEqual(result["geometric_fragment_join_count"], 1)
+        self.assertEqual(result["ambiguous_soft_break_join_count"], 1)
 
     def test_bold_short_heading_is_not_a_short_body_fragment(self):
         result = analyze_markdown_text(

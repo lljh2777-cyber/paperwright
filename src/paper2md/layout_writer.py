@@ -41,6 +41,7 @@ from .quality import (
     analyze_markdown_text,
     analyze_native_object_diagnostics,
     analyze_title,
+    analyze_word_spacing,
 )
 from .references import (
     ReferenceParagraph,
@@ -907,6 +908,9 @@ def write_layout_outputs(
                                 "role": region.role,
                                 "text": text,
                                 "is_bold": markdown_text.startswith("**"),
+                                "reconstruction_events": [
+                                    item.to_dict() for item in paragraph.events
+                                ],
                             }
                         )
                     target_lines.extend(
@@ -960,6 +964,7 @@ def write_layout_outputs(
     )
     quality_checks: dict[str, dict[str, Any]] = {
         "markdown_text": markdown_quality,
+        "word_spacing": analyze_word_spacing(quality_paragraphs),
         "figure_label_leakage": figure_label_quality,
         "title_integrity": analyze_title(title, article_text),
         "image_links": analyze_image_links(article_path, images_dir),
@@ -987,6 +992,7 @@ def write_layout_outputs(
     }
     quality_warning_codes = {
         "markdown_text": "quality_markdown_text_suspicions",
+        "word_spacing": "quality_word_spacing_suspected",
         "figure_label_leakage": "quality_figure_label_leak_suspected",
         "title_integrity": "quality_title_integrity_suspected",
         "image_links": "quality_image_links_invalid",
