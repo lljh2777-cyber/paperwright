@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any, Sequence
 
 
 EVIDENCE_LEVELS = {"minimal", "standard", "full"}
+_MAX_ACTIONABLE_FINDINGS = 100
 
 
 def validate_evidence_level(level: str) -> str:
@@ -113,8 +115,12 @@ def build_validation_report(
     reviewers: Sequence[str],
     quality_checks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    warning_summary = build_warning_summary(
+        warnings=warnings,
+        quality_checks=quality_checks or {},
+    )
     report = {
-        "contract_version": "paper2md-validation-report-v0.1",
+        "contract_version": "paper2md-validation-report-v0.2",
         "status": status,
         "evidence_level": evidence_level,
         "checks": {
@@ -131,6 +137,7 @@ def build_validation_report(
         "reviewers": sorted(set(reviewers)),
         "references": references,
         "warnings": list(warnings),
+        "warning_summary": warning_summary,
         "human_review": {
             "status": "layout-reviewed",
             "note": "Final layout decisions were validated before packaging.",
@@ -141,23 +148,168 @@ def build_validation_report(
     return report
 
 
+def _issue_severity(status: str) -> str:
+    if status == "fail":
+        return "error"
+    if status == "warning":
+        return "warning"
+    return "info"
+
+
+def _actionable_finding(
+    *,
+    check: str,
+    status: str,
+    finding: dict[str, Any],
+) -> dict[str, Any]:
+    code = str(finding.get("detail_code") or finding.get("code") or check)
+    result: dict[str, Any] = {
+        "severity": _issue_severity(status),
+        "check": check,
+        "code": code,
+    }
+    for name in (
+        "page",
+        "region_id",
+        "paragraph_index",
+        "element_id",
+        "region_ids",
+        "snippet",
+        "codepoints",
+    ):
+        if name in finding:
+            result[name] = finding[name]
+    return result
+
+
+def build_warning_summary(
+    *,
+    warnings: Sequence[dict[str, Any]],
+    quality_checks: dict[str, Any],
+) -> dict[str, Any]:
+    """Aggregate validation issues into a compact, actionable index."""
+
+    findings: list[dict[str, Any]] = []
+    for check, value in quality_checks.items():
+        status = str(value.get("status", "unknown"))
+        if status == "pass":
+            continue
+        detailed = value.get("findings")
+        if isinstance(detailed, list) and detailed:
+            for item in detailed:
+                if isinstance(item, dict):
+                    findings.append(
+                        _actionable_finding(
+                            check=check,
+                            status=status,
+                            finding=item,
+                        )
+                    )
+        else:
+            findings.append(
+                _actionable_finding(
+                    check=check,
+                    status=status,
+                    finding={"code": f"{check}_{status}"},
+                )
+            )
+
+    # Preserve backend/runtime warnings that have useful locations. Aggregate
+    # records without locations by code below instead of flooding the list.
+    for item in warnings:
+        if not isinstance(item, dict) or not any(
+            name in item
+            for name in ("page", "region_id", "paragraph_index", "element_id")
+        ):
+            continue
+        findings.append(
+            _actionable_finding(
+                check=str(item.get("check", "runtime")),
+                status=str(item.get("status", "warning")),
+                finding=item,
+            )
+        )
+
+    unique: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for item in findings:
+        key = (
+            item.get("code"),
+            item.get("page"),
+            item.get("region_id"),
+            item.get("paragraph_index"),
+            item.get("element_id"),
+            item.get("snippet"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+
+    warning_codes = Counter(
+        str(item.get("code", "unknown")) for item in warnings
+    )
+    issue_codes = Counter(str(item["code"]) for item in unique)
+    affected_pages = sorted(
+        {
+            int(item["page"])
+            for item in unique
+            if isinstance(item.get("page"), int)
+        }
+    )
+    severity_counts = Counter(str(item["severity"]) for item in unique)
+    check_counts = Counter(str(item["check"]) for item in unique)
+    return {
+        "issue_count": len(unique),
+        "warning_record_count": len(warnings),
+        "affected_page_count": len(affected_pages),
+        "affected_pages": affected_pages,
+        "by_severity": dict(sorted(severity_counts.items())),
+        "by_check": dict(sorted(check_counts.items())),
+        "by_issue_code": dict(sorted(issue_codes.items())),
+        "by_warning_code": dict(sorted(warning_codes.items())),
+        "actionable_findings": unique[:_MAX_ACTIONABLE_FINDINGS],
+        "truncated_count": max(0, len(unique) - _MAX_ACTIONABLE_FINDINGS),
+    }
+
+
 def validation_report_markdown(report: dict[str, Any]) -> str:
     checks = report["checks"]
     check_lines = [
         f"- {'PASS' if passed else 'FAIL'}: `{name}`"
         for name, passed in checks.items()
     ]
-    warnings = report["warnings"]
-    warning_lines = (
-        [f"- `{item.get('code', 'unknown')}`: {json.dumps(item, ensure_ascii=False)}" for item in warnings]
-        if warnings
-        else ["- 无。"]
-    )
+    warning_summary = report.get("warning_summary", {})
+    warning_code_lines = [
+        f"- `{code}`：{count}"
+        for code, count in warning_summary.get("by_warning_code", {}).items()
+    ] or ["- 无。"]
+    actionable_lines: list[str] = []
+    for item in warning_summary.get("actionable_findings", []):
+        location = []
+        if "page" in item:
+            location.append(f"page={item['page']}")
+        if "region_id" in item:
+            location.append(f"region={item['region_id']}")
+        if "paragraph_index" in item:
+            location.append(f"paragraph={item['paragraph_index']}")
+        suffix = f" ({', '.join(location)})" if location else ""
+        snippet = item.get("snippet")
+        detail = f" — {snippet}" if snippet else ""
+        actionable_lines.append(
+            f"- **{item['severity'].upper()}** `{item['code']}`{suffix}{detail}"
+        )
+    if not actionable_lines:
+        actionable_lines = ["- 无。"]
     quality = report.get("quality_checks", {})
     quality_lines = [
         f"- `{name}`：`{value.get('status', 'unknown')}`"
         for name, value in quality.items()
     ] or ["- 未运行。"]
+    severity_text = ", ".join(
+        f"{name}={count}"
+        for name, count in warning_summary.get("by_severity", {}).items()
+    ) or "无"
     return "\n".join(
         [
             "# Paper2MD 验证报告",
@@ -166,6 +318,9 @@ def validation_report_markdown(report: dict[str, Any]) -> str:
             f"- 证据级别：`{report['evidence_level']}`",
             f"- 页数：{report['page_count']}",
             f"- 最终图片数：{report['rendered_image_count']}",
+            f"- 可定位问题数：{warning_summary.get('issue_count', 0)}",
+            f"- 受影响页数：{warning_summary.get('affected_page_count', 0)}",
+            f"- 严重级别汇总：{severity_text}",
             "",
             "## 自动检查",
             "",
@@ -175,9 +330,13 @@ def validation_report_markdown(report: dict[str, Any]) -> str:
             "",
             *quality_lines,
             "",
-            "## 警告",
+            "## 可操作问题",
             "",
-            *warning_lines,
+            *actionable_lines,
+            "",
+            "## 警告代码汇总",
+            "",
+            *warning_code_lines,
             "",
             "## 人工检查",
             "",

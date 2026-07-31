@@ -376,6 +376,11 @@ class LayoutStageDTests(unittest.TestCase):
                 validation["quality_checks"]["text_reconstruction"]["status"],
                 "pass",
             )
+            self.assertIn("warning_summary", validation)
+            self.assertIn(
+                "actionable_findings",
+                validation["warning_summary"],
+            )
             self.assertTrue(
                 validation["checks"]["manifest_inventory_complete"]
             )
