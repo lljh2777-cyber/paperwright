@@ -355,6 +355,25 @@ class LayoutStageDTests(unittest.TestCase):
                 ).read_text(encoding="utf-8")
             )
             self.assertTrue(validation["checks"]["ocr_not_used"])
+            self.assertEqual(
+                set(validation["quality_checks"]),
+                {
+                    "markdown_text",
+                    "figure_label_leakage",
+                    "title_integrity",
+                    "image_links",
+                    "layout_element_coverage",
+                    "layout_element_uniqueness",
+                    "manifest_inventory",
+                },
+            )
+            self.assertEqual(
+                validation["quality_checks"]["image_links"]["status"],
+                "pass",
+            )
+            self.assertTrue(
+                validation["checks"]["manifest_inventory_complete"]
+            )
             self.assertTrue(
                 (
                     output

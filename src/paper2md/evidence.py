@@ -111,8 +111,9 @@ def build_validation_report(
     warnings: Sequence[dict[str, Any]],
     references: dict[str, object],
     reviewers: Sequence[str],
+    quality_checks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    report = {
         "contract_version": "paper2md-validation-report-v0.1",
         "status": status,
         "evidence_level": evidence_level,
@@ -135,6 +136,9 @@ def build_validation_report(
             "note": "Final layout decisions were validated before packaging.",
         },
     }
+    if quality_checks is not None:
+        report["quality_checks"] = quality_checks
+    return report
 
 
 def validation_report_markdown(report: dict[str, Any]) -> str:
@@ -149,6 +153,11 @@ def validation_report_markdown(report: dict[str, Any]) -> str:
         if warnings
         else ["- 无。"]
     )
+    quality = report.get("quality_checks", {})
+    quality_lines = [
+        f"- `{name}`：`{value.get('status', 'unknown')}`"
+        for name, value in quality.items()
+    ] or ["- 未运行。"]
     return "\n".join(
         [
             "# Paper2MD 验证报告",
@@ -161,6 +170,10 @@ def validation_report_markdown(report: dict[str, Any]) -> str:
             "## 自动检查",
             "",
             *check_lines,
+            "",
+            "## 输出质量检查",
+            "",
+            *quality_lines,
             "",
             "## 警告",
             "",

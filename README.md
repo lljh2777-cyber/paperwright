@@ -133,6 +133,11 @@ python -m paper2md convert input.pdf output-dir
 `full`，并通过 `--include-source-pdf` 显式复制原 PDF。完整结构与命令见
 [混合布局设计](docs/HYBRID_LAYOUT_OUTLINE_ZH.md)。
 
+标准与完整证据包会自动检查 Markdown 断词、重复词、短碎片、疑似图内标签、
+标题完整性、图片链接、manifest 清单，以及布局对象是否遗漏或重复归属。
+启发式文本问题标为 `warning`，不会阻断输出；确定性结构检查单独给出
+`PASS/FAIL`。
+
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)

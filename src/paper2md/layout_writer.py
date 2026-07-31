@@ -32,6 +32,13 @@ from .manifest import (
     sha256_file,
 )
 from .models import BBox, Element, Page, PhysicalDocument
+from .quality import (
+    analyze_image_links,
+    analyze_layout_elements,
+    analyze_manifest_inventory,
+    analyze_markdown_text,
+    analyze_title,
+)
 from .references import (
     ReferenceParagraph,
     detect_reference_section,
@@ -352,6 +359,7 @@ def write_layout_outputs(
     layout_output_paths: list[Path] = []
     visual_paths: list[Path] = []
     provenance_pages: list[dict[str, Any]] = []
+    quality_paragraphs: list[dict[str, Any]] = []
     visual_index = 0
 
     for page, task, review, materialized in zip(
@@ -540,6 +548,17 @@ def write_layout_outputs(
                 if target_lines is not None:
                     if destination == "separate" and is_reference_heading(text):
                         continue
+                    if destination == "article":
+                        quality_paragraphs.append(
+                            {
+                                "page_index": page.page_index,
+                                "region_id": region.region_id,
+                                "paragraph_index": paragraph_index,
+                                "role": region.role,
+                                "text": text,
+                                "is_bold": markdown_text.startswith("**"),
+                            }
+                        )
                     target_lines.extend(
                         [
                             _region_trace_comment(
@@ -579,6 +598,39 @@ def write_layout_outputs(
         encoding="utf-8",
         newline="\n",
     )
+    article_text = article_path.read_text(encoding="utf-8")
+    markdown_quality = analyze_markdown_text(quality_paragraphs)
+    figure_label_quality = markdown_quality.pop("figure_label_leakage")
+    element_quality = analyze_layout_elements(
+        tasks,
+        materialized_layouts,
+        document,
+    )
+    quality_checks: dict[str, dict[str, Any]] = {
+        "markdown_text": markdown_quality,
+        "figure_label_leakage": figure_label_quality,
+        "title_integrity": analyze_title(title, article_text),
+        "image_links": analyze_image_links(article_path, images_dir),
+        "layout_element_coverage": element_quality["coverage"],
+        "layout_element_uniqueness": element_quality["uniqueness"],
+    }
+    quality_warning_codes = {
+        "markdown_text": "quality_markdown_text_suspicions",
+        "figure_label_leakage": "quality_figure_label_leak_suspected",
+        "title_integrity": "quality_title_integrity_suspected",
+        "image_links": "quality_image_links_invalid",
+        "layout_element_coverage": "quality_unassigned_text_objects",
+        "layout_element_uniqueness": "quality_duplicate_region_objects",
+    }
+    for name, result in quality_checks.items():
+        if result["status"] != "pass":
+            warnings.append(
+                {
+                    "code": quality_warning_codes[name],
+                    "check": name,
+                    "status": result["status"],
+                }
+            )
     references_path: Path | None = None
     if (
         references_mode == "separate"
@@ -727,6 +779,7 @@ def write_layout_outputs(
             warnings=warnings,
             references=references_summary,
             reviewers=[item.reviewer for item in layouts],
+            quality_checks=quality_checks,
         )
         validation_dir = evidence_dir / "05-validation"
         validation_json = validation_dir / "validation-report.json"
@@ -746,6 +799,34 @@ def write_layout_outputs(
         output_paths.append(physical_path)
     output_paths.extend(layout_output_paths)
     output_paths.extend(evidence_paths)
+    if evidence_level in {"standard", "full"}:
+        manifest_inventory = analyze_manifest_inventory(root, output_paths)
+        if manifest_inventory["status"] != "pass":
+            raise ValueError("manifest 输出清单预检失败")
+        quality_checks["manifest_inventory"] = manifest_inventory
+        validation["quality_checks"] = quality_checks
+        validation["checks"].update(
+            {
+                "image_links_valid": (
+                    quality_checks["image_links"]["status"] == "pass"
+                ),
+                "layout_element_coverage_complete": (
+                    quality_checks["layout_element_coverage"]["status"]
+                    == "pass"
+                ),
+                "layout_element_assignments_unique": (
+                    quality_checks["layout_element_uniqueness"]["status"]
+                    == "pass"
+                ),
+                "manifest_inventory_complete": True,
+            }
+        )
+        write_json(validation_json, validation)
+        validation_md.write_text(
+            validation_report_markdown(validation),
+            encoding="utf-8",
+            newline="\n",
+        )
 
     def output_role(path: Path) -> str:
         if path == article_path:
