@@ -275,6 +275,8 @@ class Paper2MD:
         *,
         visual_scale: float = 2.0,
         references_mode: str = "keep",
+        evidence_level: str = "standard",
+        include_source_pdf: bool = False,
     ) -> ConversionResult:
         """Apply reviewed page layouts to a new, atomic conversion output."""
 
@@ -352,6 +354,9 @@ class Paper2MD:
                 region_renderer=backend,
                 visual_scale=visual_scale,
                 references_mode=references_mode,
+                evidence_level=evidence_level,
+                include_source_pdf=include_source_pdf,
+                review_root=review_root,
             )
             total = sum(
                 path.stat().st_size

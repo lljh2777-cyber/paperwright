@@ -237,7 +237,10 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertNotIn("Acknowledgments", references)
             provenance = json.loads(
                 (
-                    separated / "layout" / "layout-provenance.json"
+                    separated
+                    / "_paper2md"
+                    / "04-provenance"
+                    / "layout-provenance.json"
                 ).read_text(encoding="utf-8")
             )
             self.assertEqual(provenance["references"]["status"], "detected")
@@ -259,7 +262,7 @@ class LayoutStageDTests(unittest.TestCase):
                 0,
             )
 
-    def test_layout_apply_writes_markdown_visuals_and_v06_manifest(self):
+    def test_layout_apply_writes_standard_self_contained_package(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source, review = self._prepare(root)
@@ -284,11 +287,18 @@ class LayoutStageDTests(unittest.TestCase):
             )
             self.assertTrue((output / "article.md").is_file())
             self.assertTrue(any((output / "images").glob("*.png")))
+            self.assertTrue((output / "images" / "figure-0001.png").is_file())
             manifest = json.loads(
-                (output / "manifest.json").read_text(encoding="utf-8")
+                (
+                    output / "_paper2md" / "manifest.json"
+                ).read_text(encoding="utf-8")
             )
             validate_manifest(manifest)
             self.assertFalse(manifest["layout_review"]["ocr_used"])
+            self.assertEqual(
+                manifest["layout_review"]["evidence_level"],
+                "standard",
+            )
             provenance = output / manifest["layout_review"]["provenance_path"]
             self.assertEqual(
                 sha256_file(provenance),
@@ -317,8 +327,138 @@ class LayoutStageDTests(unittest.TestCase):
                     for region in page["regions"]
                 )
             )
+            self.assertFalse(
+                (
+                    output
+                    / "_paper2md"
+                    / "01-physical"
+                    / "physical-document.json"
+                ).exists()
+            )
+            self.assertTrue(
+                (output / "_paper2md" / "02-roi" / "content-roi.json").is_file()
+            )
+            self.assertTrue(
+                (
+                    output
+                    / "_paper2md"
+                    / "03-layout"
+                    / "page-0001-overlay.png"
+                ).is_file()
+            )
+            validation = json.loads(
+                (
+                    output
+                    / "_paper2md"
+                    / "05-validation"
+                    / "validation-report.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertTrue(validation["checks"]["ocr_not_used"])
+            self.assertTrue(
+                (
+                    output
+                    / "_paper2md"
+                    / "03-layout"
+                    / "page-0001-final-layout.json"
+                ).is_file()
+            )
+            self.assertFalse(
+                any(
+                    (output / "_paper2md" / "03-layout").glob(
+                        "*-layout-task.json"
+                    )
+                )
+            )
+            self.assertTrue((output / "_paper2md" / "run.json").is_file())
+            self.assertTrue((output / "_paper2md" / "source.json").is_file())
+            self.assertTrue(
+                (
+                    output
+                    / "_paper2md"
+                    / "05-validation"
+                    / "validation-report.md"
+                ).is_file()
+            )
 
-    def test_layout_apply_is_byte_deterministic(self):
+    def test_layout_apply_supports_minimal_and_full_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, review = self._prepare(root)
+            minimal = root / "minimal"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(minimal),
+                        "--evidence",
+                        "minimal",
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                {item.name for item in minimal.iterdir()},
+                {"article.md", "images", "_paper2md"},
+            )
+            self.assertEqual(
+                {
+                    item.relative_to(minimal).as_posix()
+                    for item in (minimal / "_paper2md").rglob("*")
+                    if item.is_file()
+                },
+                {"_paper2md/manifest.json"},
+            )
+            minimal_manifest = json.loads(
+                (minimal / "_paper2md" / "manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                minimal_manifest["layout_review"]["evidence_level"],
+                "minimal",
+            )
+            self.assertIsNone(
+                minimal_manifest["layout_review"]["provenance_path"]
+            )
+
+            full = root / "full"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(full),
+                        "--evidence",
+                        "full",
+                        "--include-source-pdf",
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            evidence = full / "_paper2md"
+            self.assertTrue(
+                (evidence / "01-physical" / "physical-document.json").is_file()
+            )
+            self.assertTrue(
+                (evidence / "02-roi" / "page-0001-content-roi.png").is_file()
+            )
+            self.assertTrue(
+                (evidence / "03-layout" / "page-0001-layout-task.json").is_file()
+            )
+            self.assertTrue(
+                (evidence / "03-layout" / "page-0001-page.png").is_file()
+            )
+            self.assertEqual(
+                (evidence / "source.pdf").read_bytes(), source.read_bytes()
+            )
+
+    def test_layout_apply_core_artifacts_are_byte_deterministic(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source, review = self._prepare(root)
@@ -343,9 +483,17 @@ class LayoutStageDTests(unittest.TestCase):
                     path.relative_to(output_root).as_posix(): path.read_bytes()
                     for path in output_root.rglob("*")
                     if path.is_file()
+                    and path.name not in {"run.json", "manifest.json"}
                 }
 
             self.assertEqual(content(outputs[0]), content(outputs[1]))
+            for output in outputs:
+                run = json.loads(
+                    (output / "_paper2md" / "run.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertTrue(run["completed_at_utc"].endswith("+00:00"))
 
     def test_layout_apply_rejects_stale_task_without_output(self):
         with tempfile.TemporaryDirectory() as temp:

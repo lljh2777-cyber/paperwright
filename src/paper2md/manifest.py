@@ -12,7 +12,8 @@ from .exceptions import ContractValidationError
 
 MANIFEST_VERSION = "paper2md-manifest-v0.4"
 AUTO_REGION_MANIFEST_VERSION = "paper2md-manifest-v0.5"
-HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
+LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
+HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.7"
 
 
 def sha256_file(path: Path) -> str:
@@ -115,6 +116,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
     if value["manifest_version"] not in {
         MANIFEST_VERSION,
         AUTO_REGION_MANIFEST_VERSION,
+        LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION,
         HYBRID_LAYOUT_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
@@ -165,16 +167,40 @@ def validate_manifest(value: dict[str, Any]) -> None:
             "ocr_used",
             "pages",
         }
+        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+            required_review.add("evidence_level")
         if not isinstance(review, dict) or set(review) != required_review:
-            raise ContractValidationError("manifest v0.6 缺少 layout_review")
+            raise ContractValidationError("manifest hybrid 缺少 layout_review")
         if review["mode"] != "hybrid-reviewed" or review["ocr_used"] is not False:
             raise ContractValidationError("manifest layout_review 模式非法")
-        provenance_path = Path(review["provenance_path"])
-        if provenance_path.is_absolute() or ".." in provenance_path.parts:
-            raise ContractValidationError(
-                "manifest layout_review provenance 路径非法"
-            )
-        if len(review["provenance_sha256"]) != 64:
+        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+            if review["evidence_level"] not in {"minimal", "standard", "full"}:
+                raise ContractValidationError("manifest evidence_level 非法")
+            if review["evidence_level"] == "minimal":
+                if (
+                    review["provenance_path"] is not None
+                    or review["provenance_sha256"] is not None
+                ):
+                    raise ContractValidationError(
+                        "minimal manifest 不应引用 provenance"
+                    )
+            elif (
+                not isinstance(review["provenance_path"], str)
+                or not isinstance(review["provenance_sha256"], str)
+            ):
+                raise ContractValidationError(
+                    "standard/full manifest 缺少 provenance"
+                )
+        if review["provenance_path"] is not None:
+            provenance_path = Path(review["provenance_path"])
+            if provenance_path.is_absolute() or ".." in provenance_path.parts:
+                raise ContractValidationError(
+                    "manifest layout_review provenance 路径非法"
+                )
+        if (
+            review["provenance_sha256"] is not None
+            and len(review["provenance_sha256"]) != 64
+        ):
             raise ContractValidationError(
                 "manifest layout_review provenance 哈希非法"
             )

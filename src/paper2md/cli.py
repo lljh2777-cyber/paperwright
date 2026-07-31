@@ -151,6 +151,17 @@ def build_parser() -> argparse.ArgumentParser:
             "或将参考文献单独写入 references.md（补充材料保留）"
         ),
     )
+    apply_layout.add_argument(
+        "--evidence",
+        choices=("minimal", "standard", "full"),
+        default="standard",
+        help="证据包级别；默认 standard",
+    )
+    apply_layout.add_argument(
+        "--include-source-pdf",
+        action="store_true",
+        help="将原 PDF 复制到 _paper2md/source.pdf；默认只记录路径和哈希",
+    )
 
     export_dataset = commands.add_parser(
         "layout-export-dataset",
@@ -350,6 +361,8 @@ def _apply_layout(args: argparse.Namespace) -> int:
         args.output_dir,
         visual_scale=args.visual_scale,
         references_mode=args.references,
+        evidence_level=args.evidence,
+        include_source_pdf=args.include_source_pdf,
     )
     print(
         json.dumps(
@@ -360,6 +373,7 @@ def _apply_layout(args: argparse.Namespace) -> int:
                 "manifest_version": result.manifest["manifest_version"],
                 "layout_mode": "hybrid-reviewed",
                 "references_mode": args.references,
+                "evidence_level": args.evidence,
             },
             ensure_ascii=False,
             sort_keys=True,

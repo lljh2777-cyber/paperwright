@@ -51,6 +51,10 @@ _JOURNAL = re.compile(
     r"nature|science|cell|lancet|immunity|biol\.?|med\.?)\b",
     re.IGNORECASE,
 )
+_PUBLICATION_HISTORY = re.compile(
+    r"^(?:received|submitted)\b.*\b(?:accepted|published)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -133,11 +137,19 @@ def is_supplementary_heading(text: str) -> bool:
 def removable_back_matter_keys(
     paragraphs: Sequence[ReferenceParagraph],
     start_index: int,
+    *,
+    reference_start_index: int | None = None,
 ) -> frozenset[tuple[int, str, int]]:
     """Select administrative back matter while preserving supplements."""
 
     removing = False
     keys: set[tuple[int, str, int]] = set()
+    if reference_start_index is not None:
+        for paragraph in paragraphs[
+            max(0, reference_start_index - 4) : reference_start_index
+        ]:
+            if _PUBLICATION_HISTORY.search(" ".join(paragraph.text.split())):
+                keys.add(paragraph.key)
     for paragraph in paragraphs[start_index:]:
         if is_supplementary_heading(paragraph.text):
             removing = False

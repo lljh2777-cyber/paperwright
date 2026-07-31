@@ -321,7 +321,7 @@ paper2md layout-prepare input.pdf review-dir `
 paper2md validate-final-layout review-dir/page-0001/final-layout.json `
   --task review-dir/page-0001/layout-task.json
 
-paper2md layout-apply input.pdf review-dir output-dir
+paper2md layout-apply input.pdf review-dir output-dir --evidence standard
 ```
 
 参考文献及行政性后置内容默认保留。需要时可显式选择：
@@ -341,17 +341,37 @@ DOI 等证据共同满足时才使用编号引文序列兜底。选择非 `keep`
 Supplementary Information/Materials（补充材料）及其内容保留。未可靠检测到
 参考文献时保持原文，不做猜测性删除。
 
-输出为：
+默认输出为自包含文档包：
 
 ```text
 output-dir/
 ├── article.md
-├── references.md        # 仅 --references separate
 ├── images/
-├── physical_document.json
-├── layout/
-└── manifest.json
+│   └── figure-0001.png
+└── _paper2md/
+    ├── run.json
+    ├── source.json
+    ├── manifest.json
+    ├── 02-roi/
+    │   └── content-roi.json
+    ├── 03-layout/
+    │   ├── page-0001-overlay.png
+    │   └── page-0001-final-layout.json
+    ├── 04-provenance/
+    │   └── layout-provenance.json
+    └── 05-validation/
+        ├── validation-report.json
+        └── validation-report.md
 ```
+
+`--evidence minimal` 只保留 `article.md`、`images/` 和
+`_paper2md/manifest.json`。`--evidence full` 还会增加
+`01-physical/physical-document.json`、每页 `page.png`、Content ROI
+预览和全部 `layout-task.json`，适合审计与训练数据积累。
+
+原 PDF 默认不复制，只在 `source.json` 记录绝对路径、文件名、大小、页数和
+SHA-256。显式使用 `--include-source-pdf` 时，才复制为
+`_paper2md/source.pdf`。所有文件先写入同级临时目录，成功后再原子改名。
 
 ### 15.3 导出本地机器学习数据
 

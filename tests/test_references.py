@@ -83,6 +83,11 @@ class ReferenceDetectionTests(unittest.TestCase):
 
     def test_administrative_back_matter_is_removed_but_supplement_is_kept(self):
         paragraphs = (
+            _paragraph(
+                0,
+                "Received 26 September 2011; accepted 27 March 2012. "
+                "Published online 11 April 2012.",
+            ),
             _paragraph(1, "Acknowledgments"),
             _paragraph(2, "The authors thank the reviewers."),
             _paragraph(3, "Author Contributions"),
@@ -92,7 +97,11 @@ class ReferenceDetectionTests(unittest.TestCase):
             _paragraph(7, "Competing Interests"),
             _paragraph(8, "The authors declare no competing interests."),
         )
-        keys = removable_back_matter_keys(paragraphs, 0)
+        keys = removable_back_matter_keys(
+            paragraphs,
+            1,
+            reference_start_index=1,
+        )
         self.assertEqual(
             keys,
             {
@@ -100,8 +109,9 @@ class ReferenceDetectionTests(unittest.TestCase):
                 paragraphs[1].key,
                 paragraphs[2].key,
                 paragraphs[3].key,
-                paragraphs[6].key,
+                paragraphs[4].key,
                 paragraphs[7].key,
+                paragraphs[8].key,
             },
         )
 

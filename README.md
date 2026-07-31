@@ -127,6 +127,12 @@ python -m paper2md convert input.pdf output-dir
 
 ## 更多文档
 
+混合布局流程的最终结果采用自包含文档包：顶层只放 `article.md` 和
+`images/`，ROI、布局覆盖图、追溯数据与验证报告统一放入 `_paper2md/`。
+`layout-apply` 默认使用 `--evidence standard`；也可选择 `minimal` 或
+`full`，并通过 `--include-source-pdf` 显式复制原 PDF。完整结构与命令见
+[混合布局设计](docs/HYBRID_LAYOUT_OUTLINE_ZH.md)。
+
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)

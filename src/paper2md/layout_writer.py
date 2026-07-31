@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
 from .backends.base import ExtractedAsset
+from .evidence import (
+    build_run_record,
+    build_source_record,
+    build_validation_report,
+    validate_evidence_level,
+    validation_report_markdown,
+    write_json,
+)
 from .layout_models import (
     FinalLayout,
     LayoutRegion,
@@ -38,7 +47,7 @@ from .writer import _markdown_text_groups, _title
 class PreparedLayoutOutput:
     manifest: dict[str, Any]
     article_path: Path
-    physical_document_path: Path
+    physical_document_path: Path | None
 
 
 def _trace_digest(element_ids: Sequence[str]) -> str:
@@ -240,6 +249,9 @@ def write_layout_outputs(
     region_renderer: Any,
     visual_scale: float = 2.0,
     references_mode: str = "keep",
+    evidence_level: str = "standard",
+    include_source_pdf: bool = False,
+    review_root: Path | None = None,
 ) -> PreparedLayoutOutput:
     """Write reviewed layout output without changing the default writer."""
 
@@ -249,18 +261,25 @@ def write_layout_outputs(
     if visual_scale <= 0:
         raise ValueError("visual_scale 必须为正")
     references_mode = validate_reference_mode(references_mode)
+    evidence_level = validate_evidence_level(evidence_level)
+    if evidence_level in {"standard", "full"} and review_root is None:
+        raise ValueError("standard/full evidence requires review_root")
 
     images_dir = root / "images"
-    layout_dir = root / "layout"
+    evidence_dir = root / "_paper2md"
+    layout_dir = evidence_dir / "03-layout"
     images_dir.mkdir(parents=True)
-    layout_dir.mkdir(parents=True)
+    evidence_dir.mkdir(parents=True)
 
-    physical_path = root / "physical_document.json"
-    physical_path.write_text(
-        document.canonical_json(),
-        encoding="utf-8",
-        newline="\n",
-    )
+    physical_path: Path | None = None
+    if evidence_level == "full":
+        physical_path = evidence_dir / "01-physical/physical-document.json"
+        physical_path.parent.mkdir(parents=True)
+        physical_path.write_text(
+            document.canonical_json(),
+            encoding="utf-8",
+            newline="\n",
+        )
     title, title_element_ids = _title(document)
     lines = [f"# {title}", ""]
     materialized_layouts = tuple(
@@ -318,6 +337,7 @@ def write_layout_outputs(
         removable_back_matter_keys(
             reference_paragraphs,
             reference_section.end_index,
+            reference_start_index=reference_section.start_index,
         )
         if reference_section is not None
         else frozenset()
@@ -332,6 +352,7 @@ def write_layout_outputs(
     layout_output_paths: list[Path] = []
     visual_paths: list[Path] = []
     provenance_pages: list[dict[str, Any]] = []
+    visual_index = 0
 
     for page, task, review, materialized in zip(
         document.pages,
@@ -340,15 +361,40 @@ def write_layout_outputs(
         materialized_layouts,
         strict=True,
     ):
-        task_path = layout_dir / f"page-{page.page_index + 1:04d}-task.json"
-        final_path = layout_dir / f"page-{page.page_index + 1:04d}-final.json"
-        task_path.write_text(task.canonical_json(), encoding="utf-8", newline="\n")
-        final_path.write_text(
-            review.canonical_json(),
-            encoding="utf-8",
-            newline="\n",
-        )
-        layout_output_paths.extend((task_path, final_path))
+        if evidence_level in {"standard", "full"}:
+            layout_dir.mkdir(parents=True, exist_ok=True)
+            final_path = (
+                layout_dir
+                / f"page-{page.page_index + 1:04d}-final-layout.json"
+            )
+            final_path.write_text(
+                review.canonical_json(),
+                encoding="utf-8",
+                newline="\n",
+            )
+            layout_output_paths.append(final_path)
+            assert review_root is not None
+            source_page_root = (
+                review_root / f"page-{page.page_index + 1:04d}"
+            )
+            overlay_path = (
+                layout_dir / f"page-{page.page_index + 1:04d}-overlay.png"
+            )
+            shutil.copyfile(source_page_root / "overlay.png", overlay_path)
+            layout_output_paths.append(overlay_path)
+            if evidence_level == "full":
+                task_path = (
+                    layout_dir
+                    / f"page-{page.page_index + 1:04d}-layout-task.json"
+                )
+                task_path.write_text(
+                    task.canonical_json(), encoding="utf-8", newline="\n"
+                )
+                page_path = (
+                    layout_dir / f"page-{page.page_index + 1:04d}-page.png"
+                )
+                shutil.copyfile(source_page_root / "page.png", page_path)
+                layout_output_paths.extend((task_path, page_path))
         lines.extend([f"<!-- page: {page.page_index + 1} -->", ""])
         page_regions: list[dict[str, Any]] = []
 
@@ -361,6 +407,7 @@ def write_layout_outputs(
             key=lambda item: item.order or 0,
         ):
             if region.content_class in {"visual", "unknown"}:
+                visual_index += 1
                 request = _region_request(
                     page=page,
                     region=region,
@@ -371,10 +418,7 @@ def write_layout_outputs(
                     request,
                     expected_source_sha256=document.source_sha256,
                 )
-                filename = (
-                    f"page-{page.page_index + 1:04d}-"
-                    f"{region.region_id}-{region.role}.png"
-                )
+                filename = f"figure-{visual_index:04d}.png"
                 image_path = images_dir / filename
                 image_path.write_bytes(rendered.data)
                 visual_paths.append(image_path)
@@ -592,44 +636,146 @@ def write_layout_outputs(
         "references": references_summary,
         "pages": provenance_pages,
     }
-    provenance_path = layout_dir / "layout-provenance.json"
-    provenance_path.write_text(
-        json.dumps(
-            provenance,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
+    status = "success_with_degradation" if warnings else "success"
+    evidence_paths: list[Path] = []
+    provenance_path: Path | None = None
+    if evidence_level in {"standard", "full"}:
+        assert review_root is not None
+        provenance_path = (
+            evidence_dir / "04-provenance/layout-provenance.json"
         )
-        + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+        write_json(provenance_path, provenance)
+        evidence_paths.append(provenance_path)
 
-    output_paths = [
-        article_path,
-        physical_path,
-        provenance_path,
-        *([references_path] if references_path is not None else []),
-        *layout_output_paths,
-        *visual_paths,
-    ]
+        roi_dir = evidence_dir / "02-roi"
+        roi_dir.mkdir(parents=True, exist_ok=True)
+        roi_path = roi_dir / "content-roi.json"
+        shutil.copyfile(review_root / "content-roi.json", roi_path)
+        evidence_paths.append(roi_path)
+        if evidence_level == "full":
+            for page in document.pages:
+                source_page_root = (
+                    review_root / f"page-{page.page_index + 1:04d}"
+                )
+                roi_preview = (
+                    roi_dir
+                    / f"page-{page.page_index + 1:04d}-content-roi.png"
+                )
+                shutil.copyfile(
+                    source_page_root / "content-roi.png", roi_preview
+                )
+                evidence_paths.append(roi_preview)
+
+    included_source_path: Path | None = None
+    if include_source_pdf:
+        included_source_path = evidence_dir / "source.pdf"
+        shutil.copyfile(source, included_source_path)
+        evidence_paths.append(included_source_path)
+
+    if evidence_level in {"standard", "full"} or include_source_pdf:
+        source_record_path = evidence_dir / "source.json"
+        write_json(
+            source_record_path,
+            build_source_record(
+                source=source,
+                source_sha256=document.source_sha256,
+                page_count=len(document.pages),
+                included_path=(
+                    "_paper2md/source.pdf"
+                    if included_source_path is not None
+                    else None
+                ),
+            ),
+        )
+        evidence_paths.append(source_record_path)
+
+    if evidence_level in {"standard", "full"}:
+        run_path = evidence_dir / "run.json"
+        write_json(
+            run_path,
+            build_run_record(
+                source_sha256=document.source_sha256,
+                backend=document.backend,
+                backend_version=document.backend_version,
+                page_count=len(document.pages),
+                evidence_level=evidence_level,
+                references_mode=references_mode,
+                visual_scale=visual_scale,
+                status=status,
+                task_hashes=[item.deterministic_sha256() for item in tasks],
+                final_layout_hashes=[
+                    item.deterministic_sha256() for item in layouts
+                ],
+            ),
+        )
+        evidence_paths.append(run_path)
+
+        validation = build_validation_report(
+            status=status,
+            evidence_level=evidence_level,
+            page_count=len(document.pages),
+            image_count=len(visual_paths),
+            warnings=warnings,
+            references=references_summary,
+            reviewers=[item.reviewer for item in layouts],
+        )
+        validation_dir = evidence_dir / "05-validation"
+        validation_json = validation_dir / "validation-report.json"
+        validation_md = validation_dir / "validation-report.md"
+        write_json(validation_json, validation)
+        validation_md.write_text(
+            validation_report_markdown(validation),
+            encoding="utf-8",
+            newline="\n",
+        )
+        evidence_paths.extend((validation_json, validation_md))
+
+    output_paths = [article_path, *visual_paths]
+    if references_path is not None:
+        output_paths.append(references_path)
+    if physical_path is not None:
+        output_paths.append(physical_path)
+    output_paths.extend(layout_output_paths)
+    output_paths.extend(evidence_paths)
+
+    def output_role(path: Path) -> str:
+        if path == article_path:
+            return "markdown"
+        if path == references_path:
+            return "references_markdown"
+        if path == physical_path:
+            return "physical_document"
+        if path == provenance_path:
+            return "layout_provenance"
+        if path in visual_paths:
+            return "visual_region"
+        name = path.name
+        if name.endswith("-final-layout.json"):
+            return "final_layout"
+        if name.endswith("-layout-task.json"):
+            return "layout_task"
+        if name.endswith("-overlay.png"):
+            return "layout_overlay"
+        if name.endswith("-page.png"):
+            return "page_preview"
+        if name.endswith("-content-roi.png"):
+            return "content_roi_preview"
+        if name == "content-roi.json":
+            return "content_roi"
+        if name.startswith("validation-report"):
+            return "validation_report"
+        if name == "run.json":
+            return "run_metadata"
+        if name == "source.json":
+            return "source_metadata"
+        if name == "source.pdf":
+            return "source_pdf"
+        return "evidence"
+
     outputs = [
         OutputFile(
             str(path.relative_to(root)).replace("\\", "/"),
-            (
-                "markdown"
-                if path == article_path
-                else "references_markdown"
-                if path == references_path
-                else "physical_document"
-                if path == physical_path
-                else "layout_provenance"
-                if path == provenance_path
-                else "visual_region"
-                if path in visual_paths
-                else "layout_contract"
-            ),
+            output_role(path),
             path.stat().st_size,
             sha256_file(path),
         )
@@ -646,7 +792,7 @@ def write_layout_outputs(
         }
         for page in document.pages
         for element in page.elements
-    ]
+    ] if evidence_level == "full" else None
     layout_summary_pages = [
         {
             "page_index": page["page_index"],
@@ -663,30 +809,44 @@ def write_layout_outputs(
         backend_version=document.backend_version,
         contract_version=document.contract_version,
         page_count=len(document.pages),
-        status="success_with_degradation" if warnings else "success",
+        status=status,
         outputs=outputs,
         warnings=warnings,
         elements=element_records,
         images=image_records,
-        physical_document={
-            "path": "physical_document.json",
-            "sha256": hashlib.sha256(
-                document.canonical_json().encode("utf-8")
-            ).hexdigest(),
-        },
+        physical_document=(
+            {
+                "path": "_paper2md/01-physical/physical-document.json",
+                "sha256": hashlib.sha256(
+                    document.canonical_json().encode("utf-8")
+                ).hexdigest(),
+            }
+            if physical_path is not None
+            else None
+        ),
         manifest_version=HYBRID_LAYOUT_MANIFEST_VERSION,
         layout_review={
             "mode": "hybrid-reviewed",
             "prompt_version": layouts[0].prompt_version,
             "candidate_generator_version": tasks[0].candidate_generator_version,
             "feature_schema_version": tasks[0].feature_schema_version,
-            "provenance_path": "layout/layout-provenance.json",
-            "provenance_sha256": sha256_file(provenance_path),
+            "provenance_path": (
+                "_paper2md/04-provenance/layout-provenance.json"
+                if provenance_path is not None
+                else None
+            ),
+            "provenance_sha256": (
+                sha256_file(provenance_path)
+                if provenance_path is not None
+                else None
+            ),
+            "evidence_level": evidence_level,
             "ocr_used": False,
             "pages": layout_summary_pages,
         },
     )
-    (root / "manifest.json").write_text(
+    manifest_path = evidence_dir / "manifest.json"
+    manifest_path.write_text(
         canonical_manifest_json(manifest),
         encoding="utf-8",
         newline="\n",
