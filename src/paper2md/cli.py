@@ -114,6 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.5,
     )
+    prepare_layout.add_argument(
+        "--content-roi-json",
+        type=Path,
+        help=(
+            "AI/人工确认后的 content-roi.json；省略时生成规则提案，"
+            "提案不可直接 layout-apply"
+        ),
+    )
 
     apply_layout = commands.add_parser(
         "layout-apply",
@@ -307,6 +315,7 @@ def _prepare_layout(args: argparse.Namespace) -> int:
         args.input_pdf,
         args.output_dir,
         preview_scale=args.preview_scale,
+        content_roi_json=args.content_roi_json,
     )
     print(
         json.dumps(

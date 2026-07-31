@@ -107,6 +107,7 @@ class LayoutStageFTests(unittest.TestCase):
                     "action_labels": 3,
                     "reading_order_pairs": 3,
                     "caption_pairs": 1,
+                    "content_roi_labels": 1,
                 },
             )
 
@@ -121,6 +122,11 @@ class LayoutStageFTests(unittest.TestCase):
             self.assertNotIn("p0001-text", payload)
             caption_pairs = _jsonl(result.output_dir / "caption_pairs.jsonl")
             self.assertTrue(caption_pairs[0]["is_attached"])
+            content_rois = _jsonl(
+                result.output_dir / "content_roi_labels.jsonl"
+            )
+            self.assertEqual(content_rois[0]["label_source"], "confirmed:fixture-ai")
+            self.assertFalse(content_rois[0]["destructive_crop"])
 
     def test_export_is_deterministic(self):
         with tempfile.TemporaryDirectory() as temp:

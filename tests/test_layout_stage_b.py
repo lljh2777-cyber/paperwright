@@ -6,6 +6,7 @@ from paper2md.api import Paper2MD
 from paper2md.backends.pdfium import PDFiumBackend
 from paper2md.config import Paper2MDConfig
 from paper2md.layout_candidates import generate_layout_tasks
+from paper2md.layout_models import NormalizedBBox
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
 
 from pdf_fixture_factory import create_born_digital_fixture
@@ -180,22 +181,117 @@ class LayoutStageBTests(unittest.TestCase):
             by_element["p0-caption"].features["starts_with_figure"]
         )
 
-    def test_repeated_header_and_page_number_are_peripheral_candidates(self):
+    def test_repeated_furniture_is_excluded_before_candidate_generation(self):
         tasks = generate_layout_tasks(_article_document())
         for page_index, task in enumerate(tasks):
-            by_element = {
-                element_id: candidate
+            candidate_element_ids = {
+                element_id
                 for candidate in task.candidates
                 for element_id in candidate.source_element_ids
             }
-            header = by_element[f"p{page_index}-header"]
-            footer = by_element[f"p{page_index}-footer"]
-            self.assertTrue(header.features["peripheral_hint"])
-            self.assertEqual(
-                header.features["furniture_reason"],
-                "repeated_header_footer",
+            self.assertNotIn(f"p{page_index}-header", candidate_element_ids)
+            self.assertNotIn(f"p{page_index}-footer", candidate_element_ids)
+            self.assertIn(
+                f"p{page_index}-header",
+                task.metadata["excluded_element_ids"],
             )
-            self.assertTrue(footer.features["peripheral_hint"])
+            self.assertEqual(
+                task.metadata["analysis_roi"]["coordinate_system"],
+                "top-left/original-page-normalized/y-down",
+            )
+            self.assertFalse(task.metadata["analysis_roi"]["destructive_crop"])
+
+    def test_confirmed_roi_limits_candidates_without_changing_page_coordinates(self):
+        document = _article_document()
+        roi = NormalizedBBox(0.05, 0.10, 0.90, 0.80)
+        tasks = generate_layout_tasks(
+            document,
+            content_rois={page.page_index: roi for page in document.pages},
+            content_roi_source="confirmed:test",
+        )
+        for task in tasks:
+            self.assertEqual(task.metadata["analysis_roi"]["bbox"], roi.to_dict())
+            self.assertEqual(
+                task.page.coordinate_system,
+                "top-left/pdf-point/y-down",
+            )
+            for candidate in task.candidates:
+                self.assertGreaterEqual(candidate.bbox.x, roi.x)
+                self.assertGreaterEqual(candidate.bbox.y, roi.y)
+                self.assertLessEqual(candidate.bbox.right, roi.right + 1e-9)
+                self.assertLessEqual(candidate.bbox.bottom, roi.bottom + 1e-9)
+
+    def test_rule_roi_removes_sparse_edge_header_and_text_footer(self):
+        page = Page(
+            page_index=0,
+            width=600,
+            height=800,
+            rotation=0,
+            elements=(
+                _text(
+                    "journal-badge",
+                    0,
+                    BBox(470, 12, 80, 16),
+                    "LETTER RESEARCH",
+                    0,
+                    size=8,
+                ),
+                Element(
+                    element_id="journal-rule",
+                    kind="vector",
+                    page_index=0,
+                    bbox=BBox(50, 30, 500, 2),
+                    provenance=Provenance(
+                        "fixture",
+                        "native_vector",
+                        "fixture:journal-rule",
+                        confidence=1.0,
+                    ),
+                ),
+                _text(
+                    "body-top",
+                    0,
+                    BBox(50, 70, 500, 12),
+                    "Body starts here",
+                    1,
+                ),
+                _text(
+                    "body-bottom",
+                    0,
+                    BBox(50, 700, 500, 12),
+                    "Body ends here",
+                    2,
+                ),
+                _text(
+                    "date-folio",
+                    0,
+                    BBox(400, 775, 150, 8),
+                    "17 MAY 2012 | VOL 485",
+                    3,
+                    size=8,
+                ),
+            ),
+        )
+        document = PhysicalDocument(
+            source_sha256="e" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        task = generate_layout_tasks(document)[0]
+        candidate_ids = {
+            element_id
+            for candidate in task.candidates
+            for element_id in candidate.source_element_ids
+        }
+        self.assertNotIn("journal-badge", candidate_ids)
+        self.assertNotIn("journal-rule", candidate_ids)
+        self.assertNotIn("date-folio", candidate_ids)
+        self.assertIn("body-top", candidate_ids)
+        self.assertIn("body-bottom", candidate_ids)
+        roi = task.metadata["analysis_roi"]["bbox"]
+        self.assertGreater(roi["y"], 0.03)
+        self.assertLess(roi["y"] + roi["height"], 0.95)
 
     def test_vertical_and_horizontal_separators_are_recorded(self):
         task = generate_layout_tasks(_article_document())[0]

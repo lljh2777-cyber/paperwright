@@ -77,6 +77,23 @@ def _task() -> LayoutTask:
         feature_schema_version="layout-features-v0.1",
         candidates=candidates,
         separators=(separator,),
+        metadata={
+            "analysis_roi": {
+                "bbox": {
+                    "x": 0.04,
+                    "y": 0.04,
+                    "width": 0.92,
+                    "height": 0.78,
+                },
+                "source": "confirmed:fixture-ai",
+                "coordinate_system": (
+                    "top-left/original-page-normalized/y-down"
+                ),
+                "destructive_crop": False,
+            },
+            "excluded_element_ids": [],
+            "boundary_crossing_element_ids": [],
+        },
     )
 
 
@@ -245,6 +262,7 @@ class LayoutStageATests(unittest.TestCase):
                 task,
             )
             self.assertTrue((destination / "page.png").is_file())
+            self.assertTrue((destination / "content-roi.png").is_file())
             self.assertTrue((destination / "overlay.png").is_file())
             self.assertTrue(
                 (destination / "review-instructions.md").is_file()

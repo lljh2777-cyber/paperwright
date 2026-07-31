@@ -12,7 +12,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from statistics import median
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from .layout_models import (
     LayoutCandidate,
@@ -23,7 +23,7 @@ from .layout_models import (
 )
 from .models import BBox, Element, Page, PhysicalDocument
 
-CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.3"
+CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
 FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
 
 _PAGE_NUMBER = re.compile(
@@ -46,6 +46,11 @@ class CandidateGenerationConfig:
     vertical_gap_line_ratio: float = 0.8
     vertical_gap_page_ratio: float = 0.012
     graphics_cluster_line_ratio: float = 0.6
+    content_roi_padding_ratio: float = 0.005
+    edge_band_limit_ratio: float = 0.12
+    edge_band_max_height_ratio: float = 0.06
+    edge_band_max_width_ratio: float = 0.65
+    edge_band_gap_ratio: float = 0.006
     max_split_depth: int = 8
 
     def __post_init__(self) -> None:
@@ -58,6 +63,11 @@ class CandidateGenerationConfig:
             self.vertical_gap_line_ratio,
             self.vertical_gap_page_ratio,
             self.graphics_cluster_line_ratio,
+            self.content_roi_padding_ratio,
+            self.edge_band_limit_ratio,
+            self.edge_band_max_height_ratio,
+            self.edge_band_max_width_ratio,
+            self.edge_band_gap_ratio,
         )
         if any(not math.isfinite(item) or item <= 0 for item in ratios):
             raise ValueError("候选生成阈值必须是正有限数")
@@ -83,6 +93,131 @@ class _Leaf:
     atoms: tuple[_Atom, ...]
     band_index: int
     column_index: int
+
+
+def _intersect_bbox(left: BBox, right: BBox) -> BBox | None:
+    x0 = max(left.x, right.x)
+    y0 = max(left.y, right.y)
+    x1 = min(left.right, right.right)
+    y1 = min(left.bottom, right.bottom)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return BBox(x0, y0, x1 - x0, y1 - y0)
+
+
+def _padded_content_roi(
+    page: Page,
+    atoms: Sequence[_Atom],
+    peripheral_ids: set[str],
+    *,
+    padding_ratio: float,
+    outer_ratio: float,
+    line_height: float,
+    edge_band_limit_ratio: float,
+    edge_band_max_height_ratio: float,
+    edge_band_max_width_ratio: float,
+    edge_band_gap_ratio: float,
+) -> NormalizedBBox:
+    retained = [
+        atom
+        for atom in atoms
+        if not (
+            atom.element_ids
+            and set(atom.element_ids).issubset(peripheral_ids)
+            and (
+                atom.bbox.y + atom.bbox.height / 2
+                <= page.height * outer_ratio
+                or atom.bbox.y + atom.bbox.height / 2
+                >= page.height * (1 - outer_ratio)
+            )
+        )
+    ]
+    minimum_gap = max(
+        line_height * 0.8,
+        page.height * edge_band_gap_ratio,
+    )
+
+    # Remove isolated, shallow edge bands such as journal badges, running
+    # labels, dates and folios.  This deliberately does not use pixel/OCR
+    # content and preserves wider or multi-line footnotes.
+    while len(retained) > 1:
+        bands: list[list[_Atom]] = []
+        band_bottoms: list[float] = []
+        for atom in sorted(
+            retained,
+            key=lambda item: (item.bbox.y, item.bbox.x, item.atom_id),
+        ):
+            if not bands or atom.bbox.y - band_bottoms[-1] >= minimum_gap:
+                bands.append([atom])
+                band_bottoms.append(atom.bbox.bottom)
+            else:
+                bands[-1].append(atom)
+                band_bottoms[-1] = max(band_bottoms[-1], atom.bbox.bottom)
+        if len(bands) < 2:
+            break
+        ordered = sorted(
+            bands,
+            key=lambda band: (
+                min(atom.bbox.y for atom in band),
+                min(atom.bbox.x for atom in band),
+            ),
+        )
+        first_box = _union_bbox(atom.bbox for atom in ordered[0])
+        second_box = _union_bbox(atom.bbox for atom in ordered[1])
+        last_box = _union_bbox(atom.bbox for atom in ordered[-1])
+        previous_box = _union_bbox(atom.bbox for atom in ordered[-2])
+
+        def removable(box: BBox, band: Sequence[_Atom]) -> bool:
+            occupied_area = sum(
+                atom.bbox.width * atom.bbox.height for atom in band
+            )
+            band_area = box.width * box.height
+            occupancy = min(1.0, occupied_area / band_area)
+            return (
+                box.height
+                <= max(
+                    line_height * 2.0,
+                    page.height * edge_band_max_height_ratio,
+                )
+                and (
+                    box.width <= page.width * edge_band_max_width_ratio
+                    or occupancy <= 0.45
+                )
+            )
+
+        remove_band: Sequence[_Atom] | None = None
+        if (
+            first_box.bottom <= page.height * edge_band_limit_ratio
+            and second_box.y - first_box.bottom >= minimum_gap
+            and removable(first_box, ordered[0])
+        ):
+            remove_band = ordered[0]
+        elif (
+            last_box.y >= page.height * (1 - edge_band_limit_ratio)
+            and last_box.y - previous_box.bottom >= minimum_gap
+            and removable(last_box, ordered[-1])
+        ):
+            remove_band = ordered[-1]
+        if remove_band is None:
+            break
+        removed_ids = {id(atom) for atom in remove_band}
+        retained = [atom for atom in retained if id(atom) not in removed_ids]
+
+    boxes = [atom.bbox for atom in retained]
+    if not boxes:
+        return NormalizedBBox(0.0, 0.0, 1.0, 1.0)
+    content = _union_bbox(boxes)
+    x_pad = page.width * padding_ratio
+    y_pad = page.height * padding_ratio
+    left = max(0.0, content.x - x_pad)
+    top = max(0.0, content.y - y_pad)
+    right = min(page.width, content.right + x_pad)
+    bottom = min(page.height, content.bottom + y_pad)
+    return NormalizedBBox.from_pdf_bbox(
+        BBox(left, top, right - left, bottom - top),
+        page_width=page.width,
+        page_height=page.height,
+    )
 
 
 def _union_bbox(boxes: Iterable[BBox]) -> BBox:
@@ -860,15 +995,77 @@ def _candidate_separators(
     )
 
 
+def propose_content_rois(
+    document: PhysicalDocument,
+    *,
+    config: CandidateGenerationConfig | None = None,
+) -> dict[int, NormalizedBBox]:
+    """Propose a conservative analysis ROI for every page.
+
+    Repeated furniture and page numbers are excluded before the union is
+    calculated.  The returned boxes remain in the original page coordinate
+    system and are intended for AI/human confirmation, not destructive crop.
+    """
+
+    settings = config or CandidateGenerationConfig()
+    furniture, _ = _furniture_element_ids(document, settings)
+    proposals: dict[int, NormalizedBBox] = {}
+    for page in document.pages:
+        text_atoms = _text_atoms(page)
+        line_height = _line_height(page, text_atoms)
+        atoms = (
+            text_atoms
+            + _graphics_atoms(
+                page,
+                proximity=line_height * settings.graphics_cluster_line_ratio,
+            )
+            + _other_atoms(page)
+        )
+        proposals[page.page_index] = _padded_content_roi(
+            page,
+            atoms,
+            furniture.get(page.page_index, set()),
+            padding_ratio=settings.content_roi_padding_ratio,
+            outer_ratio=settings.page_number_ratio,
+            line_height=line_height,
+            edge_band_limit_ratio=settings.edge_band_limit_ratio,
+            edge_band_max_height_ratio=settings.edge_band_max_height_ratio,
+            edge_band_max_width_ratio=settings.edge_band_max_width_ratio,
+            edge_band_gap_ratio=settings.edge_band_gap_ratio,
+        )
+    return proposals
+
+
 def generate_layout_tasks(
     document: PhysicalDocument,
     *,
     config: CandidateGenerationConfig | None = None,
+    content_rois: Mapping[int, NormalizedBBox] | None = None,
+    content_roi_source: str = "rule_proposed",
 ) -> tuple[LayoutTask, ...]:
-    """Generate one deterministic, AI-reviewable layout task per page."""
+    """Generate one deterministic, AI-reviewable layout task per page.
+
+    Candidate splitting and separator detection operate only inside the page's
+    content ROI.  Element and candidate coordinates remain normalized against
+    the original, uncropped PDF page.
+    """
 
     settings = config or CandidateGenerationConfig()
     furniture, furniture_reasons = _furniture_element_ids(document, settings)
+    rois = (
+        dict(content_rois)
+        if content_rois is not None
+        else propose_content_rois(document, config=settings)
+    )
+    expected_pages = {page.page_index for page in document.pages}
+    if set(rois) != expected_pages:
+        missing = sorted(expected_pages - set(rois))
+        extra = sorted(set(rois) - expected_pages)
+        raise ValueError(
+            f"content ROI pages do not match document; missing={missing}, extra={extra}"
+        )
+    if not content_roi_source.strip():
+        raise ValueError("content_roi_source must not be empty")
     tasks: list[LayoutTask] = []
     for page in document.pages:
         text_atoms = _text_atoms(page)
@@ -882,13 +1079,44 @@ def generate_layout_tasks(
             + _other_atoms(page)
         )
         peripheral_ids = furniture.get(page.page_index, set())
+        analysis_roi = rois[page.page_index]
+        analysis_pdf_bbox = analysis_roi.to_pdf_bbox(
+            page_width=page.width,
+            page_height=page.height,
+        )
         content_atoms: list[_Atom] = []
-        peripheral_atoms: list[_Atom] = []
+        excluded_element_ids: set[str] = set()
+        boundary_crossing_element_ids: set[str] = set()
         for atom in atoms:
-            if atom.element_ids and set(atom.element_ids).issubset(peripheral_ids):
-                peripheral_atoms.append(atom)
-            else:
-                content_atoms.append(atom)
+            atom_center = atom.bbox.y + atom.bbox.height / 2
+            outer_furniture = (
+                atom.element_ids
+                and set(atom.element_ids).issubset(peripheral_ids)
+                and (
+                    atom_center
+                    <= page.height * settings.page_number_ratio
+                    or atom_center
+                    >= page.height * (1 - settings.page_number_ratio)
+                )
+            )
+            if outer_furniture:
+                excluded_element_ids.update(atom.element_ids)
+                continue
+            intersection = _intersect_bbox(atom.bbox, analysis_pdf_bbox)
+            if intersection is None:
+                excluded_element_ids.update(atom.element_ids)
+                continue
+            if intersection != atom.bbox:
+                boundary_crossing_element_ids.update(atom.element_ids)
+            content_atoms.append(
+                _Atom(
+                    atom_id=atom.atom_id,
+                    bbox=intersection,
+                    element_ids=atom.element_ids,
+                    kinds=atom.kinds,
+                    text=atom.text,
+                )
+            )
 
         horizontal_gap = max(
             line_height * settings.horizontal_gap_line_ratio,
@@ -938,35 +1166,9 @@ def generate_layout_tasks(
                     page_has_native_text=page_has_native_text,
                 )
             )
-        next_index = len(candidates) + 1
-        for offset, atom in enumerate(
-            sorted(
-                peripheral_atoms,
-                key=lambda item: (item.bbox.y, item.bbox.x, item.atom_id),
-            )
-        ):
-            reasons = {
-                furniture_reasons.get(page.page_index, {}).get(element_id)
-                for element_id in atom.element_ids
-            }
-            reasons.discard(None)
-            candidates.append(
-                _candidate_from_leaf(
-                    page,
-                    _Leaf((atom,), -1, offset),
-                    candidate_id=f"C{next_index + offset:03d}",
-                    page_has_native_text=page_has_native_text,
-                    peripheral_hint=True,
-                    furniture_reason=(
-                        sorted(reasons)[0] if reasons else "peripheral"
-                    ),
-                )
-            )
-
         content_boxes = [
             item.bbox
             for item in candidates
-            if not bool(item.features.get("peripheral_hint"))
         ]
         content_bbox = (
             _union_bbox(
@@ -987,6 +1189,12 @@ def generate_layout_tasks(
             candidates=tuple(candidates),
             separators=_candidate_separators(candidates),
             metadata={
+                "analysis_roi": {
+                    "bbox": analysis_roi.to_dict(),
+                    "source": content_roi_source,
+                    "coordinate_system": "top-left/original-page-normalized/y-down",
+                    "destructive_crop": False,
+                },
                 "content_bbox": (
                     NormalizedBBox.from_pdf_bbox(
                         content_bbox,
@@ -999,6 +1207,17 @@ def generate_layout_tasks(
                 "horizontal_gap_threshold_pdf_points": horizontal_gap,
                 "vertical_gap_threshold_pdf_points": vertical_gap,
                 "line_height_median_pdf_points": line_height,
+                "excluded_element_ids": sorted(excluded_element_ids),
+                "boundary_crossing_element_ids": sorted(
+                    boundary_crossing_element_ids
+                ),
+                "furniture_reasons": {
+                    element_id: reason
+                    for element_id, reason in sorted(
+                        furniture_reasons.get(page.page_index, {}).items()
+                    )
+                    if element_id in excluded_element_ids
+                },
                 "ocr_used": False,
             },
         )

@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from .exceptions import OutputConflictError
-from .layout_models import LayoutTask
+from .layout_models import LayoutTask, NormalizedBBox
 from .layout_review import write_layout_review_instructions
 
 _CANDIDATE_COLORS = {
@@ -18,6 +18,52 @@ _CANDIDATE_COLORS = {
     "unknown": (96, 96, 96),
 }
 _SEPARATOR_COLOR = (255, 166, 0)
+_ROI_COLOR = (255, 48, 48)
+
+
+def _task_content_roi(task: LayoutTask) -> NormalizedBBox | None:
+    value = task.metadata.get("analysis_roi")
+    if not isinstance(value, dict) or not isinstance(value.get("bbox"), dict):
+        return None
+    return NormalizedBBox.from_dict(value["bbox"])
+
+
+def render_content_roi_overlay(
+    preview: Image.Image,
+    task: LayoutTask,
+) -> Image.Image:
+    """Darken the excluded perimeter and outline the analysis ROI."""
+
+    base = preview.convert("RGBA")
+    roi = _task_content_roi(task)
+    if roi is None:
+        return base.convert("RGB")
+    left, top, right, bottom = roi.to_pixel_box(
+        image_width=base.width,
+        image_height=base.height,
+    )
+    shade = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(shade)
+    fill = (20, 20, 20, 112)
+    if top > 0:
+        draw.rectangle((0, 0, base.width - 1, top - 1), fill=fill)
+    if bottom < base.height - 1:
+        draw.rectangle(
+            (0, bottom + 1, base.width - 1, base.height - 1),
+            fill=fill,
+        )
+    if left > 0:
+        draw.rectangle((0, top, left - 1, bottom), fill=fill)
+    if right < base.width - 1:
+        draw.rectangle(
+            (right + 1, top, base.width - 1, bottom),
+            fill=fill,
+        )
+    composed = Image.alpha_composite(base, shade)
+    outline = ImageDraw.Draw(composed)
+    width = max(2, round(min(base.size) / 300))
+    outline.rectangle((left, top, right, bottom), outline=_ROI_COLOR, width=width)
+    return composed.convert("RGB")
 
 
 def _candidate_color(kinds: tuple[str, ...]) -> tuple[int, int, int]:
@@ -35,7 +81,7 @@ def render_layout_overlay(
 ) -> Image.Image:
     """Return a labeled overlay without modifying the source preview."""
 
-    overlay = preview.convert("RGB")
+    overlay = render_content_roi_overlay(preview, task)
     draw = ImageDraw.Draw(overlay)
     width = max(1, round(min(overlay.size) / 350))
     for candidate in sorted(task.candidates, key=lambda item: item.candidate_id):
@@ -85,6 +131,12 @@ def export_layout_task_bundle(
     )
     preview.convert("RGB").save(
         destination / task.preview_filename,
+        format="PNG",
+        optimize=False,
+        compress_level=9,
+    )
+    render_content_roi_overlay(preview, task).save(
+        destination / "content-roi.png",
         format="PNG",
         optimize=False,
         compress_level=9,

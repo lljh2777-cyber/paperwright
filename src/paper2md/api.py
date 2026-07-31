@@ -13,10 +13,16 @@ from typing import Any
 from .backends.base import Backend, BackendRegistry, BackendResult
 from .config import Paper2MDConfig
 from .exceptions import BackendExecutionError
-from .layout_candidates import generate_layout_tasks
+from .layout_candidates import generate_layout_tasks, propose_content_rois
 from .layout_export import export_layout_task_bundle
 from .layout_models import FinalLayout, LayoutTask
 from .layout_review import validate_layout_review
+from .layout_roi import (
+    canonical_content_roi_json,
+    content_roi_contract,
+    content_roi_review_instructions,
+    load_confirmed_content_rois,
+)
 from .layout_writer import write_layout_outputs
 from .models import PhysicalDocument
 from .paths import validate_conversion_paths
@@ -130,6 +136,7 @@ class Paper2MD:
         output_dir: str | Path,
         *,
         preview_scale: float = 1.5,
+        content_roi_json: str | Path | None = None,
     ) -> LayoutPreparationResult:
         """Export page review bundles without changing conversion output."""
 
@@ -158,7 +165,29 @@ class Paper2MD:
                 if isinstance(extracted, BackendResult)
                 else BackendResult(extracted)
             )
-            tasks = generate_layout_tasks(result.document)
+            if content_roi_json is None:
+                content_rois = propose_content_rois(result.document)
+                roi_source = "rule_proposed"
+                roi_contract = content_roi_contract(
+                    result.document,
+                    content_rois,
+                )
+            else:
+                content_rois, roi_source = load_confirmed_content_rois(
+                    content_roi_json,
+                    result.document,
+                )
+                roi_contract = content_roi_contract(
+                    result.document,
+                    content_rois,
+                    review_status="confirmed",
+                    reviewer=roi_source.removeprefix("confirmed:"),
+                )
+            tasks = generate_layout_tasks(
+                result.document,
+                content_rois=content_rois,
+                content_roi_source=roi_source,
+            )
             pages: list[dict[str, Any]] = []
             for task in tasks:
                 preview = render_preview(
@@ -181,6 +210,16 @@ class Paper2MD:
                         "separator_count": len(task.separators),
                     }
                 )
+            (temporary / "content-roi.json").write_text(
+                canonical_content_roi_json(roi_contract),
+                encoding="utf-8",
+                newline="\n",
+            )
+            (temporary / "content-roi-instructions.md").write_text(
+                content_roi_review_instructions(),
+                encoding="utf-8",
+                newline="\n",
+            )
             index = {
                 "contract_version": "paper2md-layout-review-index-v0.1",
                 "source_sha256": result.document.source_sha256,
@@ -188,6 +227,12 @@ class Paper2MD:
                 "backend_version": result.document.backend_version,
                 "preview_scale": preview_scale,
                 "page_count": len(tasks),
+                "content_roi": {
+                    "path": "content-roi.json",
+                    "review_status": roi_contract["review_status"],
+                    "source": roi_source,
+                    "destructive_crop": False,
+                },
                 "pages": pages,
                 "ocr_used": False,
             }
@@ -261,7 +306,15 @@ class Paper2MD:
                 if isinstance(extracted, BackendResult)
                 else BackendResult(extracted)
             )
-            regenerated = generate_layout_tasks(result.document)
+            content_rois, roi_source = load_confirmed_content_rois(
+                review_root / "content-roi.json",
+                result.document,
+            )
+            regenerated = generate_layout_tasks(
+                result.document,
+                content_rois=content_rois,
+                content_roi_source=roi_source,
+            )
             reviews: list[FinalLayout] = []
             for expected_task in regenerated:
                 page_root = (

@@ -324,6 +324,7 @@ def export_layout_dataset(
     action_labels: list[dict[str, Any]] = []
     reading_pairs: list[dict[str, Any]] = []
     caption_pairs: list[dict[str, Any]] = []
+    content_roi_labels: list[dict[str, Any]] = []
     documents: dict[str, dict[str, Any]] = {}
     for _, task, layout in pairs:
         candidate_page, action_page = _candidate_records(task, layout)
@@ -331,6 +332,33 @@ def export_layout_dataset(
         action_labels.extend(action_page)
         reading_pairs.extend(_reading_order_records(task, layout))
         caption_pairs.extend(_caption_pair_records(task, layout))
+        roi = task.metadata.get("analysis_roi")
+        if (
+            isinstance(roi, dict)
+            and isinstance(roi.get("bbox"), dict)
+            and isinstance(roi.get("source"), str)
+        ):
+            content_roi_labels.append(
+                {
+                    "schema_version": LAYOUT_DATASET_VERSION,
+                    "document_id": f"sha256:{task.source_sha256}",
+                    "page_index": task.page.page_index,
+                    "page_width": task.page.width,
+                    "page_height": task.page.height,
+                    "content_bbox": roi["bbox"],
+                    "label_source": roi["source"],
+                    "excluded_element_count": len(
+                        task.metadata.get("excluded_element_ids", ())
+                    ),
+                    "boundary_crossing_element_count": len(
+                        task.metadata.get(
+                            "boundary_crossing_element_ids",
+                            (),
+                        )
+                    ),
+                    "destructive_crop": False,
+                }
+            )
         document_id = f"sha256:{task.source_sha256}"
         document = documents.setdefault(
             document_id,
@@ -359,6 +387,7 @@ def export_layout_dataset(
             ("action_labels.jsonl", action_labels),
             ("reading_order_pairs.jsonl", reading_pairs),
             ("caption_pairs.jsonl", caption_pairs),
+            ("content_roi_labels.jsonl", content_roi_labels),
         )
         for filename, records in files_and_records:
             _write_jsonl(temporary / filename, records)
@@ -391,6 +420,7 @@ def export_layout_dataset(
                 "action_labels": len(action_labels),
                 "reading_order_pairs": len(reading_pairs),
                 "caption_pairs": len(caption_pairs),
+                "content_roi_labels": len(content_roi_labels),
             },
             "documents": normalized_documents,
             "split_unit": "document_id",
@@ -424,6 +454,7 @@ def export_layout_dataset(
             "action_labels.jsonl",
             "reading_order_pairs.jsonl",
             "caption_pairs.jsonl",
+            "content_roi_labels.jsonl",
             "dataset_manifest.json",
         ):
             path = temporary / filename

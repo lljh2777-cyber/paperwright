@@ -224,6 +224,7 @@ class LayoutStageCTests(unittest.TestCase):
                     {
                         "layout-task.json",
                         "page.png",
+                        "content-roi.png",
                         "overlay.png",
                         "review-instructions.md",
                     },

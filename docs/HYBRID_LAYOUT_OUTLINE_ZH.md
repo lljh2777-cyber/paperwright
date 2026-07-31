@@ -65,7 +65,7 @@ Paper2MD 校验结果并吸附到精确 PDF 坐标
 - 扫描页没有原生文字时，`native_text_coverage` 必须为 `null`，不能记为零。
 - Figure 内存在原生坐标轴文字时，只统计其几何特征，不单独转录输出。
 
-## 5. 页面有效内容区
+## 5. 页面有效内容区（Content ROI）
 
 结合位置、跨页重复和元素特征识别：
 
@@ -76,6 +76,24 @@ Paper2MD 校验结果并吸附到精确 PDF 坐标
 - 重复边注或 running title。
 
 脚注属于正文内容，不得按固定页边距直接删除。无法确定的外围内容应保留并降低置信度。
+
+规则先生成保守的 `content_bbox`，AI 或人工通过完整页预览确认或调整。
+这个 bbox 只是分析掩膜，不裁剪 PDF，不改变任何文字、图片、绘图或最终区块
+的原始页面坐标。
+
+规则提案除跨页重复文字外，还检测靠近页面上下边缘、与主体存在明显空白、
+高度较小且占用稀疏的孤立带，用于排除期刊标签、DOI 横线、日期栏和页码。
+宽而密集或多行的脚注不按该规则自动删除。
+
+确认后：
+
+- 完全位于 ROI 外的页眉、页脚、页码和装饰对象不进入候选生成；
+- 与 ROI 边界相交的对象记录为 `boundary_crossing_element_ids`；
+- 空白带、分栏、候选区块和分隔带只在 ROI 内计算；
+- Figure/Table 仍从原 PDF 按原始页面坐标渲染。
+
+Content ROI 应独立保存规则提案、最终 bbox、复核者和来源，既用于复现，也作为
+后续正文窗口预测模型的训练数据。
 
 ## 6. 规则生成候选区块
 
@@ -269,23 +287,35 @@ overlay.webp          可选的候选框叠加图
 
 ## 15. 当前 CLI 流程
 
-### 15.1 生成 AI 复核包
+### 15.1 生成 Content ROI 提案
 
 ```powershell
-paper2md layout-prepare input.pdf review-dir
+paper2md layout-prepare input.pdf roi-proposal-dir
+```
+
+先检查每页 `content-roi.png`。确认红框没有裁掉正文、脚注、Figure、Table 或
+caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为
+`confirmed` 并填写 `reviewer`。
+
+### 15.2 在确认的 ROI 内生成 AI 区块复核包
+
+```powershell
+paper2md layout-prepare input.pdf review-dir `
+  --content-roi-json roi-proposal-dir/content-roi.json
 ```
 
 每页生成：
 
 - `layout-task.json`；
 - `page.png`；
+- `content-roi.png`；
 - `overlay.png`；
 - `review-instructions.md`。
 
 视觉 AI 按说明只划分区块、标注类型和顺序，并在对应页面目录写入
 `final-layout.json`；AI 不转录正文，也不读取 Figure/Table 内部文字。
 
-### 15.2 校验并应用复核结果
+### 15.3 校验并应用复核结果
 
 ```powershell
 paper2md validate-final-layout review-dir/page-0001/final-layout.json `

@@ -87,6 +87,7 @@ def _write_fixture_reviews(review_root: Path) -> None:
 class LayoutStageDTests(unittest.TestCase):
     def _prepare(self, root: Path) -> tuple[Path, Path]:
         source = root / "fixture.pdf"
+        proposal = root / "roi-proposal"
         review = root / "review"
         create_born_digital_fixture(source)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -94,7 +95,34 @@ class LayoutStageDTests(unittest.TestCase):
                 [
                     "layout-prepare",
                     str(source),
+                    str(proposal),
+                    "--workspace-root",
+                    str(root),
+                ]
+            )
+        self.assertEqual(code, 0)
+        roi_path = proposal / "content-roi.json"
+        roi = json.loads(roi_path.read_text(encoding="utf-8"))
+        roi["review_status"] = "confirmed"
+        roi["reviewer"] = "fixture-roi-reviewer"
+        roi_path.write_text(
+            json.dumps(
+                roi,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = main(
+                [
+                    "layout-prepare",
+                    str(source),
                     str(review),
+                    "--content-roi-json",
+                    str(roi_path),
                     "--workspace-root",
                     str(root),
                 ]
@@ -102,6 +130,39 @@ class LayoutStageDTests(unittest.TestCase):
         self.assertEqual(code, 0)
         _write_fixture_reviews(review)
         return source, review
+
+    def test_layout_apply_rejects_unconfirmed_content_roi(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "fixture.pdf"
+            review = root / "review"
+            output = root / "output"
+            create_born_digital_fixture(source)
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-prepare",
+                        str(source),
+                        str(review),
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            _write_fixture_reviews(review)
+            with contextlib.redirect_stderr(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertNotEqual(code, 0)
+            self.assertFalse(output.exists())
 
     def test_layout_apply_writes_markdown_visuals_and_v06_manifest(self):
         with tempfile.TemporaryDirectory() as temp:
