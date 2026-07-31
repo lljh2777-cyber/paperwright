@@ -365,6 +365,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "layout_element_coverage",
                     "layout_element_uniqueness",
                     "manifest_inventory",
+                    "native_object_diagnostics",
                     "text_reconstruction",
                 },
             )

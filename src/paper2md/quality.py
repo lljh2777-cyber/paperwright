@@ -268,3 +268,53 @@ def analyze_manifest_inventory(
         "missing_paths": missing,
         "unlisted_paths": unlisted,
     }
+
+
+def analyze_native_object_diagnostics(
+    document: PhysicalDocument,
+) -> dict[str, Any]:
+    diagnostics = document.metadata.get("degenerate_object_handling", {})
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+    raw_counts = diagnostics.get("counts", {})
+    counts = {
+        str(code): int(count)
+        for code, count in raw_counts.items()
+        if isinstance(code, str) and isinstance(count, int) and count >= 0
+    } if isinstance(raw_counts, dict) else {}
+    risky_codes = {
+        code for code in counts if code.startswith("unplaced_degenerate_")
+    }
+    findings: list[dict[str, Any]] = []
+    raw_pages = diagnostics.get("pages", [])
+    if isinstance(raw_pages, list):
+        for page in raw_pages:
+            if not isinstance(page, dict) or not isinstance(page.get("page"), int):
+                continue
+            page_counts = page.get("counts", {})
+            if not isinstance(page_counts, dict):
+                continue
+            for code in sorted(risky_codes):
+                count = page_counts.get(code, 0)
+                if isinstance(count, int) and count > 0:
+                    findings.append(
+                        {
+                            "code": code,
+                            "page": page["page"],
+                            "count": count,
+                        }
+                    )
+    unplaced_count = sum(counts.get(code, 0) for code in risky_codes)
+    ignored_count = sum(
+        count
+        for code, count in counts.items()
+        if code.startswith("ignored_degenerate_")
+    )
+    return {
+        "status": "warning" if unplaced_count else "pass",
+        "policy_version": diagnostics.get("policy_version"),
+        "ignored_safe_object_count": ignored_count,
+        "unplaced_risk_object_count": unplaced_count,
+        "counts": dict(sorted(counts.items())),
+        "findings": findings[:_MAX_FINDINGS],
+    }

@@ -17,11 +17,47 @@ from paper2md.quality import (
     analyze_layout_elements,
     analyze_manifest_inventory,
     analyze_markdown_text,
+    analyze_native_object_diagnostics,
     analyze_title,
 )
 
 
 class QualityValidationTests(unittest.TestCase):
+    def test_native_object_diagnostics_separate_safe_and_risky_objects(self):
+        page = Page(0, 100, 100, 0, ())
+        document = PhysicalDocument(
+            "d" * 64,
+            "fixture",
+            "1",
+            (page,),
+            metadata={
+                "degenerate_object_handling": {
+                    "policy_version": "fixture-v1",
+                    "counts": {
+                        "ignored_degenerate_empty_text": 12,
+                        "ignored_degenerate_form_container": 1,
+                        "unplaced_degenerate_vector_path": 2,
+                    },
+                    "pages": [
+                        {
+                            "page": 1,
+                            "counts": {
+                                "ignored_degenerate_empty_text": 12,
+                                "ignored_degenerate_form_container": 1,
+                                "unplaced_degenerate_vector_path": 2,
+                            },
+                        }
+                    ],
+                }
+            },
+        )
+        result = analyze_native_object_diagnostics(document)
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["ignored_safe_object_count"], 13)
+        self.assertEqual(result["unplaced_risk_object_count"], 2)
+        self.assertEqual(result["findings"][0]["page"], 1)
+        self.assertEqual(result["findings"][0]["count"], 2)
+
     def test_layout_element_coverage_and_uniqueness_are_reported(self):
         provenance = Provenance("fixture", "fixture", "fixture:quality")
         first = Element(

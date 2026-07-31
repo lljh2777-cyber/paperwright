@@ -7,6 +7,7 @@ PDFium.  It only normalizes native page objects into PhysicalDocument v0.2.
 from __future__ import annotations
 
 import ctypes
+from collections import Counter
 import hashlib
 import importlib.metadata
 import io
@@ -79,6 +80,35 @@ def _clamped_bbox(
     if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6:
         return None
     return BBox(x0, y0, x1 - x0, y1 - y0)
+
+
+def _degenerate_bbox_reason(
+    bounds: tuple[float, float, float, float],
+    page_width: float,
+    page_height: float,
+) -> str:
+    left, bottom, right, top = (float(value) for value in bounds)
+    raw_width = right - left
+    raw_height = top - bottom
+    if raw_width <= 1e-6 and raw_height <= 1e-6:
+        return "zero_area"
+    if raw_width <= 1e-6:
+        return "zero_width"
+    if raw_height <= 1e-6:
+        return "zero_height"
+    if right <= 0 or left >= page_width or top <= 0 or bottom >= page_height:
+        return "outside_page"
+    return "collapsed_after_page_clamp"
+
+
+def _degenerate_text_class(text: str | None, *, extraction_failed: bool) -> str:
+    if extraction_failed:
+        return "unreadable_text"
+    if not text:
+        return "empty_text"
+    if not text.strip():
+        return "whitespace_text"
+    return "nonempty_text"
 
 
 def _restore_missing_spaces_from_charboxes(
@@ -387,6 +417,8 @@ class PDFiumBackend:
         assets: list[ExtractedAsset] = []
         warnings: list[dict[str, object]] = []
         pages: list[Page] = []
+        degenerate_counts: Counter[str] = Counter()
+        degenerate_pages: list[dict[str, object]] = []
         try:
             document = pdfium.PdfDocument(source)
         except Exception as exc:
@@ -411,6 +443,8 @@ class PDFiumBackend:
                             page_index,
                             assets,
                             warnings,
+                            degenerate_counts,
+                            degenerate_pages,
                         )
                     )
                 finally:
@@ -442,6 +476,11 @@ class PDFiumBackend:
                     "pdfium_native_text_object_character_geometry_v3"
                 ),
                 "text_line_reconstruction": "native_object_geometry_v2",
+                "degenerate_object_handling": {
+                    "policy_version": "paper2md-degenerate-object-policy-v1",
+                    "counts": dict(sorted(degenerate_counts.items())),
+                    "pages": degenerate_pages,
+                },
             },
         )
         return BackendResult(physical, tuple(assets), tuple(warnings))
@@ -597,6 +636,8 @@ class PDFiumBackend:
         page_index: int,
         assets: list[ExtractedAsset],
         warnings: list[dict[str, object]],
+        degenerate_counts: Counter[str],
+        degenerate_pages: list[dict[str, object]],
     ) -> Page:
         pdfium = self._pdfium
         width, height = float(page.get_width()), float(page.get_height())
@@ -606,17 +647,81 @@ class PDFiumBackend:
         elements: list[Element] = []
         image_index = 0
         vector_index = 0
+        page_degenerate_counts: Counter[str] = Counter()
         try:
             for raw_index, obj in enumerate(page.get_objects()):
-                bbox = _clamped_bbox(obj.get_bounds(), width, height)
+                bounds = obj.get_bounds()
+                bbox = _clamped_bbox(bounds, width, height)
                 if bbox is None:
-                    warnings.append(
-                        {
-                            "code": "degenerate_object_bbox",
-                            "page": page_index + 1,
-                            "raw_object_index": raw_index,
-                        }
-                    )
+                    reason = _degenerate_bbox_reason(bounds, width, height)
+                    if isinstance(obj, pdfium.PdfTextObj):
+                        text: str | None = None
+                        extraction_failed = False
+                        try:
+                            obj.textpage = textpage
+                            text = obj.extract()
+                        except Exception:
+                            extraction_failed = True
+                        text_class = _degenerate_text_class(
+                            text,
+                            extraction_failed=extraction_failed,
+                        )
+                        diagnostic_code = f"ignored_degenerate_{text_class}"
+                        if text_class in {"unreadable_text", "nonempty_text"}:
+                            diagnostic_code = f"unplaced_degenerate_{text_class}"
+                            warning: dict[str, object] = {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                            if text:
+                                warning.update(
+                                    {
+                                        "text_sha256": hashlib.sha256(
+                                            text.encode("utf-8")
+                                        ).hexdigest(),
+                                        "snippet": " ".join(text.split())[:160],
+                                    }
+                                )
+                            warnings.append(warning)
+                    elif getattr(obj, "type", None) == 5:
+                        # Form XObjects are structural containers. PDFium's
+                        # recursive iterator yields their children separately.
+                        diagnostic_code = "ignored_degenerate_form_container"
+                    elif getattr(obj, "type", None) == 2:
+                        diagnostic_code = "unplaced_degenerate_vector_path"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                        )
+                    elif isinstance(obj, pdfium.PdfImage):
+                        diagnostic_code = "unplaced_degenerate_image"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                        )
+                    else:
+                        diagnostic_code = "unplaced_degenerate_unsupported_object"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "object_type": getattr(obj, "type", None),
+                                "bbox_reason": reason,
+                            }
+                        )
+                    degenerate_counts[diagnostic_code] += 1
+                    page_degenerate_counts[diagnostic_code] += 1
                     continue
                 source_ref = f"page:{page_index}:native-object-index:{raw_index}"
                 if isinstance(obj, pdfium.PdfTextObj):
@@ -764,6 +869,14 @@ class PDFiumBackend:
             ordered = _reading_order(elements, width)
         finally:
             textpage.close()
+
+        if page_degenerate_counts:
+            degenerate_pages.append(
+                {
+                    "page": page_index + 1,
+                    "counts": dict(sorted(page_degenerate_counts.items())),
+                }
+            )
 
         normalized = [
             Element(
