@@ -274,6 +274,7 @@ class Paper2MD:
         output_dir: str | Path,
         *,
         visual_scale: float = 2.0,
+        references_mode: str = "keep",
     ) -> ConversionResult:
         """Apply reviewed page layouts to a new, atomic conversion output."""
 
@@ -350,6 +351,7 @@ class Paper2MD:
                 layouts=tuple(reviews),
                 region_renderer=backend,
                 visual_scale=visual_scale,
+                references_mode=references_mode,
             )
             total = sum(
                 path.stat().st_size

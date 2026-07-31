@@ -85,11 +85,19 @@ def _write_fixture_reviews(review_root: Path) -> None:
 
 
 class LayoutStageDTests(unittest.TestCase):
-    def _prepare(self, root: Path) -> tuple[Path, Path]:
+    def _prepare(
+        self,
+        root: Path,
+        *,
+        include_references: bool = False,
+    ) -> tuple[Path, Path]:
         source = root / "fixture.pdf"
         proposal = root / "roi-proposal"
         review = root / "review"
-        create_born_digital_fixture(source)
+        create_born_digital_fixture(
+            source,
+            include_references=include_references,
+        )
         with contextlib.redirect_stdout(io.StringIO()):
             code = main(
                 [
@@ -163,6 +171,93 @@ class LayoutStageDTests(unittest.TestCase):
                 )
             self.assertNotEqual(code, 0)
             self.assertFalse(output.exists())
+
+    def test_reference_section_can_be_omitted_or_written_separately(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, review = self._prepare(
+                root,
+                include_references=True,
+            )
+            omitted = root / "omitted"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(omitted),
+                        "--references",
+                        "omit",
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            omitted_article = (omitted / "article.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn("Smith AB", omitted_article)
+            self.assertNotIn("Acknowledgments", omitted_article)
+            self.assertNotIn("fixture reviewers", omitted_article)
+            self.assertNotIn("Author Contributions", omitted_article)
+            self.assertIn("Supplementary Information", omitted_article)
+            self.assertIn("Supplementary Figure S1", omitted_article)
+            self.assertFalse((omitted / "references.md").exists())
+
+            separated = root / "separated"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(separated),
+                        "--references",
+                        "separate",
+                        "--workspace-root",
+                        str(root),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            separated_article = (separated / "article.md").read_text(
+                encoding="utf-8"
+            )
+            references = (separated / "references.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertNotIn("Smith AB", separated_article)
+            self.assertNotIn("Acknowledgments", separated_article)
+            self.assertNotIn("fixture reviewers", separated_article)
+            self.assertNotIn("Author Contributions", separated_article)
+            self.assertIn("Supplementary Information", separated_article)
+            self.assertIn("Supplementary Figure S1", separated_article)
+            self.assertIn("# References", references)
+            self.assertIn("Smith AB", references)
+            self.assertNotIn("Acknowledgments", references)
+            provenance = json.loads(
+                (
+                    separated / "layout" / "layout-provenance.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(provenance["references"]["status"], "detected")
+            self.assertEqual(
+                provenance["references"]["output_path"],
+                "references.md",
+            )
+            self.assertEqual(
+                provenance["references"]["detection_method"],
+                "heading_and_entries",
+            )
+            self.assertIsNotNone(
+                provenance["references"]["end_page_index"]
+            )
+            self.assertGreater(
+                provenance["references"][
+                    "omitted_back_matter_paragraphs"
+                ],
+                0,
+            )
 
     def test_layout_apply_writes_markdown_visuals_and_v06_manifest(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -22,6 +22,7 @@ from .layout_models import (
     NormalizedBBox,
 )
 from .models import BBox, Element, Page, PhysicalDocument
+from .references import is_reference_heading
 
 CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
 FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
@@ -168,6 +169,11 @@ def _padded_content_roi(
         previous_box = _union_bbox(atom.bbox for atom in ordered[-2])
 
         def removable(box: BBox, band: Sequence[_Atom]) -> bool:
+            if any(
+                atom.text and is_reference_heading(atom.text)
+                for atom in band
+            ):
+                return False
             occupied_area = sum(
                 atom.bbox.width * atom.bbox.height for atom in band
             )

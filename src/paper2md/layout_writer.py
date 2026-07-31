@@ -23,6 +23,13 @@ from .manifest import (
     sha256_file,
 )
 from .models import BBox, Element, Page, PhysicalDocument
+from .references import (
+    ReferenceParagraph,
+    detect_reference_section,
+    is_reference_heading,
+    removable_back_matter_keys,
+    validate_reference_mode,
+)
 from .region_render import RegionRenderRequest
 from .writer import _markdown_text_groups, _title
 
@@ -232,6 +239,7 @@ def write_layout_outputs(
     layouts: Sequence[FinalLayout],
     region_renderer: Any,
     visual_scale: float = 2.0,
+    references_mode: str = "keep",
 ) -> PreparedLayoutOutput:
     """Write reviewed layout output without changing the default writer."""
 
@@ -240,6 +248,7 @@ def write_layout_outputs(
         raise ValueError("布局任务、结果和 PhysicalDocument 页数不一致")
     if visual_scale <= 0:
         raise ValueError("visual_scale 必须为正")
+    references_mode = validate_reference_mode(references_mode)
 
     images_dir = root / "images"
     layout_dir = root / "layout"
@@ -254,14 +263,83 @@ def write_layout_outputs(
     )
     title, title_element_ids = _title(document)
     lines = [f"# {title}", ""]
+    materialized_layouts = tuple(
+        materialize_layout_sources(review, task, page)
+        for page, task, review in zip(
+            document.pages,
+            tasks,
+            layouts,
+            strict=True,
+        )
+    )
+    reference_paragraphs: list[ReferenceParagraph] = []
+    for page, materialized in zip(
+        document.pages,
+        materialized_layouts,
+        strict=True,
+    ):
+        for region in sorted(
+            (
+                item
+                for item in materialized.regions
+                if item.content_class == "text"
+            ),
+            key=lambda item: item.order or 0,
+        ):
+            text_elements = tuple(
+                item
+                for item in _ordered_text_elements(page, region)
+                if item.element_id not in title_element_ids
+            )
+            for paragraph_index, (_, text) in enumerate(
+                _markdown_text_groups(text_elements)
+            ):
+                if text:
+                    reference_paragraphs.append(
+                        ReferenceParagraph(
+                            page_index=page.page_index,
+                            region_id=region.region_id,
+                            paragraph_index=paragraph_index,
+                            text=text,
+                        )
+                    )
+    reference_section = detect_reference_section(reference_paragraphs)
+    reference_keys = (
+        {
+            item.key
+            for item in reference_paragraphs[
+                reference_section.start_index : reference_section.end_index
+            ]
+        }
+        if reference_section is not None
+        else set()
+    )
+    back_matter_keys = (
+        removable_back_matter_keys(
+            reference_paragraphs,
+            reference_section.end_index,
+        )
+        if reference_section is not None
+        else frozenset()
+    )
+    reference_lines: list[str] = (
+        ["# References", ""]
+        if references_mode == "separate" and reference_section is not None
+        else []
+    )
     image_records: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = list(backend_warnings)
     layout_output_paths: list[Path] = []
     visual_paths: list[Path] = []
     provenance_pages: list[dict[str, Any]] = []
 
-    for page, task, review in zip(document.pages, tasks, layouts):
-        materialized = materialize_layout_sources(review, task, page)
+    for page, task, review, materialized in zip(
+        document.pages,
+        tasks,
+        layouts,
+        materialized_layouts,
+        strict=True,
+    ):
         task_path = layout_dir / f"page-{page.page_index + 1:04d}-task.json"
         final_path = layout_dir / f"page-{page.page_index + 1:04d}-final.json"
         task_path.write_text(task.canonical_json(), encoding="utf-8", newline="\n")
@@ -371,11 +449,27 @@ def write_layout_outputs(
             for paragraph_index, (element_ids, text) in enumerate(paragraphs):
                 if not text:
                     continue
+                paragraph_key = (
+                    page.page_index,
+                    region.region_id,
+                    paragraph_index,
+                )
+                is_reference = paragraph_key in reference_keys
+                is_back_matter = paragraph_key in back_matter_keys
+                destination = (
+                    "article"
+                    if references_mode == "keep"
+                    or not (is_reference or is_back_matter)
+                    else references_mode
+                    if is_reference
+                    else "omit_back_matter"
+                )
                 paragraph_records.append(
                     {
                         "paragraph_index": paragraph_index,
                         "source_element_ids": element_ids,
                         "elements_sha256": _trace_digest(element_ids),
+                        "markdown_destination": destination,
                     }
                 )
                 prefix = (
@@ -383,19 +477,29 @@ def write_layout_outputs(
                     if region.role == "heading" and paragraph_index == 0
                     else ""
                 )
-                lines.extend(
-                    [
-                        _region_trace_comment(
-                            region_id=region.region_id,
-                            role=region.role,
-                            page_number=page.page_index + 1,
-                            element_ids=element_ids,
-                            paragraph_index=paragraph_index,
-                        ),
-                        prefix + text,
-                        "",
-                    ]
-                )
+                target_lines: list[str] | None
+                if destination == "article":
+                    target_lines = lines
+                elif destination == "separate":
+                    target_lines = reference_lines
+                else:
+                    target_lines = None
+                if target_lines is not None:
+                    if destination == "separate" and is_reference_heading(text):
+                        continue
+                    target_lines.extend(
+                        [
+                            _region_trace_comment(
+                                region_id=region.region_id,
+                                role=region.role,
+                                page_number=page.page_index + 1,
+                                element_ids=element_ids,
+                                paragraph_index=paragraph_index,
+                            ),
+                            prefix + text,
+                            "",
+                        ]
+                    )
             page_regions.append(
                 {
                     **region.to_dict(),
@@ -422,6 +526,62 @@ def write_layout_outputs(
         encoding="utf-8",
         newline="\n",
     )
+    references_path: Path | None = None
+    if (
+        references_mode == "separate"
+        and reference_section is not None
+        and reference_lines
+    ):
+        references_path = root / "references.md"
+        references_path.write_text(
+            "\n".join(reference_lines).rstrip() + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    references_summary: dict[str, object] = {
+        "mode": references_mode,
+        "status": (
+            "detected" if reference_section is not None else "not_detected"
+        ),
+        "output_path": (
+            str(references_path.relative_to(root)).replace("\\", "/")
+            if references_path is not None
+            else None
+        ),
+        "omitted_back_matter_paragraphs": (
+            len(back_matter_keys) if references_mode != "keep" else 0
+        ),
+    }
+    if reference_section is not None:
+        references_summary.update(
+            {
+                "start_page_index": reference_section.start.page_index,
+                "start_region_id": reference_section.start.region_id,
+                "start_paragraph_index": (
+                    reference_section.start.paragraph_index
+                ),
+                "evidence_score": reference_section.evidence_score,
+                "evidence_paragraphs": (
+                    reference_section.evidence_paragraphs
+                ),
+                "end_page_index": (
+                    reference_section.end.page_index
+                    if reference_section.end is not None
+                    else None
+                ),
+                "end_region_id": (
+                    reference_section.end.region_id
+                    if reference_section.end is not None
+                    else None
+                ),
+                "end_paragraph_index": (
+                    reference_section.end.paragraph_index
+                    if reference_section.end is not None
+                    else None
+                ),
+                "detection_method": reference_section.detection_method,
+            }
+        )
     provenance = {
         "contract_version": "paper2md-layout-provenance-v0.1",
         "source_sha256": document.source_sha256,
@@ -429,6 +589,7 @@ def write_layout_outputs(
         "feature_schema_version": tasks[0].feature_schema_version,
         "prompt_version": layouts[0].prompt_version,
         "ocr_used": False,
+        "references": references_summary,
         "pages": provenance_pages,
     }
     provenance_path = layout_dir / "layout-provenance.json"
@@ -449,6 +610,7 @@ def write_layout_outputs(
         article_path,
         physical_path,
         provenance_path,
+        *([references_path] if references_path is not None else []),
         *layout_output_paths,
         *visual_paths,
     ]
@@ -458,6 +620,8 @@ def write_layout_outputs(
             (
                 "markdown"
                 if path == article_path
+                else "references_markdown"
+                if path == references_path
                 else "physical_document"
                 if path == physical_path
                 else "layout_provenance"

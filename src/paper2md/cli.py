@@ -142,6 +142,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=2.0,
     )
+    apply_layout.add_argument(
+        "--references",
+        choices=("keep", "omit", "separate"),
+        default="keep",
+        help=(
+            "后置内容处理：保留；省略参考文献及行政性后置内容；"
+            "或将参考文献单独写入 references.md（补充材料保留）"
+        ),
+    )
 
     export_dataset = commands.add_parser(
         "layout-export-dataset",
@@ -340,6 +349,7 @@ def _apply_layout(args: argparse.Namespace) -> int:
         args.review_dir,
         args.output_dir,
         visual_scale=args.visual_scale,
+        references_mode=args.references,
     )
     print(
         json.dumps(
@@ -349,6 +359,7 @@ def _apply_layout(args: argparse.Namespace) -> int:
                 "page_count": result.manifest["page_count"],
                 "manifest_version": result.manifest["manifest_version"],
                 "layout_mode": "hybrid-reviewed",
+                "references_mode": args.references,
             },
             ensure_ascii=False,
             sort_keys=True,

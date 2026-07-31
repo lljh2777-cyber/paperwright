@@ -324,11 +324,29 @@ paper2md validate-final-layout review-dir/page-0001/final-layout.json `
 paper2md layout-apply input.pdf review-dir output-dir
 ```
 
+参考文献及行政性后置内容默认保留。需要时可显式选择：
+
+```powershell
+# 从 article.md 省略参考文献、致谢、作者贡献等后置内容
+paper2md layout-apply input.pdf review-dir output-dir --references omit
+
+# 将参考文献写入 references.md，并省略行政性后置内容
+paper2md layout-apply input.pdf review-dir output-dir --references separate
+```
+
+检测优先使用 References、Bibliography 等章节标题，并兼容 PDF
+原生文字层中被空格拆散的标题；标题缺失时，只在连续编号、年份、期刊或
+DOI 等证据共同满足时才使用编号引文序列兜底。选择非 `keep` 模式后，致谢、
+作者贡献、利益冲突、资助、作者信息和数据可用性等行政性后置内容也会省略；
+Supplementary Information/Materials（补充材料）及其内容保留。未可靠检测到
+参考文献时保持原文，不做猜测性删除。
+
 输出为：
 
 ```text
 output-dir/
 ├── article.md
+├── references.md        # 仅 --references separate
 ├── images/
 ├── physical_document.json
 ├── layout/
