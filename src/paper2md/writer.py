@@ -215,8 +215,10 @@ def _format_markdown_paragraph(
     text: str,
     element_ids: list[str],
     elements: tuple[Element, ...],
+    *,
+    first_line_indented: bool = False,
 ) -> str:
-    """Preserve unambiguous whole-paragraph bold from native PDF fonts."""
+    """Preserve native bold and a confirmed first-line paragraph indent."""
     selected_ids = set(element_ids)
     selected = [
         element
@@ -225,9 +227,13 @@ def _format_markdown_paragraph(
         and element.kind == "text"
         and element.text
     ]
-    if selected and all(_is_bold_text_element(element) for element in selected):
-        return f"**{text}**"
-    return text
+    value = (
+        f"**{text}**"
+        if selected
+        and all(_is_bold_text_element(element) for element in selected)
+        else text
+    )
+    return "&emsp;" + value if first_line_indented else value
 
 
 def _markdown_text_groups_detailed(
@@ -660,7 +666,9 @@ def write_outputs(
                     "",
                 ]
             )
-        for element_ids, text in _markdown_text_groups(page.elements):
+        for paragraph in _markdown_text_groups_detailed(page.elements):
+            element_ids = list(paragraph.element_ids)
+            text = paragraph.text
             if any(element_id in title_element_ids for element_id in element_ids):
                 continue
             matched_ids = {
@@ -675,6 +683,7 @@ def write_outputs(
                     text,
                     element_ids,
                     page.elements,
+                    first_line_indented=paragraph.first_line_indented,
                 )
                 lines.extend(
                     [

@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .models import Element
 
 
-TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v2"
+TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v3"
 
 _LIGATURES = str.maketrans(
     {
@@ -72,6 +72,7 @@ class ReconstructedText:
     element_ids: tuple[str, ...]
     events: tuple[ReconstructionEvent, ...] = ()
     warnings: tuple[ReconstructionWarning, ...] = ()
+    first_line_indented: bool = False
 
 
 def clean_text(text: str) -> tuple[str, int]:
@@ -491,6 +492,13 @@ def _looks_like_heading(text: str) -> bool:
     )
 
 
+_PARAGRAPH_TERMINAL = re.compile(r"[.!?][\"'\u2019\u201d)]*(?:\d+)?$")
+
+
+def _ends_paragraph_sentence(text: str) -> bool:
+    return bool(_PARAGRAPH_TERMINAL.search(text.rstrip()))
+
+
 def reconstruct_text_groups(
     elements: tuple[Element, ...],
 ) -> list[ReconstructedText]:
@@ -511,9 +519,11 @@ def reconstruct_text_groups(
 
     reconstructed_lines = [join_line_elements(line) for line in line_groups]
     paragraphs: list[list[int]] = []
+    paragraph_indents: list[bool] = []
     for line_index, line in enumerate(line_groups):
         if not paragraphs:
             paragraphs.append([line_index])
+            paragraph_indents.append(False)
             continue
         previous_index = paragraphs[-1][-1]
         previous = line_groups[previous_index]
@@ -525,10 +535,10 @@ def reconstruct_text_groups(
         previous_height = previous_bottom - previous_top
         current_height = max(item.bbox.bottom for item in line) - current_top
         vertical_gap = current_top - previous_bottom
-        indent_delta = abs(
-            min(item.bbox.x for item in line)
-            - min(item.bbox.x for item in previous)
-        )
+        previous_start = min(item.bbox.x for item in previous)
+        current_start = min(item.bbox.x for item in line)
+        signed_indent = current_start - previous_start
+        indent_delta = abs(signed_indent)
         previous_font = _dominant_font(previous)
         current_font = _dominant_font(line)
         same_font = (
@@ -536,13 +546,37 @@ def reconstruct_text_groups(
             or current_font is None
             or previous_font == current_font
         )
+        normal_line_gap = -1.0 <= vertical_gap <= max(
+            5.0,
+            min(previous_height, current_height) * 0.9,
+        )
+        indentation_threshold = max(
+            4.0,
+            min(previous_height, current_height) * 0.55,
+        )
+        indented_paragraph_start = (
+            normal_line_gap
+            and same_font
+            and signed_indent >= indentation_threshold
+            and _ends_paragraph_sentence(previous_text)
+            and not _looks_like_heading(previous_text)
+            and not _looks_like_heading(current_text)
+        )
+        if (
+            len(paragraphs[-1]) == 1
+            and normal_line_gap
+            and same_font
+            and -signed_indent >= indentation_threshold
+            and not _looks_like_heading(previous_text)
+            and not _looks_like_heading(current_text)
+        ):
+            paragraph_indents[-1] = True
         continues = (
-            -1.0
-            <= vertical_gap
-            <= max(5.0, min(previous_height, current_height) * 0.9)
+            normal_line_gap
             and indent_delta
             <= max(14.0, min(previous_height, current_height) * 2.0)
             and same_font
+            and not indented_paragraph_start
             and not _looks_like_heading(previous_text)
             and not _looks_like_heading(current_text)
         )
@@ -550,9 +584,14 @@ def reconstruct_text_groups(
             paragraphs[-1].append(line_index)
         else:
             paragraphs.append([line_index])
+            paragraph_indents.append(indented_paragraph_start)
 
     results: list[ReconstructedText] = []
-    for paragraph in paragraphs:
+    for paragraph, first_line_indented in zip(
+        paragraphs,
+        paragraph_indents,
+        strict=True,
+    ):
         text = ""
         element_ids: list[str] = []
         events: list[ReconstructionEvent] = []
@@ -624,6 +663,7 @@ def reconstruct_text_groups(
                 tuple(element_ids),
                 tuple(events),
                 tuple(unique_warnings.values()),
+                first_line_indented,
             )
         )
     return results

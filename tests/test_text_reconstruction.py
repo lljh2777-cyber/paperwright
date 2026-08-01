@@ -39,6 +39,50 @@ def text(
 
 
 class TextReconstructionTests(unittest.TestCase):
+    def test_first_line_indent_splits_native_body_paragraphs(self):
+        elements = (
+            text("p1-l1", 10, 100, 70, "The first paragraph", line_group=0),
+            text("p1-l2", 10, 108, 70, "ends here.", line_group=1),
+            text("p2-l1", 17, 116, 70, "A new paragraph", line_group=2),
+            text("p2-l2", 10, 124, 70, "continues here.", line_group=3),
+        )
+
+        paragraphs = reconstruct_text_groups(elements)
+
+        self.assertEqual(
+            [item.text for item in paragraphs],
+            [
+                "The first paragraph ends here.",
+                "A new paragraph continues here.",
+            ],
+        )
+        self.assertEqual(
+            [item.first_line_indented for item in paragraphs],
+            [False, True],
+        )
+
+    def test_indent_on_first_region_line_is_detected_from_second_line(self):
+        paragraphs = reconstruct_text_groups(
+            (
+                text("l1", 17, 100, 70, "An indented opening", line_group=0),
+                text("l2", 10, 108, 70, "continues here.", line_group=1),
+            )
+        )
+
+        self.assertEqual(len(paragraphs), 1)
+        self.assertTrue(paragraphs[0].first_line_indented)
+
+    def test_indent_without_sentence_boundary_does_not_split_line_wrap(self):
+        paragraphs = reconstruct_text_groups(
+            (
+                text("l1", 10, 100, 70, "A wrapped line", line_group=0),
+                text("l2", 17, 108, 70, "continues here.", line_group=1),
+            )
+        )
+
+        self.assertEqual(len(paragraphs), 1)
+        self.assertFalse(paragraphs[0].first_line_indented)
+
     def test_geometric_letter_spacing_is_collapsed(self):
         elements = [
             text("ca", 37.328, 40.468, 11.408, "CA"),

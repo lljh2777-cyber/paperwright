@@ -36,6 +36,19 @@ def text(element_id, x, y, width, height, value, *, font_name=None):
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_confirmed_first_line_indent_uses_markdown_safe_em_space(self):
+        item = text("paragraph", 10, 10, 60, 8, "Paragraph text")
+
+        self.assertEqual(
+            _format_markdown_paragraph(
+                "Paragraph text",
+                [item.element_id],
+                (item,),
+                first_line_indented=True,
+            ),
+            "&emsp;Paragraph text",
+        )
+
     def test_markdown_omits_a_classified_decorative_symbol(self):
         sentence = text("sentence", 10, 10, 45, 8, "Finished.")
         dingbat = replace(

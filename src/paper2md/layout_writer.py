@@ -89,6 +89,7 @@ class CrossPageParagraphBlock:
     dominant_font: str | None
     ends_with_pdf_soft_break: bool
     element_ids: tuple[str, ...]
+    first_line_indented: bool = False
 
 
 def _dominant_font_name(elements: Sequence[Element]) -> str | None:
@@ -114,6 +115,7 @@ def _cross_page_pair_is_continuation(
         and current.trace_index == marker + 2
         and previous.role == "body"
         and current.role == "body"
+        and not current.first_line_indented
         and not previous.is_bold
         and not current.is_bold
         and bool(first)
@@ -1157,6 +1159,7 @@ def write_layout_outputs(
                         "rendered_as": (
                             "equation_image" if equation is not None else "text"
                         ),
+                        "first_line_indented": paragraph.first_line_indented,
                         "text_reconstruction": {
                             "version": TEXT_RECONSTRUCTION_VERSION,
                             "events": [
@@ -1278,6 +1281,10 @@ def write_layout_outputs(
                         text,
                         element_ids,
                         text_elements,
+                        first_line_indented=(
+                            paragraph.first_line_indented
+                            and region.role == "body"
+                        ),
                     )
                 )
                 if region.role == "caption" and paragraph_index == 0:
@@ -1300,7 +1307,13 @@ def write_layout_outputs(
                                 "paragraph_index": paragraph_index,
                                 "role": region.role,
                                 "text": text,
-                                "is_bold": markdown_text.startswith("**"),
+                                "is_bold": markdown_text.removeprefix(
+                                    "&emsp;"
+                                ).startswith("**"),
+                                "first_line_indented": (
+                                    paragraph.first_line_indented
+                                    and region.role == "body"
+                                ),
                                 "reconstruction_events": [
                                     item.to_dict() for item in paragraph.events
                                 ],
@@ -1346,13 +1359,19 @@ def write_layout_outputs(
                                 text_index=len(lines) - 2,
                                 text=prefix + markdown_text,
                                 role=region.role,
-                                is_bold=markdown_text.startswith("**"),
+                                is_bold=markdown_text.removeprefix(
+                                    "&emsp;"
+                                ).startswith("**"),
                                 dominant_font=_dominant_font_name(
                                     paragraph_elements
                                 ),
                                 ends_with_pdf_soft_break=bool(last_text)
                                 and unicodedata.category(last_text[-1]) == "Cc",
                                 element_ids=tuple(element_ids),
+                                first_line_indented=(
+                                    paragraph.first_line_indented
+                                    and region.role == "body"
+                                ),
                             )
                         )
             page_regions.append(
