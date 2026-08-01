@@ -60,6 +60,14 @@ class TextReconstructionTests(unittest.TestCase):
             [item.first_line_indented for item in paragraphs],
             [False, True],
         )
+        self.assertEqual(
+            [item.first_line_indent_state for item in paragraphs],
+            ["aligned", "indented"],
+        )
+        self.assertAlmostEqual(
+            paragraphs[1].first_line_indent_offset or 0.0,
+            7.0,
+        )
 
     def test_indent_on_first_region_line_is_detected_from_second_line(self):
         paragraphs = reconstruct_text_groups(
@@ -71,6 +79,7 @@ class TextReconstructionTests(unittest.TestCase):
 
         self.assertEqual(len(paragraphs), 1)
         self.assertTrue(paragraphs[0].first_line_indented)
+        self.assertEqual(paragraphs[0].first_line_indent_state, "indented")
 
     def test_indent_without_sentence_boundary_does_not_split_line_wrap(self):
         paragraphs = reconstruct_text_groups(
@@ -82,6 +91,7 @@ class TextReconstructionTests(unittest.TestCase):
 
         self.assertEqual(len(paragraphs), 1)
         self.assertFalse(paragraphs[0].first_line_indented)
+        self.assertEqual(paragraphs[0].first_line_indent_state, "unknown")
 
     def test_geometric_letter_spacing_is_collapsed(self):
         elements = [

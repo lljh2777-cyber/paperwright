@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .models import Element
 
 
-TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v3"
+TEXT_RECONSTRUCTION_VERSION = "paper2md-native-text-reconstruction-v4"
 
 _LIGATURES = str.maketrans(
     {
@@ -73,6 +73,8 @@ class ReconstructedText:
     events: tuple[ReconstructionEvent, ...] = ()
     warnings: tuple[ReconstructionWarning, ...] = ()
     first_line_indented: bool = False
+    first_line_indent_state: str = "unknown"
+    first_line_indent_offset: float | None = None
 
 
 def clean_text(text: str) -> tuple[str, int]:
@@ -519,11 +521,13 @@ def reconstruct_text_groups(
 
     reconstructed_lines = [join_line_elements(line) for line in line_groups]
     paragraphs: list[list[int]] = []
-    paragraph_indents: list[bool] = []
+    paragraph_indent_states: list[str] = []
+    paragraph_indent_offsets: list[float | None] = []
     for line_index, line in enumerate(line_groups):
         if not paragraphs:
             paragraphs.append([line_index])
-            paragraph_indents.append(False)
+            paragraph_indent_states.append("unknown")
+            paragraph_indent_offsets.append(None)
             continue
         previous_index = paragraphs[-1][-1]
         previous = line_groups[previous_index]
@@ -566,11 +570,16 @@ def reconstruct_text_groups(
             len(paragraphs[-1]) == 1
             and normal_line_gap
             and same_font
-            and -signed_indent >= indentation_threshold
             and not _looks_like_heading(previous_text)
             and not _looks_like_heading(current_text)
         ):
-            paragraph_indents[-1] = True
+            first_line_offset = -signed_indent
+            if first_line_offset >= indentation_threshold:
+                paragraph_indent_states[-1] = "indented"
+                paragraph_indent_offsets[-1] = first_line_offset
+            elif abs(first_line_offset) < indentation_threshold:
+                paragraph_indent_states[-1] = "aligned"
+                paragraph_indent_offsets[-1] = first_line_offset
         continues = (
             normal_line_gap
             and indent_delta
@@ -584,12 +593,18 @@ def reconstruct_text_groups(
             paragraphs[-1].append(line_index)
         else:
             paragraphs.append([line_index])
-            paragraph_indents.append(indented_paragraph_start)
+            paragraph_indent_states.append(
+                "indented" if indented_paragraph_start else "unknown"
+            )
+            paragraph_indent_offsets.append(
+                signed_indent if indented_paragraph_start else None
+            )
 
     results: list[ReconstructedText] = []
-    for paragraph, first_line_indented in zip(
+    for paragraph, indent_state, indent_offset in zip(
         paragraphs,
-        paragraph_indents,
+        paragraph_indent_states,
+        paragraph_indent_offsets,
         strict=True,
     ):
         text = ""
@@ -663,7 +678,9 @@ def reconstruct_text_groups(
                 tuple(element_ids),
                 tuple(events),
                 tuple(unique_warnings.values()),
-                first_line_indented,
+                indent_state == "indented",
+                indent_state,
+                indent_offset,
             )
         )
     return results

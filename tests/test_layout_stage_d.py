@@ -108,10 +108,12 @@ class CrossPageParagraphTests(unittest.TestCase):
         *,
         role: str = "body",
         ends_soft: bool = False,
+        region_id: str | None = None,
+        indent_state: str = "unknown",
     ) -> CrossPageParagraphBlock:
         return CrossPageParagraphBlock(
             page_index=page_index,
-            region_id=f"R{page_index + 1}",
+            region_id=region_id or f"R{page_index + 1}",
             trace_index=trace_index,
             text_index=text_index,
             text=text,
@@ -120,6 +122,8 @@ class CrossPageParagraphTests(unittest.TestCase):
             dominant_font="fixture-roman",
             ends_with_pdf_soft_break=ends_soft,
             element_ids=(f"e{page_index + 1}",),
+            first_line_indented=indent_state == "indented",
+            first_line_indent_state=indent_state,
         )
 
     def test_direct_body_continuation_is_merged_across_page_marker(self):
@@ -157,6 +161,114 @@ class CrossPageParagraphTests(unittest.TestCase):
             {0: 0, 1: 3},
         )
         self.assertIn("interaction", lines)
+
+    def test_aligned_body_regions_are_joined_on_same_page(self):
+        lines = [
+            "trace-a",
+            "These results are of",
+            "",
+            "trace-b",
+            "high quality.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "These results are of",
+                    region_id="body-a",
+                ),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "high quality.",
+                    region_id="body-b",
+                    indent_state="aligned",
+                ),
+            ),
+            {0: 0},
+        )
+
+        self.assertEqual(
+            [item["code"] for item in events],
+            ["joined_same_page_body_continuation"],
+        )
+        self.assertIn("These results are of high quality.", lines)
+
+    def test_caption_is_a_hard_barrier_for_body_continuation(self):
+        lines = [
+            "trace-a",
+            "Body continues",
+            "",
+            "trace-caption",
+            "Figure 1. Caption",
+            "",
+            "trace-b",
+            "after the figure.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "Body continues", region_id="body-a"),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "Figure 1. Caption",
+                    role="caption",
+                    region_id="caption",
+                ),
+                self._block(
+                    0,
+                    6,
+                    7,
+                    "after the figure.",
+                    region_id="body-b",
+                    indent_state="aligned",
+                ),
+            ),
+            {0: 0},
+        )
+
+        self.assertEqual(events, [])
+
+    def test_indented_or_unknown_body_region_is_not_joined(self):
+        for indent_state in ("indented", "unknown"):
+            lines = [
+                "trace-a",
+                "Body continues",
+                "",
+                "trace-b",
+                "next text",
+                "",
+            ]
+            events = _merge_cross_page_paragraph_blocks(
+                lines,
+                (
+                    self._block(
+                        0,
+                        0,
+                        1,
+                        "Body continues",
+                        region_id="body-a",
+                    ),
+                    self._block(
+                        0,
+                        3,
+                        4,
+                        "next text",
+                        region_id="body-b",
+                        indent_state=indent_state,
+                    ),
+                ),
+                {0: 0},
+            )
+            self.assertEqual(events, [])
 
     def test_user_markdown_removes_only_internal_trace_comments(self):
         lines = _clean_user_markdown(
@@ -623,8 +735,9 @@ class LayoutStageDTests(unittest.TestCase):
             provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
             self.assertEqual(
                 provenance_value["contract_version"],
-                "paper2md-layout-provenance-v0.2",
+                "paper2md-layout-provenance-v0.3",
             )
+            self.assertIn("body_continuation_repairs", provenance_value)
             self.assertIn("cross_page_repairs", provenance_value)
             self.assertTrue(
                 any(

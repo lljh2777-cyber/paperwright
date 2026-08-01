@@ -90,6 +90,8 @@ class CrossPageParagraphBlock:
     ends_with_pdf_soft_break: bool
     element_ids: tuple[str, ...]
     first_line_indented: bool = False
+    first_line_indent_state: str = "unknown"
+    first_line_indent_offset: float | None = None
 
 
 def _dominant_font_name(elements: Sequence[Element]) -> str | None:
@@ -101,21 +103,14 @@ def _dominant_font_name(elements: Sequence[Element]) -> str | None:
     return max(widths, key=widths.get) if widths else None
 
 
-def _cross_page_pair_is_continuation(
+def _body_pair_has_continuation_text(
     previous: CrossPageParagraphBlock,
     current: CrossPageParagraphBlock,
-    page_markers: dict[int, int],
 ) -> bool:
-    marker = page_markers.get(current.page_index)
-    first = current.text.lstrip()[:1]
+    first = current.text.lstrip().removeprefix("&emsp;")[:1]
     return (
-        current.page_index == previous.page_index + 1
-        and marker is not None
-        and previous.text_index + 2 == marker
-        and current.trace_index == marker + 2
-        and previous.role == "body"
+        previous.role == "body"
         and current.role == "body"
-        and not current.first_line_indented
         and not previous.is_bold
         and not current.is_bold
         and bool(first)
@@ -126,29 +121,70 @@ def _cross_page_pair_is_continuation(
     )
 
 
+def _cross_page_pair_is_continuation(
+    previous: CrossPageParagraphBlock,
+    current: CrossPageParagraphBlock,
+    page_markers: dict[int, int],
+) -> bool:
+    marker = page_markers.get(current.page_index)
+    return (
+        _body_pair_has_continuation_text(previous, current)
+        and current.page_index == previous.page_index + 1
+        and marker is not None
+        and previous.text_index + 2 == marker
+        and current.trace_index == marker + 2
+        and current.first_line_indent_state != "indented"
+    )
+
+
+def _same_page_pair_is_continuation(
+    previous: CrossPageParagraphBlock,
+    current: CrossPageParagraphBlock,
+) -> bool:
+    return (
+        _body_pair_has_continuation_text(previous, current)
+        and current.page_index == previous.page_index
+        and current.region_id != previous.region_id
+        and current.trace_index == previous.text_index + 2
+        and current.first_line_indent_state == "aligned"
+    )
+
+
+def _body_pair_continuation_kind(
+    previous: CrossPageParagraphBlock,
+    current: CrossPageParagraphBlock,
+    page_markers: dict[int, int],
+) -> str | None:
+    if _same_page_pair_is_continuation(previous, current):
+        return "same_page_region_boundary"
+    if _cross_page_pair_is_continuation(previous, current, page_markers):
+        return "cross_page_boundary"
+    return None
+
+
 def _merge_cross_page_paragraph_blocks(
     lines: list[str],
     blocks: Sequence[CrossPageParagraphBlock],
     page_markers: dict[int, int],
 ) -> list[dict[str, Any]]:
-    """Merge only direct, high-confidence body continuations across pages."""
+    """Merge direct, high-confidence body continuations across boundaries."""
 
     ordered = sorted(blocks, key=lambda item: item.trace_index)
     chains: list[list[CrossPageParagraphBlock]] = []
     index = 0
     while index < len(ordered) - 1:
-        if not _cross_page_pair_is_continuation(
+        if _body_pair_continuation_kind(
             ordered[index], ordered[index + 1], page_markers
-        ):
+        ) is None:
             index += 1
             continue
         chain = [ordered[index], ordered[index + 1]]
         index += 1
         while (
             index < len(ordered) - 1
-            and _cross_page_pair_is_continuation(
+            and _body_pair_continuation_kind(
                 ordered[index], ordered[index + 1], page_markers
-            )
+            ) is not None
         ):
             chain.append(ordered[index + 1])
             index += 1
@@ -160,6 +196,12 @@ def _merge_cross_page_paragraph_blocks(
         merged = chain[0].text
         boundary_records: list[dict[str, Any]] = []
         for previous, current in zip(chain, chain[1:]):
+            method = _body_pair_continuation_kind(
+                previous,
+                current,
+                page_markers,
+            )
+            assert method is not None
             joiner = (
                 ""
                 if previous.ends_with_pdf_soft_break
@@ -168,9 +210,16 @@ def _merge_cross_page_paragraph_blocks(
             )
             boundary_records.append(
                 {
-                    "code": "joined_cross_page_paragraph",
+                    "code": (
+                        "joined_same_page_body_continuation"
+                        if method == "same_page_region_boundary"
+                        else "joined_cross_page_paragraph"
+                    ),
+                    "method": method,
                     "from_page": previous.page_index + 1,
                     "to_page": current.page_index + 1,
+                    "from_region_id": previous.region_id,
+                    "to_region_id": current.region_id,
                     "joiner": "none" if not joiner else "space",
                     "source_element_ids": list(
                         previous.element_ids + current.element_ids
@@ -179,9 +228,9 @@ def _merge_cross_page_paragraph_blocks(
             )
             merged += joiner + current.text
         traces = [lines[item.trace_index] for item in chain]
-        pages = ",".join(str(item.page_index + 1) for item in chain)
+        regions = ",".join(item.region_id for item in chain)
         replacement = traces + [
-            f"<!-- cross-page-continuation: pages: {pages}; "
+            f"<!-- body-continuation: regions: {regions}; "
             "method: native-geometry -->",
             merged,
             "",
@@ -392,6 +441,7 @@ _INTERNAL_MARKDOWN_COMMENTS = (
     "<!-- layout-region:",
     "<!-- caption-for:",
     "<!-- cross-page-continuation:",
+    "<!-- body-continuation:",
 )
 
 
@@ -1160,6 +1210,12 @@ def write_layout_outputs(
                             "equation_image" if equation is not None else "text"
                         ),
                         "first_line_indented": paragraph.first_line_indented,
+                        "first_line_indent_state": (
+                            paragraph.first_line_indent_state
+                        ),
+                        "first_line_indent_offset": (
+                            paragraph.first_line_indent_offset
+                        ),
                         "text_reconstruction": {
                             "version": TEXT_RECONSTRUCTION_VERSION,
                             "events": [
@@ -1314,6 +1370,9 @@ def write_layout_outputs(
                                     paragraph.first_line_indented
                                     and region.role == "body"
                                 ),
+                                "first_line_indent_state": (
+                                    paragraph.first_line_indent_state
+                                ),
                                 "reconstruction_events": [
                                     item.to_dict() for item in paragraph.events
                                 ],
@@ -1372,6 +1431,12 @@ def write_layout_outputs(
                                     paragraph.first_line_indented
                                     and region.role == "body"
                                 ),
+                                first_line_indent_state=(
+                                    paragraph.first_line_indent_state
+                                ),
+                                first_line_indent_offset=(
+                                    paragraph.first_line_indent_offset
+                                ),
                             )
                         )
             page_regions.append(
@@ -1404,12 +1469,12 @@ def write_layout_outputs(
             }
         )
 
-    cross_page_events = _merge_cross_page_paragraph_blocks(
+    continuation_events = _merge_cross_page_paragraph_blocks(
         lines,
         cross_page_blocks,
         page_marker_indexes,
     )
-    reconstruction_events.extend(cross_page_events)
+    reconstruction_events.extend(continuation_events)
     lines = _clean_user_markdown(lines)
     reference_lines = _clean_user_markdown(reference_lines)
     article_path = root / "article.md"
@@ -1534,14 +1599,19 @@ def write_layout_outputs(
             }
         )
     provenance = {
-        "contract_version": "paper2md-layout-provenance-v0.2",
+        "contract_version": "paper2md-layout-provenance-v0.3",
         "source_sha256": document.source_sha256,
         "candidate_generator_version": tasks[0].candidate_generator_version,
         "feature_schema_version": tasks[0].feature_schema_version,
         "prompt_version": layouts[0].prompt_version,
         "ocr_used": False,
         "references": references_summary,
-        "cross_page_repairs": cross_page_events,
+        "body_continuation_repairs": continuation_events,
+        "cross_page_repairs": [
+            item
+            for item in continuation_events
+            if item["code"] == "joined_cross_page_paragraph"
+        ],
         "pages": provenance_pages,
     }
     status = "success_with_degradation" if warnings else "success"

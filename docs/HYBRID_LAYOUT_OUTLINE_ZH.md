@@ -452,6 +452,13 @@ ID、caption 绑定或跨页拼接等内部 HTML 注释。完整段落映射、�
 图注、标题和普通换行不应用该样式。是否检测到缩进同时写入 paragraph
 provenance，便于复核和后续训练。
 
+缩进状态同时记录为 `indented`、`aligned` 或 `unknown`。正文跨区块续接
+只接受明确为 `aligned` 的后区块，并同时要求两个区块均为 `body`、阅读
+顺序直接相邻、前区块没有句末标点、后区块以小写字母开始、主字体一致，
+且中间不存在图片、表格、标题或图注。`caption` 是正文续接的硬隔离边界，
+不会被拼入正文。续接事件写入 `body_continuation_repairs` provenance；
+证据不足时保留分段，不做猜测性合并。
+
 ### 15.3 导出本地机器学习数据
 
 ```powershell
