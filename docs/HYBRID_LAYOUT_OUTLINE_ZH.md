@@ -302,9 +302,15 @@ paper2md layout-prepare input.pdf roi-proposal-dir `
 
 `fast` 只提取 TextPage 文字和坐标，每页批量渲染一次低分辨率预览，再由像素占用图
 生成 `paper2md-layout-task-v0.2` 栅格候选；不调用 `page.get_objects()`，也不枚举或
-解码全部矢量对象。复核包 PNG 使用确定性的中等压缩，像素和坐标不变。省略参数时
-仍使用兼容既有行为的 `forensic` 完整对象遍历。`layout-apply` 默认读取
-`review-index.json` 中记录的模式，拒绝用另一种模式重新生成不一致的任务。
+解码全部矢量对象。复核包 PNG 使用确定性的中等压缩，像素和坐标不变。
+
+`standard` 先执行同样的快速分析，再按页检查原生文字缺失、候选碎片过多、栅格区域
+歧义和分隔关系爆炸。只有触发风险门槛的页面才执行完整对象遍历；其他页面继续使用
+快速证据。因此同一篇论文可以同时包含 v0.1 完整对象任务和 v0.2 栅格任务。升级页码、
+原因和策略版本记录在 `review-index.json`，应用阶段按原记录重放，不重新猜测。
+
+省略参数时仍使用兼容既有行为的 `forensic` 全文完整对象遍历。`layout-apply` 默认读取
+`review-index.json` 中记录的请求模式和实际模式，拒绝用另一种模式重新生成不一致的任务。
 
 先检查每页 `content-roi.png`。确认红框没有裁掉正文、脚注、Figure、Table 或
 caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为

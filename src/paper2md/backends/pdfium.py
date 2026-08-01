@@ -599,12 +599,36 @@ class PDFiumBackend:
 
         return self._extract(source, config, text_only=True)
 
+    def extract_hybrid(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+        *,
+        full_page_indices: tuple[int, ...],
+    ) -> BackendResult:
+        """Walk native objects only on explicitly selected zero-based pages."""
+
+        selected = frozenset(full_page_indices)
+        if len(selected) != len(full_page_indices) or any(
+            not isinstance(index, int) or index < 0 for index in selected
+        ):
+            raise BackendExecutionError(
+                "hybrid full_page_indices must be unique non-negative integers"
+            )
+        return self._extract(
+            source,
+            config,
+            text_only=True,
+            full_page_indices=selected,
+        )
+
     def _extract(
         self,
         source: Path,
         config: Paper2MDConfig,
         *,
         text_only: bool,
+        full_page_indices: frozenset[int] = frozenset(),
     ) -> BackendResult:
         pdfium = self._pdfium
         extraction_started = time.perf_counter_ns()
@@ -629,6 +653,10 @@ class PDFiumBackend:
                 raise BackendExecutionError(
                     f"页数 {len(document)} 超过限制 {config.limits.max_pages}"
                 )
+            if any(index >= len(document) for index in full_page_indices):
+                raise BackendExecutionError(
+                    "hybrid full_page_indices exceed the document page range"
+                )
             metadata_started = time.perf_counter_ns()
             metadata = {
                 key: value
@@ -639,7 +667,10 @@ class PDFiumBackend:
             for page_index in range(len(document)):
                 page = document[page_index]
                 try:
-                    if text_only:
+                    page_uses_text_only = (
+                        text_only and page_index not in full_page_indices
+                    )
+                    if page_uses_text_only:
                         extracted_page, timing = self._extract_text_only_page(
                             page,
                             page_index,
@@ -653,6 +684,9 @@ class PDFiumBackend:
                             degenerate_counts,
                             degenerate_pages,
                         )
+                    timing["extraction_mode"] = (
+                        "text-only" if page_uses_text_only else "full"
+                    )
                     pages.append(extracted_page)
                     page_performance.append(timing)
                 finally:
@@ -681,16 +715,27 @@ class PDFiumBackend:
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
                 "text_object_extraction": (
-                    "pdfium_textpage_character_geometry_fast_v1"
+                    "pdfium_page_selective_hybrid_v1"
+                    if text_only and full_page_indices
+                    else "pdfium_textpage_character_geometry_fast_v1"
                     if text_only
                     else "pdfium_native_text_object_character_geometry_v3"
                 ),
                 "text_line_reconstruction": "native_object_geometry_v2",
                 "extraction_profile": (
-                    "text-only-fast" if text_only else "full"
+                    "hybrid-standard"
+                    if text_only and full_page_indices
+                    else "text-only-fast"
+                    if text_only
+                    else "full"
                 ),
                 "native_object_inventory": (
-                    "text_only; image_and_vector_objects_not_enumerated"
+                    (
+                        "selected_pages_full; other_pages_text_only; "
+                        f"full_page_indices={sorted(full_page_indices)}"
+                    )
+                    if text_only and full_page_indices
+                    else "text_only; image_and_vector_objects_not_enumerated"
                     if text_only
                     else "complete_supported_page_object_walk"
                 ),
@@ -704,7 +749,13 @@ class PDFiumBackend:
         performance = {
             "schema_version": "paper2md-extraction-timing-v0.1",
             "clock": "time.perf_counter_ns",
-            "extraction_mode": "text-only" if text_only else "full",
+            "extraction_mode": (
+                "hybrid"
+                if text_only and full_page_indices
+                else "text-only"
+                if text_only
+                else "full"
+            ),
             "total_ms": _milliseconds(
                 time.perf_counter_ns() - extraction_started
             ),

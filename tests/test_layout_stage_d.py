@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from paper2md.cli import main
@@ -25,6 +26,7 @@ from paper2md.layout_writer import (
     _text_region_non_text_diagnostics,
 )
 from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
+from paper2md.layout_risk import LayoutRiskAssessment, PageLayoutRisk
 from paper2md.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     sha256_file,
@@ -704,6 +706,73 @@ class LayoutStageDTests(unittest.TestCase):
                 )["extraction_profile"],
                 "fast",
             )
+
+    def test_standard_profile_selectively_escalates_and_replays_pages(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            forced_risk = LayoutRiskAssessment(
+                (
+                    PageLayoutRisk(
+                        page_index=0,
+                        reasons=("raster_region_ambiguity_high",),
+                        candidate_count=12,
+                        raster_candidate_count=9,
+                        separator_count=20,
+                        native_text_element_count=4,
+                    ),
+                    PageLayoutRisk(
+                        page_index=1,
+                        reasons=(),
+                        candidate_count=3,
+                        raster_candidate_count=1,
+                        separator_count=2,
+                        native_text_element_count=3,
+                    ),
+                )
+            )
+            with mock.patch(
+                "paper2md.api.assess_layout_risk",
+                return_value=forced_risk,
+            ):
+                source, review = self._prepare(
+                    root,
+                    extraction_profile="standard",
+                )
+            index = json.loads(
+                (review / "review-index.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                index["effective_extraction_profile"],
+                "hybrid-standard",
+            )
+            self.assertEqual(
+                index["layout_risk_assessment"]["escalation_page_indices"],
+                [0],
+            )
+            self.assertEqual(
+                index["layout_task_versions"],
+                [
+                    "paper2md-layout-task-v0.1",
+                    "paper2md-layout-task-v0.2",
+                ],
+            )
+
+            output = root / "standard-output"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                        "--evidence",
+                        "minimal",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            self.assertTrue((output / "article.md").is_file())
 
     def test_layout_apply_rejects_unconfirmed_content_roi(self):
         with tempfile.TemporaryDirectory() as temp:

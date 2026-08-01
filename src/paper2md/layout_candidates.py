@@ -1148,8 +1148,8 @@ def propose_content_rois(
     raster_by_page = dict(raster_analyses or {})
     if raster_analyses is not None:
         expected = {page.page_index for page in document.pages}
-        if set(raster_by_page) != expected:
-            raise ValueError("raster analysis pages do not match document")
+        if not set(raster_by_page).issubset(expected):
+            raise ValueError("raster analysis contains unknown document pages")
     furniture, _ = _furniture_element_ids(document, settings)
     proposals: dict[int, NormalizedBBox] = {}
     for page in document.pages:
@@ -1198,8 +1198,8 @@ def generate_layout_tasks(
     raster_by_page = dict(raster_analyses or {})
     if raster_analyses is not None:
         expected = {page.page_index for page in document.pages}
-        if set(raster_by_page) != expected:
-            raise ValueError("raster analysis pages do not match document")
+        if not set(raster_by_page).issubset(expected):
+            raise ValueError("raster analysis contains unknown document pages")
         for page_index, analysis in raster_by_page.items():
             if analysis.page_index != page_index:
                 raise ValueError("raster analysis mapping key mismatch")
@@ -1404,19 +1404,19 @@ def generate_layout_tasks(
         task = LayoutTask(
             contract_version=(
                 RASTER_LAYOUT_TASK_VERSION
-                if raster_analyses is not None
+                if page.page_index in raster_by_page
                 else LAYOUT_TASK_VERSION
             ),
             source_sha256=document.source_sha256,
             page=LayoutPage.from_page(page),
             candidate_generator_version=(
                 RASTER_CANDIDATE_GENERATOR_VERSION
-                if raster_analyses is not None
+                if page.page_index in raster_by_page
                 else CANDIDATE_GENERATOR_VERSION
             ),
             feature_schema_version=(
                 RASTER_FEATURE_SCHEMA_VERSION
-                if raster_analyses is not None
+                if page.page_index in raster_by_page
                 else FEATURE_SCHEMA_VERSION
             ),
             candidates=tuple(candidates),
@@ -1444,9 +1444,6 @@ def generate_layout_tasks(
                 "boundary_crossing_element_ids": sorted(
                     boundary_crossing_element_ids
                 ),
-                "raster_suppressed_element_ids": sorted(
-                    raster_suppressed_element_ids
-                ),
                 "furniture_reasons": {
                     element_id: reason
                     for element_id, reason in sorted(
@@ -1455,32 +1452,37 @@ def generate_layout_tasks(
                     if element_id in excluded_element_ids
                 },
                 "ocr_used": False,
-                "raster_evidence": (
+                **(
                     {
-                        "contract_version": raster_by_page[
-                            page.page_index
-                        ].contract_version,
-                        "preview_width": raster_by_page[
-                            page.page_index
-                        ].preview_width,
-                        "preview_height": raster_by_page[
-                            page.page_index
-                        ].preview_height,
-                        "ink_mask_sha256": raster_by_page[
-                            page.page_index
-                        ].ink_mask_sha256,
-                        "text_mask_sha256": raster_by_page[
-                            page.page_index
-                        ].text_mask_sha256,
-                        "residual_mask_sha256": raster_by_page[
-                            page.page_index
-                        ].residual_mask_sha256,
-                        "region_count": len(
-                            raster_by_page[page.page_index].regions
+                        "raster_suppressed_element_ids": sorted(
+                            raster_suppressed_element_ids
                         ),
+                        "raster_evidence": {
+                            "contract_version": raster_by_page[
+                                page.page_index
+                            ].contract_version,
+                            "preview_width": raster_by_page[
+                                page.page_index
+                            ].preview_width,
+                            "preview_height": raster_by_page[
+                                page.page_index
+                            ].preview_height,
+                            "ink_mask_sha256": raster_by_page[
+                                page.page_index
+                            ].ink_mask_sha256,
+                            "text_mask_sha256": raster_by_page[
+                                page.page_index
+                            ].text_mask_sha256,
+                            "residual_mask_sha256": raster_by_page[
+                                page.page_index
+                            ].residual_mask_sha256,
+                            "region_count": len(
+                                raster_by_page[page.page_index].regions
+                            ),
+                        },
                     }
-                    if raster_analyses is not None
-                    else None
+                    if page.page_index in raster_by_page
+                    else {}
                 ),
             },
         )

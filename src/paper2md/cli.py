@@ -145,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_layout.add_argument(
         "--extraction-profile",
-        choices=("fast", "forensic"),
+        choices=("fast", "standard", "forensic"),
         default="forensic",
         help="fast uses TextPage plus raster evidence; forensic keeps the full object walk",
     )
@@ -191,7 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     apply_layout.add_argument(
         "--extraction-profile",
-        choices=("fast", "forensic"),
+        choices=("fast", "standard", "forensic"),
         default=None,
         help="defaults to the profile recorded by layout-prepare",
     )

@@ -209,6 +209,16 @@ class RasterLayoutTests(unittest.TestCase):
             LayoutTask.from_dict(task.to_dict()).canonical_json(),
             task.canonical_json(),
         )
+        legacy_task = generate_layout_tasks(document)[0]
+        self.assertEqual(
+            legacy_task.contract_version,
+            "paper2md-layout-task-v0.1",
+        )
+        self.assertNotIn("raster_evidence", legacy_task.metadata)
+        self.assertNotIn(
+            "raster_suppressed_element_ids",
+            legacy_task.metadata,
+        )
 
 
 if __name__ == "__main__":

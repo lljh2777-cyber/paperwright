@@ -18,6 +18,7 @@ from .layout_candidates import generate_layout_tasks, propose_content_rois
 from .layout_export import export_layout_task_bundle
 from .layout_models import FinalLayout, LayoutTask
 from .layout_review import validate_layout_review
+from .layout_risk import assess_layout_risk
 from .layout_roi import (
     canonical_content_roi_json,
     content_roi_contract,
@@ -297,8 +298,10 @@ class Paper2MD:
         )
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
-        if extraction_profile not in {"fast", "forensic"}:
-            raise ValueError("extraction_profile must be fast or forensic")
+        if extraction_profile not in {"fast", "standard", "forensic"}:
+            raise ValueError(
+                "extraction_profile must be fast, standard, or forensic"
+            )
         render_preview = getattr(backend, "render_page_preview", None)
         if not callable(render_preview):
             raise BackendExecutionError(
@@ -313,7 +316,7 @@ class Paper2MD:
         try:
             raster_analyses: dict[int, Any] | None = None
             preview_by_page: dict[int, Any] = {}
-            if extraction_profile == "fast":
+            if extraction_profile in {"fast", "standard"}:
                 extract_text_only = getattr(backend, "extract_text_only", None)
                 render_previews = getattr(backend, "render_page_previews", None)
                 if not callable(extract_text_only) or not callable(render_previews):
@@ -370,6 +373,59 @@ class Paper2MD:
                 content_roi_source=roi_source,
                 raster_analyses=raster_analyses,
             )
+            risk_assessment = None
+            effective_extraction_profile = extraction_profile
+            if extraction_profile == "standard":
+                risk_assessment = assess_layout_risk(tasks, result.document)
+                escalation_pages = risk_assessment.escalation_page_indices
+                if escalation_pages:
+                    extract_hybrid = getattr(backend, "extract_hybrid", None)
+                    if not callable(extract_hybrid):
+                        raise BackendExecutionError(
+                            f"{backend.identity.name} backend does not support standard selective escalation"
+                        )
+                    result = _backend_result(
+                        extract_hybrid(
+                            source,
+                            self.config,
+                            full_page_indices=escalation_pages,
+                        )
+                    )
+                    raster_analyses = {
+                        page_index: analysis
+                        for page_index, analysis in (raster_analyses or {}).items()
+                        if page_index not in escalation_pages
+                    }
+                    if content_roi_json is None:
+                        content_rois = propose_content_rois(
+                            result.document,
+                            raster_analyses=raster_analyses,
+                        )
+                        roi_source = "standard_hybrid_rule_proposed"
+                        roi_contract = content_roi_contract(
+                            result.document,
+                            content_rois,
+                        )
+                    else:
+                        content_rois, roi_source = load_confirmed_content_rois(
+                            content_roi_json,
+                            result.document,
+                        )
+                        roi_contract = content_roi_contract(
+                            result.document,
+                            content_rois,
+                            review_status="confirmed",
+                            reviewer=roi_source.removeprefix("confirmed:"),
+                        )
+                    tasks = generate_layout_tasks(
+                        result.document,
+                        content_rois=content_rois,
+                        content_roi_source=roi_source,
+                        raster_analyses=raster_analyses,
+                    )
+                    effective_extraction_profile = "hybrid-standard"
+                else:
+                    effective_extraction_profile = "fast"
             pages: list[dict[str, Any]] = []
             for task in tasks:
                 preview = preview_by_page.get(task.page.page_index)
@@ -385,7 +441,7 @@ class Paper2MD:
                     task,
                     preview,
                     png_compress_level=(
-                        3 if extraction_profile == "fast" else 9
+                        3 if extraction_profile in {"fast", "standard"} else 9
                     ),
                 )
                 pages.append(
@@ -414,9 +470,15 @@ class Paper2MD:
                 "backend_version": result.document.backend_version,
                 "preview_scale": preview_scale,
                 "review_png_compress_level": (
-                    3 if extraction_profile == "fast" else 9
+                    3 if extraction_profile in {"fast", "standard"} else 9
                 ),
                 "extraction_profile": extraction_profile,
+                "effective_extraction_profile": effective_extraction_profile,
+                "layout_risk_assessment": (
+                    risk_assessment.to_dict()
+                    if risk_assessment is not None
+                    else None
+                ),
                 "physical_extraction_profile": result.document.metadata.get(
                     "extraction_profile",
                     "unknown",
@@ -498,12 +560,19 @@ class Paper2MD:
                 f"cannot read layout review index: {exc}"
             ) from exc
         recorded_profile = review_index.get("extraction_profile", "forensic")
-        if recorded_profile not in {"fast", "forensic"}:
+        if recorded_profile not in {"fast", "standard", "forensic"}:
             raise BackendExecutionError("unsupported review extraction profile")
-        effective_profile = extraction_profile or recorded_profile
-        if effective_profile != recorded_profile:
+        if extraction_profile is not None and extraction_profile != recorded_profile:
             raise BackendExecutionError(
                 "layout apply extraction profile does not match layout prepare"
+            )
+        effective_profile = review_index.get(
+            "effective_extraction_profile",
+            recorded_profile,
+        )
+        if effective_profile not in {"fast", "hybrid-standard", "forensic"}:
+            raise BackendExecutionError(
+                "unsupported effective review extraction profile"
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
@@ -519,26 +588,61 @@ class Paper2MD:
         )
         try:
             raster_analyses: dict[int, Any] | None = None
-            if effective_profile == "fast":
+            if effective_profile in {"fast", "hybrid-standard"}:
                 extract_text_only = getattr(backend, "extract_text_only", None)
                 render_previews = getattr(backend, "render_page_previews", None)
                 if not callable(extract_text_only) or not callable(render_previews):
                     raise BackendExecutionError(
                         f"{backend.identity.name} backend does not support fast layout extraction"
                     )
-                result = _backend_result(extract_text_only(source, self.config))
-                page_indices = tuple(
-                    page.page_index for page in result.document.pages
-                )
+                if effective_profile == "hybrid-standard":
+                    extract_hybrid = getattr(backend, "extract_hybrid", None)
+                    if not callable(extract_hybrid):
+                        raise BackendExecutionError(
+                            f"{backend.identity.name} backend does not support standard selective escalation"
+                        )
+                    assessment = review_index.get("layout_risk_assessment")
+                    if not isinstance(assessment, dict):
+                        raise BackendExecutionError(
+                            "standard review index lacks layout risk assessment"
+                        )
+                    escalation_pages = tuple(
+                        assessment.get("escalation_page_indices", ())
+                    )
+                    result = _backend_result(
+                        extract_hybrid(
+                            source,
+                            self.config,
+                            full_page_indices=escalation_pages,
+                        )
+                    )
+                    page_indices = tuple(
+                        page.page_index
+                        for page in result.document.pages
+                        if page.page_index not in escalation_pages
+                    )
+                else:
+                    result = _backend_result(
+                        extract_text_only(source, self.config)
+                    )
+                    page_indices = tuple(
+                        page.page_index for page in result.document.pages
+                    )
                 preview_scale = float(review_index.get("preview_scale", 1.5))
                 previews = render_previews(
                     source,
                     page_indices,
                     scale=preview_scale,
                 )
+                pages_by_index = {
+                    page.page_index: page for page in result.document.pages
+                }
                 raster_analyses = {
-                    page.page_index: analyze_page_raster(preview, page).analysis
-                    for page, preview in zip(result.document.pages, previews)
+                    page_index: analyze_page_raster(
+                        preview,
+                        pages_by_index[page_index],
+                    ).analysis
+                    for page_index, preview in zip(page_indices, previews)
                 }
             else:
                 result = _backend_result(backend.extract(source, self.config))
