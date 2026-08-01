@@ -21,6 +21,12 @@ from .evidence import (
     validation_report_markdown,
     write_json,
 )
+from .layout_caption import CaptionBinding, bind_caption_regions
+from .layout_continuation import (
+    CrossPageParagraphBlock,
+    dominant_font_name as _dominant_font_name,
+    merge_paragraph_continuations as _merge_cross_page_paragraph_blocks,
+)
 from .layout_models import (
     FinalLayout,
     LayoutRegion,
@@ -75,211 +81,6 @@ class NativeMatrixEquation:
     bbox: BBox
     element_ids: tuple[str, ...]
     paragraph_indexes: tuple[int, ...]
-
-
-@dataclass(frozen=True)
-class CrossPageParagraphBlock:
-    page_index: int
-    region_id: str
-    trace_index: int
-    text_index: int
-    text: str
-    role: str
-    is_bold: bool
-    dominant_font: str | None
-    ends_with_pdf_soft_break: bool
-    element_ids: tuple[str, ...]
-    first_line_indented: bool = False
-    first_line_indent_state: str = "unknown"
-    first_line_indent_offset: float | None = None
-    caption_binding_key: tuple[int, str] | None = None
-
-
-def _dominant_font_name(elements: Sequence[Element]) -> str | None:
-    widths: Counter[str] = Counter()
-    for element in elements:
-        value = element.metadata.get("font_name")
-        if isinstance(value, str) and value:
-            widths[value.casefold()] += max(element.bbox.width, 0.0)
-    return max(widths, key=widths.get) if widths else None
-
-
-def _body_pair_has_continuation_text(
-    previous: CrossPageParagraphBlock,
-    current: CrossPageParagraphBlock,
-) -> bool:
-    first = current.text.lstrip().removeprefix("&emsp;")[:1]
-    return (
-        previous.role == "body"
-        and current.role == "body"
-        and not previous.is_bold
-        and not current.is_bold
-        and bool(first)
-        and first.islower()
-        and not previous.text.rstrip().endswith((".", "!", "?", ":", ";"))
-        and previous.dominant_font is not None
-        and previous.dominant_font == current.dominant_font
-    )
-
-
-def _cross_page_pair_is_continuation(
-    previous: CrossPageParagraphBlock,
-    current: CrossPageParagraphBlock,
-    page_markers: dict[int, int],
-) -> bool:
-    marker = page_markers.get(current.page_index)
-    return (
-        _body_pair_has_continuation_text(previous, current)
-        and current.page_index == previous.page_index + 1
-        and marker is not None
-        and previous.text_index + 2 == marker
-        and current.trace_index == marker + 2
-        and current.first_line_indent_state != "indented"
-    )
-
-
-def _same_page_pair_is_continuation(
-    previous: CrossPageParagraphBlock,
-    current: CrossPageParagraphBlock,
-) -> bool:
-    return (
-        _body_pair_has_continuation_text(previous, current)
-        and current.page_index == previous.page_index
-        and current.region_id != previous.region_id
-        and current.trace_index == previous.text_index + 2
-        and current.first_line_indent_state == "aligned"
-    )
-
-
-_CAPTION_PANEL_START = re.compile(
-    r"^(?:\(?[A-Za-z]\)?[.,:]|[a-z][\u2013-][a-z][.,:])(?:\s|$)"
-)
-
-
-def _caption_pair_is_continuation(
-    previous: CrossPageParagraphBlock,
-    current: CrossPageParagraphBlock,
-) -> bool:
-    current_text = current.text.lstrip().removeprefix("&emsp;")
-    previous_text = previous.text.rstrip().rstrip("*_`")
-    starts_new_caption = bool(
-        re.match(
-            r"^(?:fig(?:ure)?\.?|table)\s+S?\d+",
-            current_text,
-            re.IGNORECASE,
-        )
-    )
-    return (
-        previous.role == "caption"
-        and current.role == "caption"
-        and previous.page_index == current.page_index
-        and previous.region_id == current.region_id
-        and previous.caption_binding_key is not None
-        and previous.caption_binding_key == current.caption_binding_key
-        and current.trace_index == previous.text_index + 2
-        and bool(current_text)
-        and not starts_new_caption
-        and (
-            not previous_text.endswith((".", "!", "?", ":", ";"))
-            or bool(_CAPTION_PANEL_START.match(current_text))
-        )
-    )
-
-
-def _paragraph_pair_continuation_kind(
-    previous: CrossPageParagraphBlock,
-    current: CrossPageParagraphBlock,
-    page_markers: dict[int, int],
-) -> str | None:
-    if _caption_pair_is_continuation(previous, current):
-        return "caption_internal_boundary"
-    if _same_page_pair_is_continuation(previous, current):
-        return "same_page_region_boundary"
-    if _cross_page_pair_is_continuation(previous, current, page_markers):
-        return "cross_page_boundary"
-    return None
-
-
-def _merge_cross_page_paragraph_blocks(
-    lines: list[str],
-    blocks: Sequence[CrossPageParagraphBlock],
-    page_markers: dict[int, int],
-) -> list[dict[str, Any]]:
-    """Merge isolated caption fragments and high-confidence body continuations."""
-
-    ordered = sorted(blocks, key=lambda item: item.trace_index)
-    chains: list[list[CrossPageParagraphBlock]] = []
-    index = 0
-    while index < len(ordered) - 1:
-        if _paragraph_pair_continuation_kind(
-            ordered[index], ordered[index + 1], page_markers
-        ) is None:
-            index += 1
-            continue
-        chain = [ordered[index], ordered[index + 1]]
-        index += 1
-        while (
-            index < len(ordered) - 1
-            and _paragraph_pair_continuation_kind(
-                ordered[index], ordered[index + 1], page_markers
-            ) is not None
-        ):
-            chain.append(ordered[index + 1])
-            index += 1
-        chains.append(chain)
-        index += 1
-
-    events: list[dict[str, Any]] = []
-    for chain in reversed(chains):
-        merged = chain[0].text
-        boundary_records: list[dict[str, Any]] = []
-        for previous, current in zip(chain, chain[1:]):
-            method = _paragraph_pair_continuation_kind(
-                previous,
-                current,
-                page_markers,
-            )
-            assert method is not None
-            joiner = (
-                ""
-                if previous.ends_with_pdf_soft_break
-                or merged.endswith(("-", "‐", "‑"))
-                else " "
-            )
-            boundary_records.append(
-                {
-                    "code": (
-                        "joined_caption_fragment"
-                        if method == "caption_internal_boundary"
-                        else (
-                            "joined_same_page_body_continuation"
-                            if method == "same_page_region_boundary"
-                            else "joined_cross_page_paragraph"
-                        )
-                    ),
-                    "method": method,
-                    "from_page": previous.page_index + 1,
-                    "to_page": current.page_index + 1,
-                    "from_region_id": previous.region_id,
-                    "to_region_id": current.region_id,
-                    "joiner": "none" if not joiner else "space",
-                    "source_element_ids": list(
-                        previous.element_ids + current.element_ids
-                    ),
-                }
-            )
-            merged += joiner + current.text
-        traces = [lines[item.trace_index] for item in chain]
-        regions = ",".join(item.region_id for item in chain)
-        replacement = traces + [
-            f"<!-- paragraph-continuation: regions: {regions}; "
-            "method: native-geometry -->",
-            merged,
-            "",
-        ]
-        lines[chain[0].trace_index : chain[-1].text_index + 2] = replacement
-        events.extend(boundary_records)
-    return list(reversed(events))
 
 
 _MATRIX_TOP = frozenset({"⎡", "⎤"})
@@ -736,44 +537,6 @@ def _ordered_text_elements(
     )
 
 
-@dataclass(frozen=True)
-class CaptionBinding:
-    caption_page_index: int
-    caption_region_id: str
-    visual_page_index: int
-    visual_region_id: str
-    method: str
-    score: float
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "caption_page": self.caption_page_index + 1,
-            "caption_region_id": self.caption_region_id,
-            "visual_page": self.visual_page_index + 1,
-            "visual_region_id": self.visual_region_id,
-            "method": self.method,
-            "score": round(self.score, 6),
-        }
-
-
-def _horizontal_overlap_ratio(left: LayoutRegion, right: LayoutRegion) -> float:
-    overlap = max(
-        0.0,
-        min(left.bbox.right, right.bbox.right)
-        - max(left.bbox.x, right.bbox.x),
-    )
-    return overlap / min(left.bbox.width, right.bbox.width)
-
-
-def _caption_prefix_kind(text: str) -> str | None:
-    normalized = text.lstrip("*# ")
-    if re.match(r"^(?:fig(?:ure)?\.?)(?:\s|\d)", normalized, re.IGNORECASE):
-        return "figure"
-    if re.match(r"^table(?:\s|\d)", normalized, re.IGNORECASE):
-        return "table"
-    return None
-
-
 def _bind_caption_regions(
     document: PhysicalDocument,
     layouts: Sequence[FinalLayout],
@@ -782,130 +545,17 @@ def _bind_caption_regions(
     dict[tuple[int, str], CaptionBinding],
     dict[str, Any],
 ]:
-    visuals: list[tuple[int, LayoutRegion]] = []
-    captions: list[tuple[int, LayoutRegion, str]] = []
-    for page, layout in zip(document.pages, layouts, strict=True):
-        for region in layout.regions:
-            if region.content_class == "visual" and region.role in {
-                "figure",
-                "table",
-            }:
-                visuals.append((page.page_index, region))
-            elif region.content_class == "text" and region.role == "caption":
-                groups = _markdown_text_groups(
-                    _ordered_text_elements(page, region)
-                )
-                captions.append(
-                    (
-                        page.page_index,
-                        region,
-                        " ".join(text for _, text in groups if text),
-                    )
-                )
-
-    by_caption: dict[tuple[int, str], CaptionBinding] = {}
-    by_visual: dict[tuple[int, str], CaptionBinding] = {}
-    for caption_page, caption, text in captions:
-        prefix_kind = _caption_prefix_kind(text)
-        candidates: list[tuple[float, int, LayoutRegion, str]] = []
-        for visual_page, visual in visuals:
-            visual_key = (visual_page, visual.region_id)
-            if visual_key in by_visual:
-                continue
-            role_bonus = 8.0 if prefix_kind == visual.role else 0.0
-            if visual_page == caption_page:
-                overlap = _horizontal_overlap_ratio(visual, caption)
-                if overlap < 0.45:
-                    continue
-                below_gap = caption.bbox.y - visual.bbox.bottom
-                above_gap = visual.bbox.y - caption.bbox.bottom
-                gap = min(
-                    value for value in (below_gap, above_gap) if value >= -0.02
-                ) if below_gap >= -0.02 or above_gap >= -0.02 else 1.0
-                if gap > 0.12:
-                    continue
-                order_gap = abs((caption.order or 0) - (visual.order or 0))
-                if order_gap > 3:
-                    continue
-                score = (
-                    100.0
-                    + overlap * 20.0
-                    - max(gap, 0.0) * 120.0
-                    - order_gap * 2.0
-                    + role_bonus
-                )
-                candidates.append(
-                    (score, visual_page, visual, "same_page_geometry")
-                )
-            elif visual_page + 1 == caption_page:
-                if (caption.order or 999) > 2 or caption.bbox.y > 0.26:
-                    continue
-                if visual.bbox.bottom < 0.72 and (
-                    visual.bbox.width * visual.bbox.height < 0.42
-                ):
-                    continue
-                score = (
-                    72.0
-                    + min(visual.bbox.width * visual.bbox.height, 0.9) * 20.0
-                    - caption.bbox.y * 20.0
-                    + role_bonus
-                )
-                candidates.append(
-                    (score, visual_page, visual, "next_page_top_caption")
-                )
-        if not candidates:
-            continue
-        score, visual_page, visual, method = max(
-            candidates,
-            key=lambda item: (
-                item[0],
-                -item[1],
-                -(item[2].order or 0),
-                item[2].region_id,
-            ),
-        )
-        binding = CaptionBinding(
-            caption_page,
-            caption.region_id,
-            visual_page,
-            visual.region_id,
-            method,
-            score,
-        )
-        by_caption[(caption_page, caption.region_id)] = binding
-        by_visual[(visual_page, visual.region_id)] = binding
-
-    unbound_captions = [
-        {"page": page + 1, "region_id": region.region_id}
-        for page, region, _ in captions
-        if (page, region.region_id) not in by_caption
-    ]
-    unbound_visuals = [
-        {"page": page + 1, "region_id": region.region_id, "role": region.role}
-        for page, region in visuals
-        if (page, region.region_id) not in by_visual
-    ]
-    summary = {
-        "status": "pass" if not unbound_captions else "warning",
-        "binding_count": len(by_caption),
-        "caption_region_count": len(captions),
-        "visual_region_count": len(visuals),
-        "unbound_caption_count": len(unbound_captions),
-        "unbound_visual_count": len(unbound_visuals),
-        "unbound_visuals_are_informational": True,
-        "bindings": [
-            item.to_dict()
-            for item in sorted(
-                by_caption.values(),
-                key=lambda value: (
-                    value.caption_page_index,
-                    value.caption_region_id,
-                ),
+    return bind_caption_regions(
+        document,
+        layouts,
+        caption_text=lambda page, region: " ".join(
+            text
+            for _, text in _markdown_text_groups(
+                _ordered_text_elements(page, region)
             )
-        ],
-        "findings": (unbound_captions + unbound_visuals)[:50],
-    }
-    return by_caption, by_visual, summary
+            if text
+        ),
+    )
 
 
 def write_layout_outputs(

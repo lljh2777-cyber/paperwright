@@ -52,6 +52,8 @@ writer.write_outputs()                v
   目录，再原子提交。
 - `paper2md.layout_candidates`：提出 Content ROI，生成文字、原生图形和栅格
   候选及分隔关系；不直接决定最终语义布局。
+- `paper2md.layout_candidate_features`：只负责候选区块的几何、文字规律、字体、
+  图形覆盖和少量模式特征，避免候选分割与特征计算互相耦合。
 - `paper2md.raster_layout`：生成 ink/text/residual mask 和高召回视觉候选。
 - `paper2md.layout_models`：定义布局任务、复核动作、最终区块及其严格契约。
 - `paper2md.layout_review`：验证候选是否完整分配、动作是否可追溯、语义角色
@@ -59,6 +61,10 @@ writer.write_outputs()                v
 - `paper2md.layout_risk`：决定 `standard` 配置下哪些页面需要完整对象分析。
 - `paper2md.layout_writer`：将已验证布局吸附到 PDF 对象，恢复文字、渲染视觉
   区块并生成自包含证据包。
+- `paper2md.layout_caption`：在已验证区块之间执行确定性的 Figure/Table 与
+  caption 几何绑定；不参与 Markdown 写出和区域渲染。
+- `paper2md.layout_continuation`：集中管理同页正文、跨页正文和已绑定 caption
+  的保守续接条件及 provenance 事件。
 - `paper2md.quality` 与 `paper2md.evidence`：区分启发式 warning 和确定性结构
   检查，生成可定位的验证报告。
 - `paper2md.layout_dataset`：导出不含正文、页面图像和对象 ID 的数值训练数据。
