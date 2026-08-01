@@ -143,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
             "提案不可直接 layout-apply"
         ),
     )
+    prepare_layout.add_argument(
+        "--extraction-profile",
+        choices=("fast", "forensic"),
+        default="forensic",
+        help="fast uses TextPage plus raster evidence; forensic keeps the full object walk",
+    )
 
     apply_layout = commands.add_parser(
         "layout-apply",
@@ -182,6 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-source-pdf",
         action="store_true",
         help="将原 PDF 复制到 _paper2md/source.pdf；默认只记录路径和哈希",
+    )
+    apply_layout.add_argument(
+        "--extraction-profile",
+        choices=("fast", "forensic"),
+        default=None,
+        help="defaults to the profile recorded by layout-prepare",
     )
 
     export_dataset = commands.add_parser(
@@ -390,6 +402,7 @@ def _prepare_layout(args: argparse.Namespace) -> int:
         args.output_dir,
         preview_scale=args.preview_scale,
         content_roi_json=args.content_roi_json,
+        extraction_profile=args.extraction_profile,
     )
     print(
         json.dumps(
@@ -399,6 +412,7 @@ def _prepare_layout(args: argparse.Namespace) -> int:
                 "page_count": result.index["page_count"],
                 "source_sha256": result.index["source_sha256"],
                 "ocr_used": False,
+                "extraction_profile": args.extraction_profile,
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -417,6 +431,7 @@ def _apply_layout(args: argparse.Namespace) -> int:
         references_mode=args.references,
         evidence_level=args.evidence,
         include_source_pdf=args.include_source_pdf,
+        extraction_profile=args.extraction_profile,
     )
     print(
         json.dumps(

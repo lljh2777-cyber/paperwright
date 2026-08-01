@@ -50,7 +50,7 @@ def _write_fixture_reviews(review_root: Path) -> None:
             region_id = f"R{index:03d}"
             peripheral = bool(candidate.features.get("peripheral_hint"))
             visual = bool(
-                {"image", "vector"} & set(candidate.element_kinds)
+                {"image", "vector", "raster"} & set(candidate.element_kinds)
             )
             content_class = (
                 "exclude" if peripheral else "visual" if visual else "text"
@@ -618,6 +618,7 @@ class LayoutStageDTests(unittest.TestCase):
         root: Path,
         *,
         include_references: bool = False,
+        extraction_profile: str = "forensic",
     ) -> tuple[Path, Path]:
         source = root / "fixture.pdf"
         proposal = root / "roi-proposal"
@@ -634,6 +635,8 @@ class LayoutStageDTests(unittest.TestCase):
                     str(proposal),
                     "--workspace-root",
                     str(root),
+                    "--extraction-profile",
+                    extraction_profile,
                 ]
             )
         self.assertEqual(code, 0)
@@ -661,11 +664,46 @@ class LayoutStageDTests(unittest.TestCase):
                     str(roi_path),
                     "--workspace-root",
                     str(root),
+                    "--extraction-profile",
+                    extraction_profile,
                 ]
             )
         self.assertEqual(code, 0)
         _write_fixture_reviews(review)
         return source, review
+
+    def test_fast_layout_prepare_and_apply_use_recorded_profile(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, review = self._prepare(
+                root,
+                extraction_profile="fast",
+            )
+            output = root / "fast-output"
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                        "--evidence",
+                        "minimal",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            self.assertTrue((output / "article.md").is_file())
+            self.assertEqual(
+                json.loads(
+                    (review / "review-index.json").read_text(encoding="utf-8")
+                )["extraction_profile"],
+                "fast",
+            )
 
     def test_layout_apply_rejects_unconfirmed_content_roi(self):
         with tempfile.TemporaryDirectory() as temp:

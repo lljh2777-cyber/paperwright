@@ -241,6 +241,57 @@ class LayoutStageCTests(unittest.TestCase):
 
             self.assertEqual(content(outputs[0]), content(outputs[1]))
 
+    def test_fast_layout_prepare_exports_raster_v2_tasks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "fixture.pdf"
+            destination = root / "review-fast"
+            create_born_digital_fixture(source)
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(
+                    [
+                        "layout-prepare",
+                        str(source),
+                        str(destination),
+                        "--workspace-root",
+                        str(root),
+                        "--extraction-profile",
+                        "fast",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["extraction_profile"], "fast")
+            index = json.loads(
+                (destination / "review-index.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(index["extraction_profile"], "fast")
+            self.assertEqual(
+                index["physical_extraction_profile"],
+                "text-only-fast",
+            )
+            self.assertEqual(
+                index["layout_task_versions"],
+                ["paper2md-layout-task-v0.2"],
+            )
+            task = json.loads(
+                (
+                    destination
+                    / index["pages"][0]["directory"]
+                    / "layout-task.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                task["contract_version"],
+                "paper2md-layout-task-v0.2",
+            )
+            self.assertTrue(
+                any("raster" in item["element_kinds"] for item in task["candidates"])
+            )
+
     def test_layout_prepare_corrupt_input_leaves_no_output(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

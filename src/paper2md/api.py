@@ -51,6 +51,10 @@ class ExtractionBenchmarkResult:
     performance: dict[str, Any]
 
 
+def _backend_result(value: PhysicalDocument | BackendResult) -> BackendResult:
+    return value if isinstance(value, BackendResult) else BackendResult(value)
+
+
 class Paper2MD:
     def __init__(
         self,
@@ -282,6 +286,7 @@ class Paper2MD:
         *,
         preview_scale: float = 1.5,
         content_roi_json: str | Path | None = None,
+        extraction_profile: str = "forensic",
     ) -> LayoutPreparationResult:
         """Export page review bundles without changing conversion output."""
 
@@ -292,6 +297,8 @@ class Paper2MD:
         )
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
+        if extraction_profile not in {"fast", "forensic"}:
+            raise ValueError("extraction_profile must be fast or forensic")
         render_preview = getattr(backend, "render_page_preview", None)
         if not callable(render_preview):
             raise BackendExecutionError(
@@ -304,15 +311,44 @@ class Paper2MD:
             )
         )
         try:
-            extracted = backend.extract(source, self.config)
-            result = (
-                extracted
-                if isinstance(extracted, BackendResult)
-                else BackendResult(extracted)
-            )
+            raster_analyses: dict[int, Any] | None = None
+            preview_by_page: dict[int, Any] = {}
+            if extraction_profile == "fast":
+                extract_text_only = getattr(backend, "extract_text_only", None)
+                render_previews = getattr(backend, "render_page_previews", None)
+                if not callable(extract_text_only) or not callable(render_previews):
+                    raise BackendExecutionError(
+                        f"{backend.identity.name} backend does not support fast layout extraction"
+                    )
+                result = _backend_result(extract_text_only(source, self.config))
+                page_indices = tuple(
+                    page.page_index for page in result.document.pages
+                )
+                previews = render_previews(
+                    source,
+                    page_indices,
+                    scale=preview_scale,
+                )
+                preview_by_page = dict(zip(page_indices, previews))
+                raster_analyses = {
+                    page.page_index: analyze_page_raster(
+                        preview_by_page[page.page_index],
+                        page,
+                    ).analysis
+                    for page in result.document.pages
+                }
+            else:
+                result = _backend_result(backend.extract(source, self.config))
             if content_roi_json is None:
-                content_rois = propose_content_rois(result.document)
-                roi_source = "rule_proposed"
+                content_rois = propose_content_rois(
+                    result.document,
+                    raster_analyses=raster_analyses,
+                )
+                roi_source = (
+                    "raster_rule_proposed"
+                    if raster_analyses is not None
+                    else "rule_proposed"
+                )
                 roi_contract = content_roi_contract(
                     result.document,
                     content_rois,
@@ -332,19 +368,25 @@ class Paper2MD:
                 result.document,
                 content_rois=content_rois,
                 content_roi_source=roi_source,
+                raster_analyses=raster_analyses,
             )
             pages: list[dict[str, Any]] = []
             for task in tasks:
-                preview = render_preview(
-                    source,
-                    task.page.page_index,
-                    scale=preview_scale,
-                )
+                preview = preview_by_page.get(task.page.page_index)
+                if preview is None:
+                    preview = render_preview(
+                        source,
+                        task.page.page_index,
+                        scale=preview_scale,
+                    )
                 page_dir = f"page-{task.page.page_index + 1:04d}"
                 export_layout_task_bundle(
                     temporary / page_dir,
                     task,
                     preview,
+                    png_compress_level=(
+                        3 if extraction_profile == "fast" else 9
+                    ),
                 )
                 pages.append(
                     {
@@ -371,6 +413,17 @@ class Paper2MD:
                 "backend": result.document.backend,
                 "backend_version": result.document.backend_version,
                 "preview_scale": preview_scale,
+                "review_png_compress_level": (
+                    3 if extraction_profile == "fast" else 9
+                ),
+                "extraction_profile": extraction_profile,
+                "physical_extraction_profile": result.document.metadata.get(
+                    "extraction_profile",
+                    "unknown",
+                ),
+                "layout_task_versions": sorted(
+                    {task.contract_version for task in tasks}
+                ),
                 "page_count": len(tasks),
                 "content_roi": {
                     "path": "content-roi.json",
@@ -422,6 +475,7 @@ class Paper2MD:
         references_mode: str = "keep",
         evidence_level: str = "standard",
         include_source_pdf: bool = False,
+        extraction_profile: str | None = None,
     ) -> ConversionResult:
         """Apply reviewed page layouts to a new, atomic conversion output."""
 
@@ -434,6 +488,22 @@ class Paper2MD:
         if not review_root.is_dir():
             raise BackendExecutionError(
                 f"布局审查目录不存在或不是目录: {review_root}"
+            )
+        try:
+            review_index = json.loads(
+                (review_root / "review-index.json").read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise BackendExecutionError(
+                f"cannot read layout review index: {exc}"
+            ) from exc
+        recorded_profile = review_index.get("extraction_profile", "forensic")
+        if recorded_profile not in {"fast", "forensic"}:
+            raise BackendExecutionError("unsupported review extraction profile")
+        effective_profile = extraction_profile or recorded_profile
+        if effective_profile != recorded_profile:
+            raise BackendExecutionError(
+                "layout apply extraction profile does not match layout prepare"
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
@@ -448,12 +518,30 @@ class Paper2MD:
             )
         )
         try:
-            extracted = backend.extract(source, self.config)
-            result = (
-                extracted
-                if isinstance(extracted, BackendResult)
-                else BackendResult(extracted)
-            )
+            raster_analyses: dict[int, Any] | None = None
+            if effective_profile == "fast":
+                extract_text_only = getattr(backend, "extract_text_only", None)
+                render_previews = getattr(backend, "render_page_previews", None)
+                if not callable(extract_text_only) or not callable(render_previews):
+                    raise BackendExecutionError(
+                        f"{backend.identity.name} backend does not support fast layout extraction"
+                    )
+                result = _backend_result(extract_text_only(source, self.config))
+                page_indices = tuple(
+                    page.page_index for page in result.document.pages
+                )
+                preview_scale = float(review_index.get("preview_scale", 1.5))
+                previews = render_previews(
+                    source,
+                    page_indices,
+                    scale=preview_scale,
+                )
+                raster_analyses = {
+                    page.page_index: analyze_page_raster(preview, page).analysis
+                    for page, preview in zip(result.document.pages, previews)
+                }
+            else:
+                result = _backend_result(backend.extract(source, self.config))
             content_rois, roi_source = load_confirmed_content_rois(
                 review_root / "content-roi.json",
                 result.document,
@@ -462,6 +550,7 @@ class Paper2MD:
                 result.document,
                 content_rois=content_rois,
                 content_roi_source=roi_source,
+                raster_analyses=raster_analyses,
             )
             reviews: list[FinalLayout] = []
             for expected_task in regenerated:

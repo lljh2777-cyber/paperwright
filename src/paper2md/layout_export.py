@@ -118,12 +118,16 @@ def export_layout_task_bundle(
     output_dir: str | Path,
     task: LayoutTask,
     preview: Image.Image,
+    *,
+    png_compress_level: int = 9,
 ) -> Path:
     """Write task JSON, preview, and overlay into a new directory.
 
     Existing directories are rejected so review evidence is never overwritten.
     """
 
+    if not isinstance(png_compress_level, int) or not 0 <= png_compress_level <= 9:
+        raise ValueError("png_compress_level must be an integer in [0, 9]")
     destination = Path(output_dir).expanduser().resolve()
     if destination.exists():
         raise OutputConflictError(f"布局任务目录已存在，拒绝覆盖: {destination}")
@@ -138,19 +142,19 @@ def export_layout_task_bundle(
         destination / task.preview_filename,
         format="PNG",
         optimize=False,
-        compress_level=9,
+        compress_level=png_compress_level,
     )
     render_content_roi_overlay(preview, task).save(
         destination / "content-roi.png",
         format="PNG",
         optimize=False,
-        compress_level=9,
+        compress_level=png_compress_level,
     )
     render_layout_overlay(preview, task).save(
         destination / task.overlay_filename,
         format="PNG",
         optimize=False,
-        compress_level=9,
+        compress_level=png_compress_level,
     )
     write_layout_review_instructions(
         destination / "review-instructions.md",

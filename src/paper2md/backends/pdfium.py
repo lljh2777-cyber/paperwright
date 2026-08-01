@@ -595,7 +595,7 @@ class PDFiumBackend:
         source: Path,
         config: Paper2MDConfig,
     ) -> BackendResult:
-        """Benchmarkable fast path that never calls ``page.get_objects()``."""
+        """Fast text path that never calls ``page.get_objects()``."""
 
         return self._extract(source, config, text_only=True)
 
@@ -687,7 +687,7 @@ class PDFiumBackend:
                 ),
                 "text_line_reconstruction": "native_object_geometry_v2",
                 "extraction_profile": (
-                    "text-only-benchmark" if text_only else "full"
+                    "text-only-fast" if text_only else "full"
                 ),
                 "native_object_inventory": (
                     "text_only; image_and_vector_objects_not_enumerated"

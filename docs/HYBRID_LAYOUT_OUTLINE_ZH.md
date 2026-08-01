@@ -293,6 +293,19 @@ overlay.webp          可选的候选框叠加图
 paper2md layout-prepare input.pdf roi-proposal-dir
 ```
 
+首次处理可显式选择提取模式：
+
+```powershell
+paper2md layout-prepare input.pdf roi-proposal-dir `
+  --extraction-profile fast
+```
+
+`fast` 只提取 TextPage 文字和坐标，每页批量渲染一次低分辨率预览，再由像素占用图
+生成 `paper2md-layout-task-v0.2` 栅格候选；不调用 `page.get_objects()`，也不枚举或
+解码全部矢量对象。复核包 PNG 使用确定性的中等压缩，像素和坐标不变。省略参数时
+仍使用兼容既有行为的 `forensic` 完整对象遍历。`layout-apply` 默认读取
+`review-index.json` 中记录的模式，拒绝用另一种模式重新生成不一致的任务。
+
 先检查每页 `content-roi.png`。确认红框没有裁掉正文、脚注、Figure、Table 或
 caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为
 `confirmed` 并填写 `reviewer`。
