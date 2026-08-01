@@ -1,10 +1,11 @@
 # Paper2MD
 
 Paper2MD 是一个本地、可追溯、非生成式 AI 的科研 PDF 重建工具。当前版本为
-`0.7.0a0` 源码 Alpha。
+`0.8.0a0` 源码 Alpha。
 
 ```text
 PDF → PhysicalDocument → article.md + images/ + manifest.json
+                         ↘ reviewed layout → public anchors + reader.json
 ```
 
 ## 当前能力
@@ -18,6 +19,7 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 - Content ROI、布局候选、结构化复核和最终布局校验；
 - `fast`、`standard`、`forensic` 三种布局提取配置；
 - 自包含证据包、输出质量报告和无正文训练数据导出；
+- 面向阅读器的稳定 Markdown 锚点、Figure/图注关系和 `reader.json`；
 - 完全本地运行，不调用 LLM、外部 API 或云 OCR。
 
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
@@ -134,6 +136,14 @@ paper2md layout-apply input.pdf layout-review output-dir --evidence standard
 人工或视觉 AI 只填写结构化 `final-layout.json`，不转录论文正文。Paper2MD 随后
 重新校验输入、缓存、栅格证据、候选完整性和最终区块关系，再确定性生成结果。
 
+混合布局输出的正文包含 `p2md:block` / `p2md:slot` 隐藏锚点，
+`_paper2md/reader.json` 通过稳定 ID 连接正文块、视觉槽位、图片和图注。阅读器
+应以该文件为主索引，不依赖 Markdown 行号、标题 slug 或图注文本匹配。可独立验包：
+
+```bash
+paper2md validate-reader output-dir/_paper2md/reader.json
+```
+
 `fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 仅把高风险页面升级为
 完整对象分析；`forensic` 对全文执行完整对象遍历。
 
@@ -152,6 +162,7 @@ python -m paper2md convert input.pdf output-dir
 
 混合布局流程的最终结果采用自包含文档包：顶层只放 `article.md` 和
 `images/`，ROI、布局覆盖图、追溯数据与验证报告统一放入 `_paper2md/`。
+`_paper2md/reader.json` 属于所有证据级别都会保留的功能索引，不是调试证据。
 `layout-apply` 默认使用 `--evidence standard`；也可选择 `minimal` 或
 `full`，并通过 `--include-source-pdf` 显式复制原 PDF。完整结构与命令见
 [混合布局设计](docs/HYBRID_LAYOUT_OUTLINE_ZH.md)。
@@ -167,6 +178,7 @@ python -m paper2md convert input.pdf output-dir
 - [支持矩阵](docs/SUPPORT_MATRIX.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
+- [manifest v0.8 与 Reader 迁移说明](docs/MANIFEST_MIGRATION_V0.8.md)
 
 ## AI Agent skills
 
@@ -193,10 +205,11 @@ python -m paper2md convert input.pdf output-dir
 
 ## 版本与数据契约
 
-包版本与数据契约独立演进。当前包版本为 `0.7.0a0`，PhysicalDocument 使用
-v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.7。直接转换的
-兼容模式仍可能输出 manifest v0.4 或 v0.5；读取旧结果时继续接受混合布局
-manifest v0.6。升级包版本不代表已有数据契约会被隐式改写。
+包版本与数据契约独立演进。当前包版本为 `0.8.0a0`，PhysicalDocument 使用
+v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.8，Reader
+使用 v0.1。直接转换的兼容模式仍可能输出 manifest v0.4 或 v0.5；读取旧结果时
+继续接受混合布局 manifest v0.6/v0.7。升级包版本不代表已有数据契约会被隐式
+改写。
 
 ## 许可证与分发
 

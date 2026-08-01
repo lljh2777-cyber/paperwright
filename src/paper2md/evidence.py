@@ -6,9 +6,10 @@ import hashlib
 import json
 from collections import Counter
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Sequence
+
+from . import __version__
 
 
 EVIDENCE_LEVELS = {"minimal", "standard", "full"}
@@ -40,10 +41,7 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def package_version() -> str:
-    try:
-        return version("paper2md")
-    except PackageNotFoundError:
-        return "0.7.0a0"
+    return __version__
 
 
 def build_run_record(

@@ -4,7 +4,9 @@ from pathlib import Path
 
 from paper2md.exceptions import ContractValidationError
 from paper2md.manifest import (
+    HYBRID_LAYOUT_MANIFEST_VERSION,
     OutputFile,
+    PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
     build_manifest,
     canonical_manifest_json,
     validate_manifest,
@@ -26,7 +28,11 @@ class ManifestTests(unittest.TestCase):
 
     def test_schema_files_are_draft_2020_12_json(self):
         root = Path(__file__).parents[1] / "src/paper2md/schemas"
-        for name in ("manifest.schema.json", "physical_document.schema.json"):
+        for name in (
+            "manifest.schema.json",
+            "physical_document.schema.json",
+            "reader.schema.json",
+        ):
             value = json.loads((root / name).read_text(encoding="utf-8"))
             self.assertEqual(value["$schema"], "https://json-schema.org/draft/2020-12/schema")
             self.assertFalse(value["additionalProperties"])
@@ -58,6 +64,71 @@ class ManifestTests(unittest.TestCase):
         first = canonical_manifest_json(self.manifest())
         second = canonical_manifest_json(self.manifest())
         self.assertEqual(first.encode(), second.encode())
+
+    def hybrid_manifest(self, *, version=HYBRID_LAYOUT_MANIFEST_VERSION):
+        article_hash = "a" * 64
+        reader_hash = "b" * 64
+        return build_manifest(
+            source_sha256="c" * 64,
+            backend="fixture",
+            backend_version="1",
+            contract_version="paper2md-physical-document-v0.2",
+            page_count=1,
+            status="success",
+            outputs=[
+                OutputFile("article.md", "markdown", 12, article_hash),
+                OutputFile(
+                    "_paper2md/reader.json",
+                    "reader_index",
+                    24,
+                    reader_hash,
+                ),
+            ],
+            manifest_version=version,
+            layout_review={
+                "mode": "hybrid-reviewed",
+                "prompt_version": "fixture-v1",
+                "candidate_generator_version": "fixture-v1",
+                "feature_schema_version": "fixture-v1",
+                "evidence_level": "minimal",
+                "provenance_path": None,
+                "provenance_sha256": None,
+                "ocr_used": False,
+                "pages": [],
+            },
+            reader=(
+                {
+                    "contract_version": "paper2md-reader-v0.1",
+                    "path": "_paper2md/reader.json",
+                    "sha256": reader_hash,
+                    "article_path": "article.md",
+                    "article_sha256": article_hash,
+                    "anchor_contract": "paper2md-markdown-anchor-v0.1",
+                }
+                if version == HYBRID_LAYOUT_MANIFEST_VERSION
+                else None
+            ),
+        )
+
+    def test_hybrid_v08_requires_reader_matching_outputs(self):
+        value = self.hybrid_manifest()
+        validate_manifest(value)
+        missing = dict(value)
+        missing.pop("reader")
+        with self.assertRaisesRegex(ContractValidationError, "缺少 reader"):
+            validate_manifest(missing)
+        value["reader"]["article_sha256"] = "d" * 64
+        with self.assertRaisesRegex(ContractValidationError, "outputs"):
+            validate_manifest(value)
+
+    def test_hybrid_v07_remains_accepted_without_reader(self):
+        value = self.hybrid_manifest(
+            version=PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION
+        )
+        value["outputs"] = [
+            item for item in value["outputs"] if item["role"] != "reader_index"
+        ]
+        validate_manifest(value)
 
 
 if __name__ == "__main__":

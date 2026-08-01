@@ -93,8 +93,9 @@ class PublicOnboardingTests(unittest.TestCase):
         for document in (support, release):
             self.assertIn("Apache License 2.0", document)
             self.assertNotIn("项目许可证仍为 `NOASSERTION`", document)
-        self.assertIn("hybrid manifest | v0.7", architecture)
-        self.assertIn("继续接受旧 v0.6", architecture)
+        self.assertIn("hybrid manifest | v0.8", architecture)
+        self.assertIn("继续接受旧 v0.6/v0.7", architecture)
+        self.assertIn("reader index | v0.1", architecture)
 
 
 if __name__ == "__main__":

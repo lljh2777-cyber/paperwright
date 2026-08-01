@@ -61,8 +61,12 @@ Repeat for every page. Fix schema, completeness, action, order, and semantic-rol
 
 ```bash
 paper2md layout-apply input.pdf layout-review output-dir --evidence standard
+paper2md validate-reader output-dir/_paper2md/reader.json
 ```
 
 Use `--evidence minimal` only for compact delivery, `standard` for normal verification, and `full` for audit/training evidence. Use `--include-source-pdf` only when the user wants the source copied into the bundle. Choose `--references keep`, `omit`, or `separate` explicitly when the default `keep` is unsuitable.
 
-Inspect the final Markdown, linked images, Figure/Table crops, reading order, captions, and validation report. A schema-valid layout is necessary but does not prove semantic correctness.
+Inspect the final Markdown, linked images, Figure/Table crops, reading order, captions,
+and validation report. `reader.json` and its public Markdown anchors are retained at
+every evidence level; do not remove them from a package intended for reader software.
+A schema-valid layout is necessary but does not prove semantic correctness.

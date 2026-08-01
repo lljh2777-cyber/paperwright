@@ -22,6 +22,7 @@ from .layout_models import FinalLayout, LayoutTask
 from .layout_dataset import export_layout_dataset
 from .layout_review import validate_layout_review
 from .models import PhysicalDocument
+from .reader import validate_reader_index
 
 
 def _add_runtime_options(
@@ -94,6 +95,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--task",
         type=Path,
         help="同时验证最终布局是否与候选任务匹配",
+    )
+
+    validate_reader = commands.add_parser(
+        "validate-reader",
+        help="验证 reader.json、article.md 公共锚点和图片资产",
+    )
+    validate_reader.add_argument("reader_json", type=Path)
+    validate_reader.add_argument(
+        "--package-root",
+        type=Path,
+        help="默认从 _paper2md/reader.json 推断文档包根目录",
     )
 
     benchmark_extract = commands.add_parser(
@@ -299,6 +311,47 @@ def _validate_final_layout(path: Path, task_path: Path | None) -> int:
                 "action_count": len(layout.actions),
                 "validated_against_task": task_path is not None,
                 "deterministic_sha256": layout.deterministic_sha256(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _validate_reader(path: Path, package_root: Path | None) -> int:
+    source = path.expanduser().resolve()
+    value = json.loads(source.read_text(encoding="utf-8"))
+    root = (
+        package_root.expanduser().resolve()
+        if package_root is not None
+        else source.parent.parent
+        if source.parent.name == "_paper2md"
+        else source.parent
+    )
+    try:
+        source.relative_to(root)
+    except ValueError as exc:
+        raise ConfigurationError("reader.json 必须位于 package root 内") from exc
+    validate_reader_index(value)
+    article_value = value["article"]
+    article_path = (root / article_value["path"]).resolve()
+    try:
+        article_path.relative_to(root)
+    except ValueError as exc:
+        raise ConfigurationError("reader article 路径越界") from exc
+    article_text = article_path.read_text(encoding="utf-8")
+    validate_reader_index(value, article_text=article_text, root=root)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": value["contract_version"],
+                "source_sha256": value["source_sha256"],
+                "article_sha256": value["article"]["sha256"],
+                "block_count": len(value["blocks"]),
+                "asset_count": len(value["assets"]),
+                "relation_count": len(value["relations"]),
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -540,6 +593,8 @@ def main(argv: list[str] | None = None) -> int:
             return _validate_layout_task(args.task_json)
         if args.command == "validate-final-layout":
             return _validate_final_layout(args.layout_json, args.task)
+        if args.command == "validate-reader":
+            return _validate_reader(args.reader_json, args.package_root)
         if args.command == "benchmark-extract":
             return _benchmark_extract(args)
         if args.command == "layout-prepare":

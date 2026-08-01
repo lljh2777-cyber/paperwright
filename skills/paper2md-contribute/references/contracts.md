@@ -18,6 +18,8 @@ Read `docs/ARCHITECTURE.md`, the relevant model, and the corresponding schema be
 - physical document model: `models.py` and `schemas/physical_document.schema.json`
 - layout task/final layout: `layout_models.py` and their schemas
 - manifest writers/readers: `manifest.py`, `writer.py`, and `layout_writer.py`
+- reader interoperability: `reader.py`, `reader_contract.py`, and
+  `schemas/reader.schema.json`
 - compatibility statements: `docs/ARCHITECTURE.md`, `docs/SUPPORT_MATRIX.md`, and migration documents
 
 Never copy version values from this skill into code. Read them from the checkout being modified.

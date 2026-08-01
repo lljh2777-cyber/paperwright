@@ -27,7 +27,10 @@ Read [references/direct-and-batch.md](references/direct-and-batch.md) for direct
 
 1. Check the command exit status before inspecting artifacts.
 2. For direct output, confirm `article.md`, `images/`, `manifest.json`, and `physical_document.json` as applicable.
-3. For hybrid output, inspect `article.md`, every Figure/Table image, and `_paper2md/05-validation/validation-report.md` when retained.
+3. For hybrid output, inspect `article.md`, every Figure/Table image,
+   `_paper2md/reader.json`, and `_paper2md/05-validation/validation-report.md`
+   when retained. Run `paper2md validate-reader <reader-json-path>` before
+   handing the package off to a reader.
 4. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
 5. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
 

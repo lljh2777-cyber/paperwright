@@ -58,6 +58,11 @@ from .references import (
     removable_back_matter_keys,
     validate_reference_mode,
 )
+from .reader import (
+    canonical_reader_json,
+    compile_reviewed_article,
+    validate_reader_index,
+)
 from .region_render import RegionRenderRequest
 from .text_reconstruction import TEXT_RECONSTRUCTION_VERSION
 from .writer import (
@@ -1176,15 +1181,28 @@ def write_layout_outputs(
         page_marker_indexes,
     )
     reconstruction_events.extend(continuation_events)
-    lines = _clean_user_markdown(lines)
+    reader_compilation = compile_reviewed_article(
+        lines,
+        document=document,
+        title_element_ids=tuple(sorted(title_element_ids)),
+        provenance_pages=provenance_pages,
+        image_records=image_records,
+    )
+    lines = list(reader_compilation.markdown_lines)
     reference_lines = _clean_user_markdown(reference_lines)
     article_path = root / "article.md"
-    article_path.write_text(
-        "\n".join(lines).rstrip() + "\n",
+    article_text = reader_compilation.markdown_text()
+    article_path.write_text(article_text, encoding="utf-8", newline="\n")
+    reader_value = reader_compilation.reader_index(
+        source_sha256=document.source_sha256
+    )
+    reader_path = evidence_dir / "reader.json"
+    reader_path.write_text(
+        canonical_reader_json(reader_value),
         encoding="utf-8",
         newline="\n",
     )
-    article_text = article_path.read_text(encoding="utf-8")
+    validate_reader_index(reader_value, article_text=article_text, root=root)
     markdown_quality = analyze_markdown_text(quality_paragraphs)
     figure_label_quality = markdown_quality.pop("figure_label_leakage")
     element_quality = analyze_layout_elements(
@@ -1220,6 +1238,14 @@ def write_layout_outputs(
             },
             "findings": reconstruction_warnings[:100],
         },
+        "reader_index": {
+            "status": "pass",
+            "contract_version": reader_value["contract_version"],
+            "block_count": len(reader_value["blocks"]),
+            "asset_count": len(reader_value["assets"]),
+            "relation_count": len(reader_value["relations"]),
+            "article_anchor_count": len(reader_value["blocks"]),
+        },
     }
     quality_warning_codes = {
         "markdown_text": "quality_markdown_text_suspicions",
@@ -1233,6 +1259,7 @@ def write_layout_outputs(
         "markdown_exclusions": "quality_markdown_exclusions_invalid",
         "native_object_diagnostics": "quality_unplaced_native_objects",
         "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
+        "reader_index": "reader_index_invalid",
     }
     for name, result in quality_checks.items():
         if result["status"] != "pass":
@@ -1300,7 +1327,7 @@ def write_layout_outputs(
             }
         )
     provenance = {
-        "contract_version": "paper2md-layout-provenance-v0.4",
+        "contract_version": "paper2md-layout-provenance-v0.5",
         "source_sha256": document.source_sha256,
         "candidate_generator_version": tasks[0].candidate_generator_version,
         "feature_schema_version": tasks[0].feature_schema_version,
@@ -1423,7 +1450,7 @@ def write_layout_outputs(
         )
         evidence_paths.extend((validation_json, validation_md))
 
-    output_paths = [article_path, *visual_paths]
+    output_paths = [article_path, reader_path, *visual_paths]
     if references_path is not None:
         output_paths.append(references_path)
     if physical_path is not None:
@@ -1462,6 +1489,8 @@ def write_layout_outputs(
     def output_role(path: Path) -> str:
         if path == article_path:
             return "markdown"
+        if path == reader_path:
+            return "reader_index"
         if path == references_path:
             return "references_markdown"
         if path == physical_path:
@@ -1564,6 +1593,14 @@ def write_layout_outputs(
             "evidence_level": evidence_level,
             "ocr_used": False,
             "pages": layout_summary_pages,
+        },
+        reader={
+            "contract_version": reader_value["contract_version"],
+            "path": "_paper2md/reader.json",
+            "sha256": sha256_file(reader_path),
+            "article_path": reader_value["article"]["path"],
+            "article_sha256": reader_value["article"]["sha256"],
+            "anchor_contract": reader_value["article"]["anchor_contract"],
         },
     )
     manifest_path = evidence_dir / "manifest.json"

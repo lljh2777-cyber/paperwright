@@ -377,6 +377,7 @@ output-dir/
     ├── run.json
     ├── source.json
     ├── manifest.json
+    ├── reader.json
     ├── 02-roi/
     │   └── content-roi.json
     ├── 03-layout/
@@ -389,8 +390,9 @@ output-dir/
         └── validation-report.md
 ```
 
-`--evidence minimal` 只保留 `article.md`、`images/` 和
-`_paper2md/manifest.json`。`--evidence full` 还会增加
+`--evidence minimal` 只保留 `article.md`、`images/`、
+`_paper2md/manifest.json` 和 `_paper2md/reader.json`。Reader 是阅读功能索引，
+不是审计证据，因此不会随证据级别裁剪。`--evidence full` 还会增加
 `01-physical/physical-document.json`、每页 `page.png`、Content ROI
 预览和全部 `layout-task.json`，适合审计与训练数据积累。
 
@@ -405,6 +407,7 @@ SHA-256。显式使用 `--include-source-pdf` 时，才复制为
 - H1 标题是否完整且唯一；
 - Markdown 图片链接是否有效，是否存在孤立图片；
 - manifest 预期文件、实际文件和哈希清单是否一致；
+- Reader 索引、公共锚点、Figure/图注关系和图片哈希是否一致；
 - 候选正文文字对象是否未分配给任何有效区块；
 - 同一 PDF 对象是否被多个最终区块重复使用；
 - 原生文字重建是否遇到可疑 Unicode，及采用了哪些确定性修复。
@@ -474,10 +477,19 @@ manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 
 ### 15.2.1 用户阅读层
 
 `article.md` 默认只保留标题、正文、图片和图注，不再包含页码、region
-ID、caption 绑定或跨页拼接等内部 HTML 注释。完整段落映射、图注绑定与
+ID、caption 绑定或跨页拼接等私有 trace 注释；每个可定位块前保留
+`p2md:block` 或 `p2md:slot` 公共隐藏锚点。完整段落映射、图注绑定与
 跨页修复仍保存在 `_paper2md/04-provenance/layout-provenance.json` 和
 验证报告中。图片替代文本优先使用已绑定图注的首句，Figure/Table 标签
 在 Markdown 中单独加粗。
+
+`_paper2md/reader.json` 是 `paper2md-reader-v0.1` 图索引。block ID 从源 PDF
+哈希、页码、规范化 bbox、region/paragraph 身份和元素集合摘要确定性生成；
+visual slot、asset 与 relation 使用独立命名空间。它不复制图注全文，而是通过
+`caption_block_id` 和 `caption-of` 关系指向同一正文块，避免双份内容漂移。
+Reader 应先验证 article/asset 哈希和锚点集合，再建立渲染映射；人工编辑正文后，
+只能把可见文本 SHA-256/SimHash 当作显式重定位线索，不能静默覆盖稳定 ID。
+v0.1 明确声明正文 `Fig. N` 引用识别不可用，消费端必须降级而不是猜测。
 
 正文段落边界优先使用原生行坐标恢复：当相邻文字行保持正常行距和相同
 主字体、上一行以句末标点结束，且下一行向右缩进达到约半个行高时，将其
@@ -556,7 +568,7 @@ paper2md layout-export-dataset dataset-dir `
 | A | 完成 | 布局任务、最终布局模型、schema、叠加图 |
 | B | 完成 | 无 OCR 空白带、双栏、外围内容和特征生成 |
 | C | 完成 | AI 复核说明、严格动作和完整性校验 |
-| D | 完成 | 原生文字重建、视觉区块截图、当前 manifest v0.7（兼容读取 v0.6） |
+| D | 完成 | 原生文字重建、视觉区块截图、Reader v0.1、当前 manifest v0.8（兼容读取 v0.6/v0.7） |
 | E | 完成 | 两篇真实论文共 29 页验证，双轮文件哈希一致 |
 | F | 部分完成 | 数据导出完成；轻量分类器等待足量真值 |
 

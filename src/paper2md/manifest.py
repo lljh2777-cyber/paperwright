@@ -13,7 +13,8 @@ from .exceptions import ContractValidationError
 MANIFEST_VERSION = "paper2md-manifest-v0.4"
 AUTO_REGION_MANIFEST_VERSION = "paper2md-manifest-v0.5"
 LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
-HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.7"
+PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.7"
+HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.8"
 
 
 def sha256_file(path: Path) -> str:
@@ -59,6 +60,7 @@ def build_manifest(
     manifest_version: str = MANIFEST_VERSION,
     region_render_policy: dict[str, Any] | None = None,
     layout_review: dict[str, Any] | None = None,
+    reader: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -86,6 +88,8 @@ def build_manifest(
         manifest["region_render_policy"] = region_render_policy
     if layout_review is not None:
         manifest["layout_review"] = layout_review
+    if reader is not None:
+        manifest["reader"] = reader
     validate_manifest(manifest)
     return manifest
 
@@ -110,6 +114,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "physical_document",
         "region_render_policy",
         "layout_review",
+        "reader",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -117,17 +122,24 @@ def validate_manifest(value: dict[str, Any]) -> None:
         MANIFEST_VERSION,
         AUTO_REGION_MANIFEST_VERSION,
         LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION,
+        PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
         HYBRID_LAYOUT_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
     if value["manifest_version"] == MANIFEST_VERSION:
-        if "region_render_policy" in value or "layout_review" in value:
+        if (
+            "region_render_policy" in value
+            or "layout_review" in value
+            or "reader" in value
+        ):
             raise ContractValidationError(
                 "manifest v0.4 不允许扩展处理策略"
             )
     elif value["manifest_version"] == AUTO_REGION_MANIFEST_VERSION:
-        if "layout_review" in value:
-            raise ContractValidationError("manifest v0.5 不允许 layout_review")
+        if "layout_review" in value or "reader" in value:
+            raise ContractValidationError(
+                "manifest v0.5 不允许 layout_review/reader"
+            )
         policy = value.get("region_render_policy")
         if not isinstance(policy, dict) or set(policy) != {
             "mode",
@@ -154,7 +166,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
     else:
         if "region_render_policy" in value:
             raise ContractValidationError(
-                "manifest v0.6 不允许 region_render_policy"
+                "manifest hybrid 不允许 region_render_policy"
             )
         review = value.get("layout_review")
         required_review = {
@@ -167,13 +179,19 @@ def validate_manifest(value: dict[str, Any]) -> None:
             "ocr_used",
             "pages",
         }
-        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+        if value["manifest_version"] in {
+            PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+        }:
             required_review.add("evidence_level")
         if not isinstance(review, dict) or set(review) != required_review:
             raise ContractValidationError("manifest hybrid 缺少 layout_review")
         if review["mode"] != "hybrid-reviewed" or review["ocr_used"] is not False:
             raise ContractValidationError("manifest layout_review 模式非法")
-        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+        if value["manifest_version"] in {
+            PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+        }:
             if review["evidence_level"] not in {"minimal", "standard", "full"}:
                 raise ContractValidationError("manifest evidence_level 非法")
             if review["evidence_level"] == "minimal":
@@ -232,6 +250,39 @@ def validate_manifest(value: dict[str, Any]) -> None:
                     "manifest layout_review page 内容非法"
                 )
             page_indices.add(page["page_index"])
+        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+            reader = value.get("reader")
+            if not isinstance(reader, dict) or set(reader) != {
+                "contract_version",
+                "path",
+                "sha256",
+                "article_path",
+                "article_sha256",
+                "anchor_contract",
+            }:
+                raise ContractValidationError("manifest v0.8 缺少 reader")
+            if (
+                reader["contract_version"] != "paper2md-reader-v0.1"
+                or reader["anchor_contract"]
+                != "paper2md-markdown-anchor-v0.1"
+            ):
+                raise ContractValidationError("manifest reader 契约非法")
+            if (
+                reader["path"] != "_paper2md/reader.json"
+                or reader["article_path"] != "article.md"
+            ):
+                raise ContractValidationError("manifest reader 路径非法")
+            if (
+                not isinstance(reader["sha256"], str)
+                or not isinstance(reader["article_sha256"], str)
+                or len(reader["sha256"]) != 64
+                or len(reader["article_sha256"]) != 64
+            ):
+                raise ContractValidationError("manifest reader 哈希非法")
+        elif "reader" in value:
+            raise ContractValidationError(
+                "旧版 manifest 不允许 reader 顶层字段"
+            )
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
         raise ContractValidationError("manifest source_sha256 非法")
@@ -254,6 +305,22 @@ def validate_manifest(value: dict[str, Any]) -> None:
         paths.add(output["path"])
         if output["size_bytes"] < 0 or len(output["sha256"]) != 64:
             raise ContractValidationError("manifest output 大小或哈希非法")
+    if "reader" in value:
+        by_path = {item["path"]: item for item in value["outputs"]}
+        reader = value["reader"]
+        reader_output = by_path.get(reader["path"])
+        article_output = by_path.get(reader["article_path"])
+        if (
+            reader_output is None
+            or reader_output["role"] != "reader_index"
+            or reader_output["sha256"] != reader["sha256"]
+            or article_output is None
+            or article_output["role"] != "markdown"
+            or article_output["sha256"] != reader["article_sha256"]
+        ):
+            raise ContractValidationError(
+                "manifest reader 与 outputs 清单不一致"
+            )
     for field_name in (
         "elements",
         "images",

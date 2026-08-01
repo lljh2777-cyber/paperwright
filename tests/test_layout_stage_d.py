@@ -33,6 +33,7 @@ from paper2md.manifest import (
     validate_manifest,
 )
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paper2md.reader import READER_CONTRACT_VERSION, validate_reader_index
 from paper2md.text_reconstruction import ReconstructedText
 
 from pdf_fixture_factory import create_born_digital_fixture
@@ -973,6 +974,8 @@ class LayoutStageDTests(unittest.TestCase):
                 manifest["layout_review"]["provenance_sha256"],
             )
             article = (output / "article.md").read_text(encoding="utf-8")
+            self.assertIn("<!-- p2md:block", article)
+            self.assertIn("<!-- p2md:slot", article)
             self.assertNotIn("<!-- page:", article)
             self.assertNotIn("<!-- layout-region:", article)
             self.assertNotIn("<!-- caption-for:", article)
@@ -981,7 +984,7 @@ class LayoutStageDTests(unittest.TestCase):
             provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
             self.assertEqual(
                 provenance_value["contract_version"],
-                "paper2md-layout-provenance-v0.4",
+                "paper2md-layout-provenance-v0.5",
             )
             self.assertIn("body_continuation_repairs", provenance_value)
             self.assertIn("caption_continuation_repairs", provenance_value)
@@ -992,6 +995,27 @@ class LayoutStageDTests(unittest.TestCase):
                     for page in provenance_value["pages"]
                     for region in page["regions"]
                 )
+            )
+            self.assertTrue(
+                any(
+                    paragraph.get("article_block_id")
+                    for page in provenance_value["pages"]
+                    for region in page["regions"]
+                    for paragraph in region.get("paragraphs", ())
+                )
+            )
+            reader_path = output / manifest["reader"]["path"]
+            reader = json.loads(reader_path.read_text(encoding="utf-8"))
+            validate_reader_index(reader, article_text=article, root=output)
+            self.assertEqual(
+                reader["contract_version"], READER_CONTRACT_VERSION
+            )
+            self.assertEqual(
+                sha256_file(reader_path), manifest["reader"]["sha256"]
+            )
+            self.assertEqual(
+                reader["article"]["sha256"],
+                manifest["reader"]["article_sha256"],
             )
             self.assertFalse(
                 (
@@ -1036,6 +1060,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "manifest_inventory",
                     "native_object_diagnostics",
                     "text_reconstruction",
+                    "reader_index",
                 },
             )
             self.assertEqual(
@@ -1109,7 +1134,10 @@ class LayoutStageDTests(unittest.TestCase):
                     for item in (minimal / "_paper2md").rglob("*")
                     if item.is_file()
                 },
-                {"_paper2md/manifest.json"},
+                {
+                    "_paper2md/manifest.json",
+                    "_paper2md/reader.json",
+                },
             )
             minimal_manifest = json.loads(
                 (minimal / "_paper2md" / "manifest.json").read_text(
@@ -1122,6 +1150,11 @@ class LayoutStageDTests(unittest.TestCase):
             )
             self.assertIsNone(
                 minimal_manifest["layout_review"]["provenance_path"]
+            )
+            self.assertTrue((minimal / "_paper2md" / "reader.json").is_file())
+            self.assertEqual(
+                minimal_manifest["reader"]["contract_version"],
+                READER_CONTRACT_VERSION,
             )
 
             full = root / "full"

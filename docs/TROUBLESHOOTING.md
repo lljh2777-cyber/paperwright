@@ -81,12 +81,20 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 
 - region render `off`：manifest v0.4，保持旧默认输出兼容；
 - `explicit/auto`：manifest v0.5，增加 `region_render_policy` 和区域证据。
-- 旧混合布局结果：manifest v0.6，仍可读取；
-- 当前 `layout-apply`：manifest v0.7，增加证据级别和自包含包清单。
+- 旧混合布局结果：manifest v0.6/v0.7，仍可读取；
+- 当前 `layout-apply`：manifest v0.8，增加 Reader 摘要及其与输出清单的哈希绑定。
 
-这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.7.0a0`。
+这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.8.0a0`。
 
-详见 `docs/MANIFEST_MIGRATION_V0.5.md`。
+详见 `docs/MANIFEST_MIGRATION_V0.5.md` 和
+`docs/MANIFEST_MIGRATION_V0.8.md`。
+
+### Reader 为什么报告 article 或 asset 哈希不匹配？
+
+`reader.json` 会绑定 `article.md` 和每个图片资产的 SHA-256。文件被编辑、替换或
+复制不完整时，运行 `paper2md validate-reader <包>/_paper2md/reader.json` 会明确
+失败。若只是人工修改正文，应由 Reader 使用 block ID 和可见文本指纹执行显式
+重定位；不要手工改写 `reader.json` 中的哈希来绕过检查。
 
 ## 明确不支持
 
