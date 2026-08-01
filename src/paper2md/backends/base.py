@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from ..config import Paper2MDConfig
 from ..exceptions import BackendUnavailableError
@@ -45,6 +45,7 @@ class BackendResult:
     document: PhysicalDocument
     assets: tuple[ExtractedAsset, ...] = ()
     warnings: tuple[dict[str, object], ...] = ()
+    performance: dict[str, Any] = field(default_factory=dict)
 
 
 class Backend(Protocol):

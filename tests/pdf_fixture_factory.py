@@ -38,7 +38,11 @@ def _image_pixels() -> bytes:
     return bytes(pixels)
 
 
-def create_born_digital_fixture(path: Path) -> dict[str, object]:
+def create_born_digital_fixture(
+    path: Path,
+    *,
+    include_references: bool = False,
+) -> dict[str, object]:
     page1 = b"\n".join(
         [
             b"BT /F2 22 Tf 60 730 Td (Paper2MD Fixture Title) Tj ET",
@@ -98,23 +102,70 @@ def create_born_digital_fixture(path: Path) -> dict[str, object]:
         9: _stream(page2),
         10: b"<< /Title (Paper2MD Fixture Title) /Producer (Paper2MD self-test) >>",
     }
+    if include_references:
+        reference_content = b"\n".join(
+            [
+                b"BT /F2 18 Tf 60 735 Td (References) Tj ET",
+                (
+                    b"BT /F1 10 Tf 60 700 Td "
+                    b"(1. Smith AB et al. Nature 2020; 10.1234/example.1) Tj ET"
+                ),
+                (
+                    b"BT /F1 10 Tf 60 670 Td "
+                    b"(2. Jones CD and Wang E. Science 2021; 12: 30-38.) Tj ET"
+                ),
+                (
+                    b"BT /F1 10 Tf 60 640 Td "
+                    b"(3. Lee FG et al. Cell 2022; 8: 100-110.) Tj ET"
+                ),
+                b"BT /F2 14 Tf 60 590 Td (Acknowledgments) Tj ET",
+                (
+                    b"BT /F1 10 Tf 60 565 Td "
+                    b"(The authors thank the fixture reviewers.) Tj ET"
+                ),
+                b"BT /F2 14 Tf 60 520 Td (Author Contributions) Tj ET",
+                (
+                    b"BT /F1 10 Tf 60 495 Td "
+                    b"(All authors approved the fixture.) Tj ET"
+                ),
+                (
+                    b"BT /F2 14 Tf 60 450 Td "
+                    b"(Supplementary Information) Tj ET"
+                ),
+                (
+                    b"BT /F1 10 Tf 60 425 Td "
+                    b"(Supplementary Figure S1 is available online.) Tj ET"
+                ),
+            ]
+        )
+        objects[2] = (
+            b"<< /Type /Pages /Kids [3 0 R 4 0 R 11 0 R] /Count 3 >>"
+        )
+        objects[11] = (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> "
+            b"/Contents 12 0 R >>"
+        )
+        objects[12] = _stream(reference_content)
+    maximum_object = max(objects)
     payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
     offsets = {0: 0}
-    for number in range(1, 11):
+    for number in range(1, maximum_object + 1):
         offsets[number] = len(payload)
         payload.extend(f"{number} 0 obj\n".encode())
         payload.extend(objects[number])
         payload.extend(b"\nendobj\n")
     xref = len(payload)
-    payload.extend(b"xref\n0 11\n")
+    payload.extend(f"xref\n0 {maximum_object + 1}\n".encode())
     payload.extend(b"0000000000 65535 f \n")
-    for number in range(1, 11):
+    for number in range(1, maximum_object + 1):
         payload.extend(f"{offsets[number]:010d} 00000 n \n".encode())
     identifier = hashlib.md5(bytes(payload), usedforsecurity=False).hexdigest()
     payload.extend(
         (
             "trailer\n"
-            f"<< /Size 11 /Root 1 0 R /Info 10 0 R /ID [<{identifier}><{identifier}>] >>\n"
+            f"<< /Size {maximum_object + 1} /Root 1 0 R /Info 10 0 R "
+            f"/ID [<{identifier}><{identifier}>] >>\n"
             f"startxref\n{xref}\n%%EOF\n"
         ).encode()
     )
@@ -122,7 +173,7 @@ def create_born_digital_fixture(path: Path) -> dict[str, object]:
     return {
         "sha256": hashlib.sha256(payload).hexdigest(),
         "size_bytes": len(payload),
-        "pages": 2,
+        "pages": 3 if include_references else 2,
         "rights": "project-authored temporary fixture",
     }
 

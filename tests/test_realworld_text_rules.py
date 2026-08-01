@@ -2,12 +2,22 @@ import hashlib
 import unittest
 from dataclasses import replace
 
-from paper2md.backends.pdfium import _reading_order
+from paper2md.backends.pdfium import (
+    _reading_order,
+    _restore_missing_spaces_from_charboxes,
+)
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.writer import _markdown_text_groups, _title
+from paper2md.writer import (
+    _format_markdown_paragraph,
+    _markdown_text_groups,
+    _title,
+)
 
 
-def text(element_id, x, y, width, height, value):
+def text(element_id, x, y, width, height, value, *, font_name=None):
+    metadata = {"font_size": 1.0}
+    if font_name is not None:
+        metadata["font_name"] = font_name
     return Element(
         element_id=element_id,
         kind="text",
@@ -21,11 +31,128 @@ def text(element_id, x, y, width, height, value):
             source_ref=f"fixture:{element_id}",
             confidence=1.0,
         ),
-        metadata={"font_size": 1.0},
+        metadata=metadata,
     )
 
 
 class RealWorldTextRuleTests(unittest.TestCase):
+    def test_confirmed_first_line_indent_uses_markdown_safe_em_space(self):
+        item = text("paragraph", 10, 10, 60, 8, "Paragraph text")
+
+        self.assertEqual(
+            _format_markdown_paragraph(
+                "Paragraph text",
+                [item.element_id],
+                (item,),
+                first_line_indented=True,
+            ),
+            "&emsp;Paragraph text",
+        )
+
+    def test_markdown_omits_a_classified_decorative_symbol(self):
+        sentence = text("sentence", 10, 10, 45, 8, "Finished.")
+        dingbat = replace(
+            text("dingbat", 57, 11, 5, 5, "\uf0a3"),
+            metadata={
+                "font_name": "Subset+Wingdings2",
+                "markdown_excluded_reason": (
+                    "decorative_line_end_private_use_dingbat"
+                ),
+            },
+        )
+
+        groups = _markdown_text_groups((sentence, dingbat))
+
+        self.assertEqual([value for _, value in groups], ["Finished."])
+        self.assertNotIn("dingbat", groups[0][0])
+
+    def test_whole_paragraph_native_bold_is_preserved_in_markdown(self):
+        item = text(
+            "bold-heading",
+            10,
+            20,
+            180,
+            12,
+            "ST reveals the landscape of TLSs across tissues",
+            font_name="BentonSansCond-Bold",
+        )
+        self.assertEqual(
+            _format_markdown_paragraph(item.text, [item.element_id], (item,)),
+            "**ST reveals the landscape of TLSs across tissues**",
+        )
+
+    def test_mixed_or_unknown_font_paragraph_is_not_forced_bold(self):
+        bold = text(
+            "bold",
+            10,
+            20,
+            40,
+            12,
+            "Bold lead",
+            font_name="Fixture-Bold",
+        )
+        regular = text(
+            "regular",
+            50,
+            20,
+            80,
+            12,
+            "with regular text",
+            font_name="Fixture-Regular",
+        )
+        self.assertEqual(
+            _format_markdown_paragraph(
+                "Bold lead with regular text",
+                [bold.element_id, regular.element_id],
+                (bold, regular),
+            ),
+            "Bold lead with regular text",
+        )
+
+    def test_missing_spaces_are_restored_from_character_geometry(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("s", (0.0, 0.0, 2.7, 8.0)),
+                ("e", (3.1, 0.0, 6.4, 8.0)),
+                ("t", (6.6, 0.0, 9.2, 8.0)),
+                ("f", (11.0, 0.0, 14.3, 8.0)),
+                ("r", (13.6, 0.0, 16.6, 8.0)),
+                ("o", (16.8, 0.0, 20.8, 8.0)),
+                ("m", (21.1, 0.0, 28.2, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "set from")
+        self.assertEqual(inserted, 1)
+
+    def test_normal_kerning_and_explicit_spaces_are_preserved(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("d", (0.0, 0.0, 4.0, 8.0)),
+                ("a", (4.3, 0.0, 8.1, 8.0)),
+                ("t", (8.3, 0.0, 10.8, 8.0)),
+                ("a", (11.1, 0.0, 14.9, 8.0)),
+                (" ", (16.2, 0.0, 16.2, 8.0)),
+                ("s", (16.5, 0.0, 19.2, 8.0)),
+                ("e", (19.6, 0.0, 22.9, 8.0)),
+                ("t", (23.1, 0.0, 25.7, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "data set")
+        self.assertEqual(inserted, 0)
+
+    def test_pdfium_noncharacter_soft_break_is_normalized(self):
+        value, inserted = _restore_missing_spaces_from_charboxes(
+            [
+                ("z", (0.0, 0.0, 3.0, 8.0)),
+                ("i", (3.2, 0.0, 4.4, 8.0)),
+                ("n", (4.6, 0.0, 8.2, 8.0)),
+                ("c", (8.4, 0.0, 11.4, 8.0)),
+                ("\ufffe", (11.6, 0.0, 12.0, 8.0)),
+            ]
+        )
+        self.assertEqual(value, "zinc\u0002")
+        self.assertEqual(inserted, 0)
+
     def test_iterative_merge_restores_native_contiguous_dixon_line(self):
         values = [
             text("p0000-text-00073", 37.21, 593.60, 61.28, 6.70, "and fluorescence"),
@@ -97,6 +224,46 @@ class RealWorldTextRuleTests(unittest.TestCase):
             "limiting a unified view",
         )
 
+    def test_overlapping_native_objects_are_deduplicated(self):
+        items = _reading_order(
+            [
+                text("visible", 37, 100, 110, 7.4, "same painted text"),
+                text("overlay", 37.1, 100.1, 109.9, 7.3, "same painted text"),
+                text("suffix", 151, 100, 42, 7.4, "continues"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "same painted text continues",
+        )
+
+    def test_overlapping_fragment_suffix_is_merged_once(self):
+        items = _reading_order(
+            [
+                text("a", 37, 100, 190, 7.4, "limiting a unifi"),
+                text("b", 226.5, 100, 60, 7.4, "fied view"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "limiting a unified view",
+        )
+
+    def test_leading_affiliation_superscript_is_separated_from_text(self):
+        items = _reading_order(
+            [
+                text("number", 37, 98, 2, 4, "12"),
+                text("department", 39.5, 100, 80, 7.4, "Department of Medicine"),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(items))[0][1],
+            "12 Department of Medicine",
+        )
+
     def test_control_glyph_does_not_split_one_visual_line(self):
         items = [
             text("a", 37.2, 471.0, 86.2, 7.4, "prognosis. Cross-cohor"),
@@ -129,6 +296,27 @@ class RealWorldTextRuleTests(unittest.TestCase):
             "artificial intelligence methods.",
         )
         self.assertEqual(groups[1][1], "RESULTS:")
+
+    def test_soft_break_before_hyphenated_continuation_keeps_hyphen(self):
+        ordered = _reading_order(
+            [
+                text("l1", 37, 100, 80, 7.4, "the zinc"),
+                text("soft", 118, 103.5, 2, 0.7, "\u0002"),
+                text(
+                    "l2",
+                    37,
+                    110.5,
+                    120,
+                    7.4,
+                    "finger-containing protein",
+                ),
+            ],
+            594,
+        )
+        self.assertEqual(
+            _markdown_text_groups(tuple(ordered))[0][1],
+            "the zinc-finger-containing protein",
+        )
 
     def test_compact_native_fragments_do_not_gain_spaces(self):
         items = _reading_order(

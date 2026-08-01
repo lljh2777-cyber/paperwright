@@ -127,6 +127,17 @@ python -m paper2md convert input.pdf output-dir
 
 ## 更多文档
 
+混合布局流程的最终结果采用自包含文档包：顶层只放 `article.md` 和
+`images/`，ROI、布局覆盖图、追溯数据与验证报告统一放入 `_paper2md/`。
+`layout-apply` 默认使用 `--evidence standard`；也可选择 `minimal` 或
+`full`，并通过 `--include-source-pdf` 显式复制原 PDF。完整结构与命令见
+[混合布局设计](docs/HYBRID_LAYOUT_OUTLINE_ZH.md)。
+
+标准与完整证据包会自动检查 Markdown 断词、重复词、短碎片、疑似图内标签、
+标题完整性、图片链接、manifest 清单，以及布局对象是否遗漏或重复归属。
+启发式文本问题标为 `warning`，不会阻断输出；确定性结构检查单独给出
+`PASS/FAIL`。
+
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)

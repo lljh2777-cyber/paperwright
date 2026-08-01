@@ -1,0 +1,57 @@
+{
+  "schema_version": "paper2md-fast-layout-validation-v0.1",
+  "test_result": {
+    "pytest_passed": 219,
+    "subtests_passed": 8
+  },
+  "samples": [
+    {
+      "id": "topological",
+      "source_sha256": "b699e4cfe8050b7ff54382db4077916a01f2e708c670f89d75f445d018160c6f",
+      "physical_document_sha256": "9e551ceae0a0da0cb9a442ce0c13b5a1ba55221d3858edc91b57222d993d883e",
+      "page_count": 5,
+      "prepare_elapsed_seconds": 3.268,
+      "cache_bytes": 1031381,
+      "review_package_bytes": 8980280,
+      "task_contract_versions": ["paper2md-layout-task-v0.2"],
+      "task_determinism": {
+        "runs_compared": 2,
+        "all_page_task_hashes_equal": true
+      },
+      "standard_escalation_page_indices": [1, 3],
+      "standard_escalation_reasons": {
+        "1": [
+          "raster_region_ambiguity_high",
+          "separator_ambiguity_high"
+        ],
+        "3": ["separator_ambiguity_high"]
+      },
+      "visual_review_page_indices": [1],
+      "visual_review": "ROI correct; two large figures are covered by raster candidates, but the overlay is too dense for direct high-confidence acceptance."
+    },
+    {
+      "id": "pan-cancer",
+      "source_sha256": "021147f9c563de8609c31d341f54f4116cc9bed36a20793b1dbf7f2f40a54459",
+      "physical_document_sha256": "c71fc1c5e4c62dc670ed05e952dabdde54a9f698f54d7dc163a80da314e1f164",
+      "page_count": 24,
+      "prepare_elapsed_seconds": 13.311,
+      "cache_bytes": 4468700,
+      "review_package_bytes": 46513264,
+      "task_contract_versions": ["paper2md-layout-task-v0.2"],
+      "standard_escalation_page_indices": [],
+      "visual_review_page_indices": [1, 2, 4],
+      "visual_review": "Representative double-column, figure-plus-caption, and full-page figure layouts have usable high-recall candidates and conservative page furniture exclusion."
+    }
+  ],
+  "historical_full_pipeline_observation": {
+    "sample_id": "topological",
+    "status": "timed_out_above_15_minutes",
+    "directly_comparable_to_prepare_benchmark": false,
+    "machine_timing_record_available": false
+  },
+  "limitations": [
+    "The real-paper validation covers extraction, ROI, candidate generation, review package export, cache integrity, and visual overlays.",
+    "Final Markdown quality was not re-scored because the new v0.2 tasks still require confirmed final-layout.json files.",
+    "The two standard escalation pages were identified but their expensive full object walks were not rerun for this fast-path benchmark."
+  ]
+}

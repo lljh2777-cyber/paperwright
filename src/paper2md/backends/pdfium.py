@@ -6,12 +6,17 @@ PDFium.  It only normalizes native page objects into PhysicalDocument v0.2.
 
 from __future__ import annotations
 
+import ctypes
+from collections import Counter
 import hashlib
 import importlib.metadata
 import io
 import math
 from pathlib import Path
+import statistics
+import time
 from typing import Any
+import unicodedata
 
 from PIL import ImageStat
 
@@ -37,6 +42,10 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _milliseconds(nanoseconds: int) -> float:
+    return round(nanoseconds / 1_000_000, 3)
 
 
 def _pdfium_runtime() -> tuple[Any, BackendIdentity]:
@@ -76,6 +85,307 @@ def _clamped_bbox(
     if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6:
         return None
     return BBox(x0, y0, x1 - x0, y1 - y0)
+
+
+def _degenerate_bbox_reason(
+    bounds: tuple[float, float, float, float],
+    page_width: float,
+    page_height: float,
+) -> str:
+    left, bottom, right, top = (float(value) for value in bounds)
+    raw_width = right - left
+    raw_height = top - bottom
+    if raw_width <= 1e-6 and raw_height <= 1e-6:
+        return "zero_area"
+    if raw_width <= 1e-6:
+        return "zero_width"
+    if raw_height <= 1e-6:
+        return "zero_height"
+    if right <= 0 or left >= page_width or top <= 0 or bottom >= page_height:
+        return "outside_page"
+    return "collapsed_after_page_clamp"
+
+
+def _degenerate_text_class(text: str | None, *, extraction_failed: bool) -> str:
+    if extraction_failed:
+        return "unreadable_text"
+    if not text:
+        return "empty_text"
+    if not text.strip():
+        return "whitespace_text"
+    return "nonempty_text"
+
+
+def _is_private_use_character(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        0xE000 <= codepoint <= 0xF8FF
+        or 0xF0000 <= codepoint <= 0xFFFFD
+        or 0x100000 <= codepoint <= 0x10FFFD
+    )
+
+
+def _decorative_line_end_symbol_reason(
+    item: Element,
+    ordered: list[Element],
+    page_width: float,
+) -> str | None:
+    """Identify a tiny PUA dingbat appended to a punctuated native text line."""
+
+    if item.kind != "text" or not item.text or len(item.text) > 3:
+        return None
+    if not all(_is_private_use_character(value) for value in item.text):
+        return None
+    font_name = item.metadata.get("font_name")
+    if not isinstance(font_name, str) or not any(
+        marker in font_name.casefold()
+        for marker in ("wingdings", "webdings", "dingbats")
+    ):
+        return None
+    if max(item.bbox.width, item.bbox.height) > 12.0:
+        return None
+    if item.bbox.x < page_width * 0.60:
+        return None
+    line_group = item.metadata.get("line_group")
+    line_position = item.metadata.get("line_position")
+    if not isinstance(line_group, int) or not isinstance(line_position, int):
+        return None
+    previous = [
+        candidate
+        for candidate in ordered
+        if candidate.kind == "text"
+        and candidate.text
+        and candidate.metadata.get("line_group") == line_group
+        and isinstance(candidate.metadata.get("line_position"), int)
+        and candidate.metadata["line_position"] < line_position
+    ]
+    if not previous:
+        return None
+    predecessor = max(
+        previous,
+        key=lambda candidate: candidate.metadata["line_position"],
+    )
+    gap = item.bbox.x - predecessor.bbox.right
+    if not -1.0 <= gap <= 12.0:
+        return None
+    if not predecessor.text.rstrip().endswith((".", "!", "?", ":", ";")):
+        return None
+    return "decorative_line_end_private_use_dingbat"
+
+
+def _restore_missing_spaces_from_charboxes(
+    characters: list[tuple[str, tuple[float, float, float, float]]],
+) -> tuple[str, int]:
+    """Restore omitted spaces using only native character geometry.
+
+    Some PDFs encode visually separated words in one text object without a
+    Unicode space.  Insert a space only between two alphanumeric characters
+    whose horizontal gap is large relative to both glyph heights.
+    """
+
+    characters = [
+        ("\u0002" if character in {"\ufffe", "\uffff"} else character, box)
+        for character, box in characters
+    ]
+    pair_gaps: list[float] = []
+    previous: tuple[str, tuple[float, float, float, float]] | None = None
+    for character, box in characters:
+        if (
+            not character
+            or character.isspace()
+            or unicodedata.category(character) == "Cc"
+        ):
+            previous = None
+            continue
+        if previous is not None:
+            previous_character, previous_box = previous
+            gap = box[0] - previous_box[2]
+            if (
+                previous_character.isalpha()
+                and character.isalpha()
+                and gap >= 0
+            ):
+                pair_gaps.append(gap)
+        previous = (character, box)
+    typical_gap = statistics.median(pair_gaps) if pair_gaps else 0.0
+
+    output: list[str] = []
+    previous = None
+    inserted = 0
+    for character, box in characters:
+        if not character:
+            continue
+        if character.isspace() or unicodedata.category(character) == "Cc":
+            output.append(character)
+            previous = None
+            continue
+        if previous is not None:
+            previous_character, previous_box = previous
+            left, bottom, _, top = box
+            _, previous_bottom, previous_right, previous_top = previous_box
+            height = max(0.0, top - bottom)
+            previous_height = max(0.0, previous_top - previous_bottom)
+            vertical_overlap = min(top, previous_top) - max(
+                bottom,
+                previous_bottom,
+            )
+            threshold = max(1.20, min(height, previous_height) * 0.20)
+            threshold = max(threshold, typical_gap * 2.4)
+            gap = left - previous_right
+            if (
+                previous_character.isalpha()
+                and character.isalpha()
+                and vertical_overlap
+                >= min(height, previous_height) * 0.50
+                and gap > threshold
+            ):
+                output.append(" ")
+                inserted += 1
+        output.append(character)
+        previous = (character, box)
+    return "".join(output), inserted
+
+
+def _object_address(raw: Any) -> int:
+    return int(ctypes.cast(raw, ctypes.c_void_p).value or 0)
+
+
+def _character_runs_by_object(
+    textpage: Any,
+) -> dict[int, list[tuple[str, tuple[float, float, float, float]]]]:
+    runs: dict[
+        int,
+        list[tuple[str, tuple[float, float, float, float]]],
+    ] = {}
+    for index in range(textpage.count_chars()):
+        text_object = textpage.get_textobj(index)
+        if text_object is None:
+            continue
+        character = textpage.get_text_range(index, 1)
+        if not character:
+            continue
+        try:
+            box = tuple(float(value) for value in textpage.get_charbox(index))
+        except Exception:
+            continue
+        runs.setdefault(_object_address(text_object.raw), []).append(
+            (character, box)
+        )
+    return runs
+
+
+def _text_elements_from_textpage(
+    textpage: Any,
+    *,
+    page_index: int,
+    page_width: float,
+    page_height: float,
+) -> tuple[list[Element], dict[str, int]]:
+    """Build native text elements without walking all PDF page objects."""
+
+    groups: dict[int, dict[str, Any]] = {}
+    missing_charboxes = 0
+    for character_index in range(textpage.count_chars()):
+        text_object = textpage.get_textobj(character_index)
+        if text_object is None:
+            continue
+        character = textpage.get_text_range(character_index, 1)
+        if not character:
+            continue
+        try:
+            box = tuple(
+                float(value) for value in textpage.get_charbox(character_index)
+            )
+        except Exception:
+            missing_charboxes += 1
+            continue
+        address = _object_address(text_object.raw)
+        group = groups.setdefault(
+            address,
+            {
+                "first_character_index": character_index,
+                "text_object": text_object,
+                "characters": [],
+            },
+        )
+        group["characters"].append((character, box))
+
+    elements: list[Element] = []
+    object_bounds_fallbacks = 0
+    for text_index, group in enumerate(
+        sorted(groups.values(), key=lambda value: value["first_character_index"])
+    ):
+        text_object = group["text_object"]
+        characters = group["characters"]
+        text, geometry_spaces_inserted = _restore_missing_spaces_from_charboxes(
+            characters
+        )
+        text = text.strip()
+        if not text:
+            continue
+        try:
+            bounds = tuple(float(value) for value in text_object.get_bounds())
+            bbox = _clamped_bbox(bounds, page_width, page_height)
+        except Exception:
+            bbox = None
+        if bbox is None:
+            object_bounds_fallbacks += 1
+            boxes = [item[1] for item in characters]
+            bounds = (
+                min(item[0] for item in boxes),
+                min(item[1] for item in boxes),
+                max(item[2] for item in boxes),
+                max(item[3] for item in boxes),
+            )
+            bbox = _clamped_bbox(bounds, page_width, page_height)
+        if bbox is None:
+            continue
+        try:
+            font_name = text_object.get_font().get_base_name()
+        except Exception:
+            font_name = None
+        try:
+            font_size = float(text_object.get_font_size())
+        except Exception:
+            font_size = None
+        element_id = f"p{page_index:04d}-text-{text_index:05d}"
+        elements.append(
+            Element(
+                element_id=element_id,
+                kind="text",
+                page_index=page_index,
+                bbox=bbox,
+                text=text,
+                source_object_id=None,
+                provenance=Provenance(
+                    backend="pdfium",
+                    method="textpage_character_geometry_without_object_walk",
+                    source_ref=(
+                        f"page:{page_index}:text-object-sequence:{text_index}"
+                    ),
+                    confidence=1.0,
+                    unavailable_reason=(
+                        "stable native PDF object ID unavailable"
+                    ),
+                ),
+                metadata={
+                    "font_name": font_name,
+                    "font_size": font_size,
+                    "text_object_sequence": text_index,
+                    "native_order": text_index,
+                    "first_character_index": group["first_character_index"],
+                    "geometry_spaces_inserted": geometry_spaces_inserted,
+                },
+            )
+        )
+    return elements, {
+        "character_count": sum(
+            len(value["characters"]) for value in groups.values()
+        ),
+        "text_object_count": len(groups),
+        "missing_charbox_count": missing_charboxes,
+        "object_bounds_fallback_count": object_bounds_fallbacks,
+    }
 
 
 def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
@@ -278,37 +588,107 @@ class PDFiumBackend:
         self._pdfium, self.identity = _pdfium_runtime()
 
     def extract(self, source: Path, config: Paper2MDConfig) -> BackendResult:
+        return self._extract(source, config, text_only=False)
+
+    def extract_text_only(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+    ) -> BackendResult:
+        """Fast text path that never calls ``page.get_objects()``."""
+
+        return self._extract(source, config, text_only=True)
+
+    def extract_hybrid(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+        *,
+        full_page_indices: tuple[int, ...],
+    ) -> BackendResult:
+        """Walk native objects only on explicitly selected zero-based pages."""
+
+        selected = frozenset(full_page_indices)
+        if len(selected) != len(full_page_indices) or any(
+            not isinstance(index, int) or index < 0 for index in selected
+        ):
+            raise BackendExecutionError(
+                "hybrid full_page_indices must be unique non-negative integers"
+            )
+        return self._extract(
+            source,
+            config,
+            text_only=True,
+            full_page_indices=selected,
+        )
+
+    def _extract(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+        *,
+        text_only: bool,
+        full_page_indices: frozenset[int] = frozenset(),
+    ) -> BackendResult:
         pdfium = self._pdfium
+        extraction_started = time.perf_counter_ns()
+        hash_started = time.perf_counter_ns()
         source_hash = _sha256(source)
+        source_hash_ns = time.perf_counter_ns() - hash_started
         assets: list[ExtractedAsset] = []
         warnings: list[dict[str, object]] = []
         pages: list[Page] = []
+        page_performance: list[dict[str, object]] = []
+        degenerate_counts: Counter[str] = Counter()
+        degenerate_pages: list[dict[str, object]] = []
+        open_started = time.perf_counter_ns()
         try:
             document = pdfium.PdfDocument(source)
         except Exception as exc:
             raise CorruptInputError(f"PDFium 无法打开 PDF: {exc}") from exc
+        document_open_ns = time.perf_counter_ns() - open_started
 
         try:
             if len(document) > config.limits.max_pages:
                 raise BackendExecutionError(
                     f"页数 {len(document)} 超过限制 {config.limits.max_pages}"
                 )
+            if any(index >= len(document) for index in full_page_indices):
+                raise BackendExecutionError(
+                    "hybrid full_page_indices exceed the document page range"
+                )
+            metadata_started = time.perf_counter_ns()
             metadata = {
                 key: value
                 for key, value in document.get_metadata_dict().items()
                 if value
             }
+            metadata_ns = time.perf_counter_ns() - metadata_started
             for page_index in range(len(document)):
                 page = document[page_index]
                 try:
-                    pages.append(
-                        self._extract_page(
+                    page_uses_text_only = (
+                        text_only and page_index not in full_page_indices
+                    )
+                    if page_uses_text_only:
+                        extracted_page, timing = self._extract_text_only_page(
+                            page,
+                            page_index,
+                        )
+                    else:
+                        extracted_page, timing = self._extract_page(
                             page,
                             page_index,
                             assets,
                             warnings,
+                            degenerate_counts,
+                            degenerate_pages,
                         )
+                    timing["extraction_mode"] = (
+                        "text-only" if page_uses_text_only else "full"
                     )
+                    pages.append(extracted_page)
+                    page_performance.append(timing)
                 finally:
                     page.close()
         except BackendExecutionError:
@@ -334,10 +714,131 @@ class PDFiumBackend:
                 ),
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
-                "text_line_reconstruction": "pdfium_union_bounded_text_v1",
+                "text_object_extraction": (
+                    "pdfium_page_selective_hybrid_v1"
+                    if text_only and full_page_indices
+                    else "pdfium_textpage_character_geometry_fast_v1"
+                    if text_only
+                    else "pdfium_native_text_object_character_geometry_v3"
+                ),
+                "text_line_reconstruction": "native_object_geometry_v2",
+                "extraction_profile": (
+                    "hybrid-standard"
+                    if text_only and full_page_indices
+                    else "text-only-fast"
+                    if text_only
+                    else "full"
+                ),
+                "native_object_inventory": (
+                    (
+                        "selected_pages_full; other_pages_text_only; "
+                        f"full_page_indices={sorted(full_page_indices)}"
+                    )
+                    if text_only and full_page_indices
+                    else "text_only; image_and_vector_objects_not_enumerated"
+                    if text_only
+                    else "complete_supported_page_object_walk"
+                ),
+                "degenerate_object_handling": {
+                    "policy_version": "paper2md-degenerate-object-policy-v1",
+                    "counts": dict(sorted(degenerate_counts.items())),
+                    "pages": degenerate_pages,
+                },
             },
         )
-        return BackendResult(physical, tuple(assets), tuple(warnings))
+        performance = {
+            "schema_version": "paper2md-extraction-timing-v0.1",
+            "clock": "time.perf_counter_ns",
+            "extraction_mode": (
+                "hybrid"
+                if text_only and full_page_indices
+                else "text-only"
+                if text_only
+                else "full"
+            ),
+            "total_ms": _milliseconds(
+                time.perf_counter_ns() - extraction_started
+            ),
+            "source_hash_ms": _milliseconds(source_hash_ns),
+            "document_open_ms": _milliseconds(document_open_ns),
+            "metadata_ms": _milliseconds(metadata_ns),
+            "page_count": len(pages),
+            "pages": page_performance,
+        }
+        return BackendResult(
+            physical,
+            tuple(assets),
+            tuple(warnings),
+            performance,
+        )
+
+    def render_page_preview(
+        self,
+        source: Path,
+        page_index: int,
+        *,
+        scale: float = 1.5,
+        max_pixels: int = 16_000_000,
+    ) -> Any:
+        """Render one complete page for layout review, without OCR."""
+
+        return self.render_page_previews(
+            source,
+            (page_index,),
+            scale=scale,
+            max_pixels=max_pixels,
+        )[0]
+
+    def render_page_previews(
+        self,
+        source: Path,
+        page_indices: tuple[int, ...],
+        *,
+        scale: float = 1.5,
+        max_pixels: int = 16_000_000,
+    ) -> tuple[Any, ...]:
+        """Render multiple previews while opening the PDF only once."""
+
+        if not math.isfinite(scale) or scale <= 0:
+            raise BackendExecutionError("layout preview scale 必须是正有限数")
+        if max_pixels <= 0:
+            raise BackendExecutionError("layout preview max_pixels 必须为正")
+        if len(set(page_indices)) != len(page_indices):
+            raise BackendExecutionError("layout preview 页码不得重复")
+        document = self._pdfium.PdfDocument(source)
+        results: list[Any] = []
+        try:
+            for page_index in page_indices:
+                if not 0 <= page_index < len(document):
+                    raise BackendExecutionError("layout preview 页码越界")
+                page = document[page_index]
+                try:
+                    width_px = int(math.ceil(float(page.get_width()) * scale))
+                    height_px = int(math.ceil(float(page.get_height()) * scale))
+                    if width_px * height_px > max_pixels:
+                        raise BackendExecutionError("layout preview 超过像素上限")
+                    bitmap = page.render(
+                        scale=scale,
+                        rotation=0,
+                        may_draw_forms=False,
+                        draw_annots=False,
+                        rev_byteorder=True,
+                    )
+                    try:
+                        results.append(bitmap.to_pil().convert("RGB"))
+                    finally:
+                        bitmap.close()
+                finally:
+                    page.close()
+        except BackendExecutionError:
+            raise
+        except Exception as exc:
+            raise BackendExecutionError(
+                f"PDFium layout preview 失败: {exc}"
+            ) from exc
+        finally:
+            document.close()
+        return tuple(results)
 
     def render_region(
         self,
@@ -438,35 +939,252 @@ class PDFiumBackend:
         finally:
             document.close()
 
+    def _extract_text_only_page(
+        self,
+        page: Any,
+        page_index: int,
+    ) -> tuple[Page, dict[str, object]]:
+        """Extract positioned native text without enumerating page objects."""
+
+        page_started = time.perf_counter_ns()
+        width, height = float(page.get_width()), float(page.get_height())
+        rotation = int(page.get_rotation())
+        text_page_started = time.perf_counter_ns()
+        textpage = page.get_textpage()
+        text_page_open_ns = time.perf_counter_ns() - text_page_started
+        try:
+            character_scan_started = time.perf_counter_ns()
+            elements, text_stats = _text_elements_from_textpage(
+                textpage,
+                page_index=page_index,
+                page_width=width,
+                page_height=height,
+            )
+            character_scan_ns = time.perf_counter_ns() - character_scan_started
+            reading_order_started = time.perf_counter_ns()
+            ordered = _reading_order(elements, width)
+            reading_order_ns = time.perf_counter_ns() - reading_order_started
+        finally:
+            textpage.close()
+
+        normalization_started = time.perf_counter_ns()
+        decorative_reasons = {
+            item.element_id: reason
+            for item in ordered
+            if (
+                reason := _decorative_line_end_symbol_reason(
+                    item,
+                    ordered,
+                    width,
+                )
+            )
+            is not None
+        }
+        normalized = [
+            Element(
+                element_id=item.element_id,
+                kind=item.kind,
+                page_index=item.page_index,
+                bbox=item.bbox,
+                provenance=item.provenance,
+                text=item.text,
+                source_object_id=item.source_object_id,
+                metadata={
+                    **item.metadata,
+                    "normalized_order": order,
+                    **(
+                        {
+                            "markdown_excluded_reason": decorative_reasons[
+                                item.element_id
+                            ]
+                        }
+                        if item.element_id in decorative_reasons
+                        else {}
+                    ),
+                },
+            )
+            for order, item in enumerate(ordered)
+        ]
+        result = Page(
+            page_index=page_index,
+            width=width,
+            height=height,
+            rotation=rotation,
+            elements=tuple(normalized),
+        )
+        normalization_ns = time.perf_counter_ns() - normalization_started
+        timing: dict[str, object] = {
+            "page_index": page_index,
+            "total_ms": _milliseconds(time.perf_counter_ns() - page_started),
+            "text_page_open_ms": _milliseconds(text_page_open_ns),
+            "character_scan_ms": _milliseconds(character_scan_ns),
+            "object_walk_ms": 0.0,
+            "image_decode_ms": 0.0,
+            "reading_order_ms": _milliseconds(reading_order_ns),
+            "normalization_ms": _milliseconds(normalization_ns),
+            "character_count": text_stats["character_count"],
+            "native_object_counts": {
+                "text": text_stats["text_object_count"],
+            },
+            "emitted_element_counts": {
+                "text": len(normalized),
+                "image": 0,
+                "vector": 0,
+            },
+            "degenerate_object_count": 0,
+            "missing_charbox_count": text_stats["missing_charbox_count"],
+            "object_bounds_fallback_count": text_stats[
+                "object_bounds_fallback_count"
+            ],
+        }
+        return result, timing
+
     def _extract_page(
         self,
         page: Any,
         page_index: int,
         assets: list[ExtractedAsset],
         warnings: list[dict[str, object]],
-    ) -> Page:
+        degenerate_counts: Counter[str],
+        degenerate_pages: list[dict[str, object]],
+    ) -> tuple[Page, dict[str, object]]:
+        page_started = time.perf_counter_ns()
         pdfium = self._pdfium
         width, height = float(page.get_width()), float(page.get_height())
         rotation = int(page.get_rotation())
+        text_page_started = time.perf_counter_ns()
         textpage = page.get_textpage()
+        text_page_open_ns = time.perf_counter_ns() - text_page_started
+        character_scan_started = time.perf_counter_ns()
+        character_runs = _character_runs_by_object(textpage)
+        character_scan_ns = time.perf_counter_ns() - character_scan_started
         elements: list[Element] = []
         image_index = 0
         vector_index = 0
+        native_object_counts: Counter[str] = Counter()
+        image_decode_ns = 0
+        page_degenerate_counts: Counter[str] = Counter()
         try:
+            object_walk_started = time.perf_counter_ns()
             for raw_index, obj in enumerate(page.get_objects()):
-                bbox = _clamped_bbox(obj.get_bounds(), width, height)
+                if isinstance(obj, pdfium.PdfTextObj):
+                    native_object_counts["text"] += 1
+                elif isinstance(obj, pdfium.PdfImage):
+                    native_object_counts["image"] += 1
+                elif getattr(obj, "type", None) == 2:
+                    native_object_counts["vector"] += 1
+                elif getattr(obj, "type", None) == 5:
+                    native_object_counts["form"] += 1
+                else:
+                    native_object_counts["other"] += 1
+                bounds = obj.get_bounds()
+                bbox = _clamped_bbox(bounds, width, height)
                 if bbox is None:
-                    warnings.append(
-                        {
-                            "code": "degenerate_object_bbox",
-                            "page": page_index + 1,
-                            "raw_object_index": raw_index,
-                        }
-                    )
+                    reason = _degenerate_bbox_reason(bounds, width, height)
+                    if isinstance(obj, pdfium.PdfTextObj):
+                        text: str | None = None
+                        extraction_failed = False
+                        try:
+                            obj.textpage = textpage
+                            text = obj.extract()
+                        except Exception:
+                            extraction_failed = True
+                        text_class = _degenerate_text_class(
+                            text,
+                            extraction_failed=extraction_failed,
+                        )
+                        diagnostic_code = f"ignored_degenerate_{text_class}"
+                        if text_class in {"unreadable_text", "nonempty_text"}:
+                            diagnostic_code = f"unplaced_degenerate_{text_class}"
+                            warning: dict[str, object] = {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                            if text:
+                                warning.update(
+                                    {
+                                        "text_sha256": hashlib.sha256(
+                                            text.encode("utf-8")
+                                        ).hexdigest(),
+                                        "snippet": " ".join(text.split())[:160],
+                                    }
+                                )
+                            warnings.append(warning)
+                    elif getattr(obj, "type", None) == 5:
+                        # Form XObjects are structural containers. PDFium's
+                        # recursive iterator yields their children separately.
+                        diagnostic_code = "ignored_degenerate_form_container"
+                    elif getattr(obj, "type", None) == 2:
+                        diagnostic_code = "unplaced_degenerate_vector_path"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                        )
+                    elif isinstance(obj, pdfium.PdfImage):
+                        diagnostic_code = "unplaced_degenerate_image"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "bbox_reason": reason,
+                            }
+                        )
+                    else:
+                        diagnostic_code = "unplaced_degenerate_unsupported_object"
+                        warnings.append(
+                            {
+                                "code": diagnostic_code,
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                                "object_type": getattr(obj, "type", None),
+                                "bbox_reason": reason,
+                            }
+                        )
+                    degenerate_counts[diagnostic_code] += 1
+                    page_degenerate_counts[diagnostic_code] += 1
                     continue
                 source_ref = f"page:{page_index}:native-object-index:{raw_index}"
                 if isinstance(obj, pdfium.PdfTextObj):
-                    text = textpage.get_text_bounded(*obj.get_bounds()).strip()
+                    # A bounded query returns every glyph touching the
+                    # rectangle.  On tight scientific layouts this leaks
+                    # descenders and superscripts from neighbouring lines.
+                    # Extract the native object's own text instead.
+                    try:
+                        obj.textpage = textpage
+                        text = obj.extract().strip()
+                        geometry_spaces_inserted = 0
+                        character_run = character_runs.get(
+                            _object_address(obj.raw)
+                        )
+                        if character_run:
+                            reconstructed, geometry_spaces_inserted = (
+                                _restore_missing_spaces_from_charboxes(
+                                    character_run
+                                )
+                            )
+                            if reconstructed.strip():
+                                text = reconstructed.strip()
+                        extraction_method = (
+                            "native_text_object_character_geometry"
+                        )
+                    except Exception:
+                        text = textpage.get_text_bounded(*obj.get_bounds()).strip()
+                        extraction_method = "native_text_object_bounded_text"
+                        geometry_spaces_inserted = 0
+                        warnings.append(
+                            {
+                                "code": "native_text_object_extract_fallback_bounded",
+                                "page": page_index + 1,
+                                "raw_object_index": raw_index,
+                            }
+                        )
                     if not text:
                         continue
                     try:
@@ -483,7 +1201,7 @@ class PDFiumBackend:
                             source_object_id=None,
                             provenance=Provenance(
                                 backend="pdfium",
-                                method="native_text_object_bounded_text",
+                                method=extraction_method,
                                 source_ref=source_ref,
                                 confidence=1.0,
                                 unavailable_reason=(
@@ -495,12 +1213,16 @@ class PDFiumBackend:
                                 "font_size": float(obj.get_font_size()),
                                 "raw_object_index": raw_index,
                                 "native_order": raw_index,
+                                "geometry_spaces_inserted": (
+                                    geometry_spaces_inserted
+                                ),
                             },
                         )
                     )
                 elif isinstance(obj, pdfium.PdfImage):
                     element_id = f"p{page_index:04d}-image-{image_index:04d}"
                     image_index += 1
+                    image_decode_started = time.perf_counter_ns()
                     bitmap = obj.get_bitmap(render=True, scale_to_original=True)
                     try:
                         pil_image = bitmap.to_pil().convert("RGB")
@@ -515,6 +1237,9 @@ class PDFiumBackend:
                         width_px, height_px = pil_image.size
                     finally:
                         bitmap.close()
+                        image_decode_ns += (
+                            time.perf_counter_ns() - image_decode_started
+                        )
                     name = f"page-{page_index + 1:03d}-image-{image_index:03d}.png"
                     assets.append(
                         ExtractedAsset(
@@ -572,55 +1297,34 @@ class PDFiumBackend:
                         )
                     )
                     vector_index += 1
+            object_walk_ns = time.perf_counter_ns() - object_walk_started
+            reading_order_started = time.perf_counter_ns()
             ordered = _reading_order(elements, width)
-            text_groups: dict[int, list[Element]] = {}
-            for item in ordered:
-                line_group = item.metadata.get("line_group")
-                if item.kind == "text" and isinstance(line_group, int):
-                    text_groups.setdefault(line_group, []).append(item)
-            native_line_text: dict[int, str] = {}
-            for line_group, group in text_groups.items():
-                left = min(item.bbox.x for item in group)
-                right = max(item.bbox.right for item in group)
-                top = min(item.bbox.y for item in group)
-                bottom = max(item.bbox.bottom for item in group)
-                value = textpage.get_text_bounded(
-                    left,
-                    height - bottom,
-                    right,
-                    height - top,
-                )
-                value = " ".join(value.replace("\r", "\n").split())
-                if value:
-                    native_line_text[line_group] = value
-            ordered = [
-                Element(
-                    element_id=item.element_id,
-                    kind=item.kind,
-                    page_index=item.page_index,
-                    bbox=item.bbox,
-                    provenance=item.provenance,
-                    text=item.text,
-                    source_object_id=item.source_object_id,
-                    metadata={
-                        **item.metadata,
-                        **(
-                            {"native_line_text": native_line_text[line_group]}
-                            if isinstance(
-                                (line_group := item.metadata.get("line_group")),
-                                int,
-                            )
-                            and line_group in native_line_text
-                            and item.metadata.get("line_position") == 0
-                            else {}
-                        ),
-                    },
-                )
-                for item in ordered
-            ]
+            reading_order_ns = time.perf_counter_ns() - reading_order_started
         finally:
             textpage.close()
 
+        normalization_started = time.perf_counter_ns()
+        if page_degenerate_counts:
+            degenerate_pages.append(
+                {
+                    "page": page_index + 1,
+                    "counts": dict(sorted(page_degenerate_counts.items())),
+                }
+            )
+
+        decorative_reasons = {
+            item.element_id: reason
+            for item in ordered
+            if (
+                reason := _decorative_line_end_symbol_reason(
+                    item,
+                    ordered,
+                    width,
+                )
+            )
+            is not None
+        }
         normalized = [
             Element(
                 element_id=item.element_id,
@@ -630,14 +1334,46 @@ class PDFiumBackend:
                 provenance=item.provenance,
                 text=item.text,
                 source_object_id=item.source_object_id,
-                metadata={**item.metadata, "normalized_order": order},
+                metadata={
+                    **item.metadata,
+                    "normalized_order": order,
+                    **(
+                        {
+                            "markdown_excluded_reason": decorative_reasons[
+                                item.element_id
+                            ]
+                        }
+                        if item.element_id in decorative_reasons
+                        else {}
+                    ),
+                },
             )
             for order, item in enumerate(ordered)
         ]
-        return Page(
+        result = Page(
             page_index=page_index,
             width=width,
             height=height,
             rotation=rotation,
             elements=tuple(normalized),
         )
+        normalization_ns = time.perf_counter_ns() - normalization_started
+        timing: dict[str, object] = {
+            "page_index": page_index,
+            "total_ms": _milliseconds(time.perf_counter_ns() - page_started),
+            "text_page_open_ms": _milliseconds(text_page_open_ns),
+            "character_scan_ms": _milliseconds(character_scan_ns),
+            "object_walk_ms": _milliseconds(object_walk_ns),
+            "image_decode_ms": _milliseconds(image_decode_ns),
+            "reading_order_ms": _milliseconds(reading_order_ns),
+            "normalization_ms": _milliseconds(normalization_ns),
+            "character_count": sum(len(run) for run in character_runs.values()),
+            "native_object_counts": dict(sorted(native_object_counts.items())),
+            "emitted_element_counts": {
+                "text": sum(item.kind == "text" for item in normalized),
+                "image": sum(item.kind == "image" for item in normalized),
+                "vector": sum(item.kind == "vector" for item in normalized),
+            },
+            "degenerate_object_count": sum(page_degenerate_counts.values()),
+        }
+        return result, timing

@@ -78,7 +78,12 @@ class Phase5AlphaTests(unittest.TestCase):
 
     def test_help_contains_all_alpha_commands(self):
         help_text = build_parser().format_help()
-        for command in ("convert", "batch", "validate-model"):
+        for command in (
+            "convert",
+            "batch",
+            "validate-model",
+            "benchmark-extract",
+        ):
             self.assertIn(command, help_text)
 
     def test_strict_config_and_cli_priority(self):

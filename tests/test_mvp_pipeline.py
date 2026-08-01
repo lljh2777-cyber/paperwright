@@ -73,6 +73,49 @@ class MVPPipelineTests(unittest.TestCase):
         markdown = (self.root / "out/article.md").read_text(encoding="utf-8")
         self.assertIn("Café", markdown)
 
+    def test_text_only_extraction_matches_full_native_text(self):
+        backend = PDFiumBackend()
+        full = backend.extract(self.source, Paper2MDConfig()).document
+        fast_result = backend.extract_text_only(self.source, Paper2MDConfig())
+        fast = fast_result.document
+
+        for full_page, fast_page in zip(full.pages, fast.pages, strict=True):
+            full_text = [
+                (
+                    item.text,
+                    item.bbox.to_dict(),
+                    item.metadata.get("font_name"),
+                    item.metadata.get("font_size"),
+                )
+                for item in full_page.elements
+                if item.kind == "text"
+            ]
+            fast_text = [
+                (
+                    item.text,
+                    item.bbox.to_dict(),
+                    item.metadata.get("font_name"),
+                    item.metadata.get("font_size"),
+                )
+                for item in fast_page.elements
+                if item.kind == "text"
+            ]
+            self.assertEqual(fast_text, full_text)
+            self.assertTrue(
+                all(item.kind == "text" for item in fast_page.elements)
+            )
+
+        self.assertEqual(
+            fast_result.performance["extraction_mode"],
+            "text-only",
+        )
+        self.assertTrue(
+            all(
+                page["object_walk_ms"] == 0.0
+                for page in fast_result.performance["pages"]
+            )
+        )
+
     def test_embedded_image_is_real_and_hash_matches(self):
         result = self.convert()
         manifest = result.manifest

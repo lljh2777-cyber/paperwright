@@ -1,0 +1,564 @@
+# Paper2MD 混合布局识别开发大纲
+
+> 状态：A–E 已实现并验证；F 已实现训练数据导出，模型训练待积累真值
+> 开发分支：`feature/hybrid-layout`
+> 目标：以“规则生成候选、AI 审查布局、Paper2MD 精确执行”为第一阶段方案，并为后续本地机器学习保留数据。
+
+## 1. 目标
+
+- 正确划分正文、标题、Figure、Table、caption、页眉、页脚和边注。
+- 为每个区块记录页面坐标、类型、阅读顺序和关联关系。
+- 文字块读取 PDF 原生文字并重建段落。
+- Figure/Table 作为完整视觉区域截图，不识别其内部图像文字。
+- 前期由 AI 审查候选区块，后期由本地轻量模型处理高置信度页面。
+- 任何不确定情况优先保留内容，避免静默丢失正文。
+
+## 2. 非目标
+
+- 不做 OCR。
+- 不识别 Figure/Table 截图内部的文字。
+- 不做公式 LaTeX 转换。
+- 不做语义表格重建。
+- 不让 AI 转录、改写论文正文或直接生成 Markdown。
+- 第一阶段不训练端到端视觉神经网络。
+
+## 3. 总体流程
+
+```text
+PDF
+  ↓
+PDFium 提取页面元素、坐标和预览图
+  ↓
+识别页面有效内容区，排除页眉/页脚/边注
+  ↓
+空白带和元素聚类规则生成候选区块
+  ↓
+计算候选区块及相邻关系特征
+  ↓
+AI 审查：保留、合并、拆分、补充、分类、排序、绑定
+  ↓
+Paper2MD 校验结果并吸附到精确 PDF 坐标
+  ↓
+文字块提取原生文字；视觉块整体截图
+  ↓
+生成 article.md + images/ + manifest.json
+  ↓
+保存候选、AI 动作和最终布局，供后续机器学习使用
+```
+
+## 4. 页面元素与坐标
+
+使用 PDFium 获取：
+
+- 页面宽高、旋转和坐标系；
+- 原生文字字符、文字行及 bbox；
+- 原生位图及 bbox；
+- 矢量绘图及 bbox；
+- 页面预览图。
+
+内部坐标继续使用 PDF point；与 AI 交换时使用 `0–1` 归一化坐标。
+
+### 4.1 原生文字与图像文字
+
+- `native_text_coverage` 只统计 PDF 中已有的文字对象。
+- 不对位图或截图内部文字执行 OCR。
+- 扫描页没有原生文字时，`native_text_coverage` 必须为 `null`，不能记为零。
+- Figure 内存在原生坐标轴文字时，只统计其几何特征，不单独转录输出。
+
+## 5. 页面有效内容区（Content ROI）
+
+结合位置、跨页重复和元素特征识别：
+
+- 页眉；
+- 页脚；
+- 页码；
+- 期刊名和日期；
+- 重复边注或 running title。
+
+脚注属于正文内容，不得按固定页边距直接删除。无法确定的外围内容应保留并降低置信度。
+
+规则先生成保守的 `content_bbox`，AI 或人工通过完整页预览确认或调整。
+这个 bbox 只是分析掩膜，不裁剪 PDF，不改变任何文字、图片、绘图或最终区块
+的原始页面坐标。
+
+规则提案除跨页重复文字外，还检测靠近页面上下边缘、与主体存在明显空白、
+高度较小且占用稀疏的孤立带，用于排除期刊标签、DOI 横线、日期栏和页码。
+宽而密集或多行的脚注不按该规则自动删除。
+
+确认后：
+
+- 完全位于 ROI 外的页眉、页脚、页码和装饰对象不进入候选生成；
+- 与 ROI 边界相交的对象记录为 `boundary_crossing_element_ids`；
+- 空白带、分栏、候选区块和分隔带只在 ROI 内计算；
+- Figure/Table 仍从原 PDF 按原始页面坐标渲染。
+
+Content ROI 应独立保存规则提案、最终 bbox、复核者和来源，既用于复现，也作为
+后续正文窗口预测模型的训练数据。
+
+## 6. 规则生成候选区块
+
+### 6.1 占用图
+
+根据文字行、位图和矢量绘图 bbox 建立页面占用图。图片 bbox 内部即使存在白色像素，也视为已占用。
+
+### 6.2 分割顺序
+
+1. 先检测横向空白带，划分正文带、视觉带、caption 带等。
+2. 再在每个横向分区内检测纵向栏间空白。
+3. 聚合相邻图片、绘图、面板标签和其他视觉元素。
+4. 生成候选区块、候选分隔带和相邻关系。
+
+优先采用相对阈值，例如中位行高、字符宽度和页面比例，避免固定像素阈值。
+
+## 7. 候选区块特征
+
+### 7.1 几何特征
+
+- 归一化 bbox、宽高比和面积比；
+- 距离页面四边的距离；
+- 是否跨栏；
+- 与前后区块的距离；
+- 相邻区块的重叠、包含和对齐关系。
+
+### 7.2 PDF 内部特征
+
+- `native_text_available`；
+- `native_text_coverage`；
+- 规则文字行与分散文字的覆盖率；
+- 文字行数量、平均行长、行距和行长方差；
+- 字体、字号、粗体和旋转比例；
+- 位图数量及覆盖率；
+- 矢量路径、横线、竖线、矩形和网格特征。
+
+### 7.3 少量模式特征
+
+- 是否以 `Fig.`、`Figure` 或 `Table` 开头；
+- 是否存在连续面板标签；
+- 数字、刻度和百分号比例；
+- 相邻区块字号、类型特征和距离。
+
+模式匹配只读取 PDF 原生文字，不读取图片内部文字。
+
+## 8. AI 布局审查
+
+向 AI 提供：
+
+- 页面预览图；
+- 带编号候选框和分隔带的叠加图；
+- 候选框坐标；
+- 数值特征和相邻关系。
+
+AI 只输出结构化布局计划，允许的动作包括：
+
+```text
+keep / merge / split / resize / discard / add / reorder / attach-caption
+```
+
+AI 需要标注：
+
+- 区块类型；
+- 页面内阅读顺序；
+- 父子关系；
+- Figure/Table 与 caption 的绑定；
+- 应忽略的页面附属内容；
+- 无法确定的区域。
+
+第一阶段所有页面均由 AI 审查；积累数据后只审查低置信度或异常页面。
+
+## 9. 程序校验与回退
+
+Paper2MD 必须检查：
+
+- bbox 是否位于页面范围内；
+- 文字元素是否遗漏或重复分配；
+- 分隔带是否切穿文字、图片或绘图；
+- Figure/Table 是否裁剪完整；
+- 阅读顺序是否唯一且完整；
+- caption 是否与邻近视觉块合理绑定；
+- 正文或脚注是否被误排除。
+
+轻微坐标误差自动吸附到真实元素边界。校验失败时重新请求 AI；仍无法确定时保留内容并记录 `degraded`。
+
+## 10. 输出规则
+
+### 10.1 文字块
+
+```text
+区域内原生文字
+  → 视觉行合并
+  → 段落重建
+  → Markdown
+```
+
+### 10.2 视觉块
+
+Figure/Table 使用完整区域高分辨率渲染，保留位图、矢量图、坐标轴、标签和图例，不拆分识别内部文字。
+
+### 10.3 Caption
+
+Caption 使用原生文字提取，并与对应视觉资源绑定。需要同时支持 caption 位于视觉块上方或下方。
+
+## 11. 数据留存
+
+每页至少保存：
+
+```text
+candidates.json       脚本原始候选区块和特征
+ai-actions.json       AI 的合并、拆分、分类和排序动作
+final-layout.json     校验后的最终布局
+preview.webp          可选的低分辨率页面预览
+overlay.webp          可选的候选框叠加图
+```
+
+数据记录候选算法版本、特征模式版本、AI 模型和提示词版本。不设置复杂标签状态；人工发现错误时直接修正并保留简单变更记录。
+
+默认不保存论文全文。敏感文档可以关闭页面预览留存。
+
+## 12. 后续本地机器学习
+
+第一批本地模型分别学习：
+
+1. 候选空白带是否为有效边界；
+2. 相邻候选框是否属于同一最终区域；
+3. 区块属于 `exclude`、`text` 或 `visual`。
+
+后续再扩展：
+
+- `text → heading/body/caption/footnote`；
+- `visual → figure/table/equation/other`；
+- caption 配对排序；
+- 页面是否需要 AI 审查。
+
+`uncertain` 是低置信度处理状态，不作为普通训练标签。训练、验证和测试必须按整篇论文划分。
+
+## 13. 分阶段实施
+
+### 阶段 A：数据协议与可视化
+
+- 定义候选区块、AI 动作和最终布局 schema。
+- 导出页面预览、候选框叠加图和特征 JSON。
+- 建立坐标转换、版本和路径安全检查。
+
+### 阶段 B：确定性候选生成
+
+- 实现页面有效内容区检测。
+- 实现空白带、分栏和元素聚类。
+- 使用合成页面覆盖单栏、双栏、跨栏标题、跨栏 Figure 和 caption。
+
+### 阶段 C：AI 审查接口
+
+- 定义严格的结构化输入输出协议。
+- 支持候选框合并、拆分、补充、分类、排序和绑定。
+- 对 AI 结果执行 schema 和几何校验。
+
+### 阶段 D：Paper2MD 集成
+
+- 文字块接入现有段落重建。
+- Figure/Table 接入区域渲染。
+- 扩展 manifest 的布局追溯信息。
+- 默认模式保持兼容，新模式显式启用。
+
+### 阶段 E：真实论文验证
+
+- 覆盖不同期刊、栏数、语言和 Figure/Table 版式。
+- 检查正文完整性、阅读顺序、视觉裁剪和 caption 绑定。
+- 保存 AI 修改前后的训练数据。
+
+### 阶段 F：本地模型
+
+- 建立边界、合并和区块分类基线。
+- 设置按错误代价区分的执行阈值。
+- 高置信度直接执行，低置信度交给 AI。
+
+当前只完成了确定性的训练数据导出。由于尚无足量
+`final-layout.json` 真值，暂不训练或宣称已有可用分类器。
+
+## 14. 第一阶段验收重点
+
+- 不遗漏或重复正文文字。
+- 双栏正文顺序正确。
+- 跨栏 Figure/Table 不被拆散。
+- Figure/Table 截图不裁掉内容。
+- caption 与对应视觉块正确绑定。
+- 页眉页脚不会进入正文，脚注不会被误删。
+- AI 不转录或改写论文内容。
+- 所有布局决策可在 manifest 和布局数据中追溯。
+- 同一输入和同一布局计划生成确定性输出。
+
+## 15. 当前 CLI 流程
+
+### 15.1 生成 Content ROI 提案
+
+```powershell
+paper2md layout-prepare input.pdf roi-proposal-dir
+```
+
+首次处理可显式选择提取模式：
+
+```powershell
+paper2md layout-prepare input.pdf roi-proposal-dir `
+  --extraction-profile fast
+```
+
+`fast` 只提取 TextPage 文字和坐标，每页批量渲染一次低分辨率预览，再由像素占用图
+生成 `paper2md-layout-task-v0.2` 栅格候选；不调用 `page.get_objects()`，也不枚举或
+解码全部矢量对象。复核包 PNG 使用确定性的中等压缩，像素和坐标不变。
+
+`standard` 先执行同样的快速分析，再按页检查原生文字缺失、候选碎片过多、栅格区域
+歧义和分隔关系爆炸。只有触发风险门槛的页面才执行完整对象遍历；其他页面继续使用
+快速证据。因此同一篇论文可以同时包含 v0.1 完整对象任务和 v0.2 栅格任务。升级页码、
+原因和策略版本记录在 `review-index.json`，应用阶段按原记录重放，不重新猜测。
+
+省略参数时仍使用兼容既有行为的 `forensic` 全文完整对象遍历。`layout-apply` 默认读取
+`review-index.json` 中记录的请求模式和实际模式，拒绝用另一种模式重新生成不一致的任务。
+
+布局准备包还包含 `extraction-cache/physical-document.json` 和
+`extraction-cache/backend-warnings.json`。索引同时记录文件 SHA-256 与
+`PhysicalDocument` 确定性哈希。`layout-apply` 会先核对输入 PDF、缓存文件和每页栅格
+掩膜哈希，再复用准备阶段的提取结果和 `page.png`；任一哈希不一致立即拒绝，不静默
+回退。旧版没有缓存的复核包仍按原流程重新提取。
+
+先检查每页 `content-roi.png`。确认红框没有裁掉正文、脚注、Figure、Table 或
+caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为
+`confirmed` 并填写 `reviewer`。
+
+### 15.2 在确认的 ROI 内生成 AI 区块复核包
+
+```powershell
+paper2md layout-prepare input.pdf review-dir `
+  --content-roi-json roi-proposal-dir/content-roi.json
+```
+
+每页生成：
+
+- `layout-task.json`；
+- `page.png`；
+- `content-roi.png`；
+- `overlay.png`；
+- `review-instructions.md`。
+
+视觉 AI 按说明只划分区块、标注类型和顺序，并在对应页面目录写入
+`final-layout.json`；AI 不转录正文，也不读取 Figure/Table 内部文字。
+
+### 15.3 校验并应用复核结果
+
+```powershell
+paper2md validate-final-layout review-dir/page-0001/final-layout.json `
+  --task review-dir/page-0001/layout-task.json
+
+paper2md layout-apply input.pdf review-dir output-dir --evidence standard
+```
+
+参考文献及行政性后置内容默认保留。需要时可显式选择：
+
+```powershell
+# 从 article.md 省略参考文献、致谢、作者贡献等后置内容
+paper2md layout-apply input.pdf review-dir output-dir --references omit
+
+# 将参考文献写入 references.md，并省略行政性后置内容
+paper2md layout-apply input.pdf review-dir output-dir --references separate
+```
+
+检测优先使用 References、Bibliography 等章节标题，并兼容 PDF
+原生文字层中被空格拆散的标题；标题缺失时，只在连续编号、年份、期刊或
+DOI 等证据共同满足时才使用编号引文序列兜底。选择非 `keep` 模式后，致谢、
+作者贡献、利益冲突、资助、作者信息和数据可用性等行政性后置内容也会省略；
+Supplementary Information/Materials（补充材料）及其内容保留。未可靠检测到
+参考文献时保持原文，不做猜测性删除。
+
+默认输出为自包含文档包：
+
+```text
+output-dir/
+├── article.md
+├── images/
+│   └── figure-0001.png
+└── _paper2md/
+    ├── run.json
+    ├── source.json
+    ├── manifest.json
+    ├── 02-roi/
+    │   └── content-roi.json
+    ├── 03-layout/
+    │   ├── page-0001-overlay.png
+    │   └── page-0001-final-layout.json
+    ├── 04-provenance/
+    │   └── layout-provenance.json
+    └── 05-validation/
+        ├── validation-report.json
+        └── validation-report.md
+```
+
+`--evidence minimal` 只保留 `article.md`、`images/` 和
+`_paper2md/manifest.json`。`--evidence full` 还会增加
+`01-physical/physical-document.json`、每页 `page.png`、Content ROI
+预览和全部 `layout-task.json`，适合审计与训练数据积累。
+
+原 PDF 默认不复制，只在 `source.json` 记录绝对路径、文件名、大小、页数和
+SHA-256。显式使用 `--include-source-pdf` 时，才复制为
+`_paper2md/source.pdf`。所有文件先写入同级临时目录，成功后再原子改名。
+
+`standard` 和 `full` 的验证报告还包含自动输出质量检查：
+
+- Markdown 疑似断词、重复词和异常短碎片；
+- 疑似 Figure/Table 内标签混入正文；
+- H1 标题是否完整且唯一；
+- Markdown 图片链接是否有效，是否存在孤立图片；
+- manifest 预期文件、实际文件和哈希清单是否一致；
+- 候选正文文字对象是否未分配给任何有效区块；
+- 同一 PDF 对象是否被多个最终区块重复使用；
+- 原生文字重建是否遇到可疑 Unicode，及采用了哪些确定性修复。
+
+`validation-report.json` 同时提供 `warning_summary`，按严重级别、检查项、
+问题代码和底层警告代码聚合结果，并列出受影响页及最多 100 条可定位到
+区块、段落或对象的 `actionable_findings`。Markdown 报告优先展示这些可操作
+问题，不再要求人工逐条翻阅大量重复的底层警告。
+
+PDFium 返回零面积对象时按内容风险分类：已成功读取且为空或纯空格的文字
+对象，以及会递归展开子对象的 Form 容器，仅计入
+`native_object_diagnostics`；非空或不可读文字、图像、矢量路径及未知对象仍
+产生可定位警告。这样不会把出版软件生成的空占位对象误报成正文丢失，也不
+会静默吞掉可能包含内容的异常对象。
+
+文字区块中的非文字对象也按几何风险分类。细水平/垂直分隔线和与标题区
+高度重合的背景色块保留在 provenance，并标记为装饰性对象，不产生质量
+警告；图片或无法证明为装饰的复杂矢量仍产生
+`text_region_contains_non_text_elements`。该规则只改变诊断，不改变正文提取、
+图片输出或对象追溯。
+
+原生 PDF 中由 Unicode 矩阵框字符组成的二维公式采用保守的局部渲染：只有
+同时存在上框、中框、下框和多个横向边界，且涉及的段落全部落在同一个紧凑
+坐标区间时才触发。公式写入 `images/equation-*.png`，Markdown 不再输出孤立
+括号和数字；所有原生文字对象、bbox、段落索引和渲染方法继续记录在
+provenance。普通行内公式不触发，也不尝试猜测 LaTeX。
+
+小型私用区 Dingbats 只有在位于页面右侧、与带终止标点的正文同一原生行、
+紧邻正文末端且字体明确属于 Wingdings/Webdings/Dingbats 时，才作为段末
+装饰符从 Markdown 文字流排除。原对象不删除，并通过
+`markdown_exclusions` 记录对象 ID、页码、bbox、码点和排除原因。
+
+文字碎片之间的空格修复只使用 PDF 原生几何与字体证据：同字体、同基线且
+间隙小于相对行高阈值的碎片合并；斜体科学符号切换到正文字体，或 `%`、`+`
+后接正文单词时补入空格。每次修复均写入 text reconstruction provenance，
+不使用论文专属词表，也不猜测跨行软断字符的语义。
+
+验证报告另列 `word_spacing`：检查 `%`、`+` 或科学符号后仍与正文粘连的
+高置信度异常，统计几何补空格与紧密碎片合并次数，并列出 PDF 显式软断行
+的歧义位置供人工抽查。软断行记录本身不阻断输出，只有残留的高置信度粘连
+模式产生 warning。
+
+跨页段落只在两个相邻页面的边界处自动续接：前一页最后一个输出块与后一页
+第一个输出块都必须是非粗体正文、主字体一致、前段没有句末标点，且后段以
+小写字母开始。PDF 显式软断字符或可见连字符决定是否无空格连接；其他情况
+补一个空格。合并后的 Markdown 同时保留两侧 trace 注释，并记录
+`joined_cross_page_paragraph`，标题、caption、视觉块或非直接相邻块均不合并。
+
+Figure/Table 与 caption 使用一对一几何绑定。同页优先根据上下距离、水平重叠、
+阅读顺序和 `Figure`/`Table` 前缀配对；整页视觉区块还允许绑定到下一页顶部的
+首个 caption。绑定结果写入图片记录、region provenance、Markdown 注释和
+`caption_binding` 质量检查。未绑定 caption 产生 warning；没有显式 caption 的
+图形摘要等视觉块只作信息记录，不降低转换状态。
+
+图注内部续接使用独立规则，不复用正文段落规则。只有同页、同一 caption
+region、绑定到同一个 Figure/Table 且在 Markdown 中直接相邻的两个图注片段
+才进入判断；后一片段不能以新的 `Figure`/`Fig.`/`Table` 编号开头。前一片段
+没有句末标点时可以续接；前一片段已有句末标点时，仅当后一片段以 `a,`、
+`(A)` 或 `f–i,` 等面板说明标记开头才续接。未绑定、绑定目标不同或证据不足
+时一律保留分段。事件单独写入 `caption_continuation_repairs`，不会进入
+`body_continuation_repairs`，也不会改变正文续接判定。
+
+文字模式识别属于启发式检查，只产生 `warning` 和可定位的片段；图片、
+manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 的对象单独计数，
+不作为正文遗漏。
+
+### 15.2.1 用户阅读层
+
+`article.md` 默认只保留标题、正文、图片和图注，不再包含页码、region
+ID、caption 绑定或跨页拼接等内部 HTML 注释。完整段落映射、图注绑定与
+跨页修复仍保存在 `_paper2md/04-provenance/layout-provenance.json` 和
+验证报告中。图片替代文本优先使用已绑定图注的首句，Figure/Table 标签
+在 Markdown 中单独加粗。
+
+正文段落边界优先使用原生行坐标恢复：当相邻文字行保持正常行距和相同
+主字体、上一行以句末标点结束，且下一行向右缩进达到约半个行高时，将其
+识别为新段落。确认后的正文段首使用 `&emsp;` 呈现一个 em 的首行缩进；
+图注、标题和普通换行不应用该样式。是否检测到缩进同时写入 paragraph
+provenance，便于复核和后续训练。
+
+缩进状态同时记录为 `indented`、`aligned` 或 `unknown`。正文跨区块续接
+只接受明确为 `aligned` 的后区块，并同时要求两个区块均为 `body`、阅读
+顺序直接相邻、前区块没有句末标点、后区块以小写字母开始、主字体一致，
+且中间不存在图片、表格、标题或图注。`caption` 是正文续接的硬隔离边界，
+不会被拼入正文。续接事件写入 `body_continuation_repairs` provenance；
+证据不足时保留分段，不做猜测性合并。
+
+### 15.2.2 提取性能基准
+
+性能计时不写入 `PhysicalDocument`、布局任务或 manifest，避免运行时间破坏
+确定性哈希。开发时可执行只读基准：
+
+```powershell
+paper2md benchmark-extract input.pdf
+paper2md benchmark-extract input.pdf --mode text-only
+```
+
+输出使用 `paper2md-extraction-timing-v0.1`，包含源文件哈希、总耗时，以及
+每页的 TextPage 打开、字符扫描、原生对象遍历、位图解码、阅读顺序和规范化
+耗时；同时记录文字、图片、矢量等对象数量。该命令不创建产品输出目录，
+用于判断 fast 提取应优先绕开的实际瓶颈。计时使用单调时钟，数值本身不作为
+回归断言，只检查字段、非负性和对象计数。
+
+`text-only` 是 fast 管线的第一段实验实现。它直接按 TextPage 中的文字对象
+分组字符及坐标，读取必要字体信息，但不调用 `page.get_objects()`，也不解码
+原生位图或枚举矢量路径。输出文字的内容、bbox、字体名和字号必须与完整提取
+对照一致；metadata 明确标记图片和矢量 inventory 未枚举。在栅格视觉候选及
+相应质量检查完成前，该模式只允许用于只读基准，不能直接替代产品转换。
+
+`raster` 基准在 text-only 之后，以 1.5 scale 批量渲染页面；同一 PDF 只打开
+一次。分析同时保留三层确定性证据：完整页面 `ink_mask`、原生文字 bbox 的
+`text_mask`，以及两者相减得到的 `residual_mask`。背景颜色从页面边缘稳健
+估计，不假定必须是纯白；三张掩膜均记录尺寸相关 SHA-256。低分辨率网格对
+残余视觉信号产生高召回原子候选，但不在这一层盲目合并多面板 Figure。
+正文 ROI、栏结构、相邻图注和阅读顺序将在下一层负责排除页眉并把同一
+Figure 的面板组合成最终视觉区块。
+
+`raster` 证据接入布局任务时使用 `paper2md-layout-task-v0.2`。原生文字/对象候选仍由
+空白带规则生成；栅格候选作为独立的 `raster` 区域加入，不与文字候选混成大框，也不
+伪造 PDF 对象 ID。被栅格区域覆盖的图内标签会记录到
+`raster_suppressed_element_ids`，避免作为正文碎片输出。靠近页面上下边缘的小型期刊
+徽标会标记为外围视觉内容，并与其覆盖的文字一起从正文 ROI 中排除。v0.1 任务格式和
+无栅格证据的既有输出保持兼容；v0.2 仍保留原子视觉候选，复杂多面板 Figure 的合并
+由后续布局确认层完成。
+
+### 15.3 导出本地机器学习数据
+
+```powershell
+paper2md layout-export-dataset dataset-dir `
+  --review-root reviewed-document-a `
+  --review-root reviewed-document-b
+```
+
+训练目录只包含：
+
+- 候选区块的数值特征和最终标签；
+- merge/split/resize/discard 等动作；
+- 阅读顺序区块对；
+- caption 与视觉区块配对；
+- 数据集 manifest 和文件哈希。
+
+不包含论文正文、页面图像或底层文字元素 ID。数据按整篇论文 SHA-256
+分组，后续训练/验证/测试必须继续按 `document_id` 划分。
+
+## 16. 当前实现状态
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| A | 完成 | 布局任务、最终布局模型、schema、叠加图 |
+| B | 完成 | 无 OCR 空白带、双栏、外围内容和特征生成 |
+| C | 完成 | AI 复核说明、严格动作和完整性校验 |
+| D | 完成 | 原生文字重建、视觉区块截图、manifest v0.6 |
+| E | 完成 | 两篇真实论文共 29 页验证，双轮文件哈希一致 |
+| F | 部分完成 | 数据导出完成；轻量分类器等待足量真值 |
+
+真实样本统计和已知限制见
+`docs/HYBRID_LAYOUT_STAGE_E_VALIDATION_ZH.md`。

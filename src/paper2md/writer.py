@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +19,12 @@ from .manifest import (
 )
 from .models import Element, PhysicalDocument
 from .region_render import plan_region_renders
+from .text_reconstruction import (
+    ReconstructedText,
+    clean_text,
+    join_line_elements,
+    reconstruct_text_groups,
+)
 
 
 @dataclass(frozen=True)
@@ -44,14 +49,7 @@ _TITLE_BOILERPLATE = {
 
 
 def _clean_text(text: str) -> tuple[str, int]:
-    removed = 0
-    output = []
-    for character in unicodedata.normalize("NFC", text):
-        if unicodedata.category(character) == "Cc" and character not in "\t\n":
-            removed += 1
-            continue
-        output.append(character)
-    return "".join(output).replace("\u00a0", " "), removed
+    return clean_text(text)
 
 
 def _join_fragments(fragments: list[str]) -> str:
@@ -72,50 +70,18 @@ def _join_fragments(fragments: list[str]) -> str:
 
 
 def _join_line_elements(elements: list[Element]) -> str:
-    native_values = {
-        item.metadata["native_line_text"]
-        for item in elements
-        if isinstance(item.metadata.get("native_line_text"), str)
-        and item.metadata["native_line_text"].strip()
-    }
-    if len(native_values) == 1:
-        native, _ = _clean_text(native_values.pop())
-        return re.sub(r"\s+", " ", native).strip()
-
-    value = ""
-    previous: Element | None = None
-    for element in sorted(elements, key=lambda item: (item.bbox.x, item.bbox.y)):
-        fragment, _ = _clean_text((element.text or "").strip())
-        if not fragment:
-            continue
-        if not value:
-            value = fragment
-        elif value.endswith(("-", "\u2010", "\u2011", "/")):
-            value += fragment
-        elif fragment[0] in ",.;:!?)]}%\u00b2\u00b3\u2020*":
-            value += fragment
-        else:
-            assert previous is not None
-            gap = max(0.0, element.bbox.x - previous.bbox.right)
-            compact_limit = max(
-                0.75, min(previous.bbox.height, element.bbox.height) * 0.12
-            )
-            if (
-                gap <= compact_limit
-                and not value.endswith((",", ".", ";", ":", "!", "?"))
-            ):
-                value += fragment
-            else:
-                value += " " + fragment
-        previous = element
-    return re.sub(r"[ \t]+", " ", value).strip()
+    return join_line_elements(elements).text
 
 
 def _page_text_lines(document: PhysicalDocument) -> list[list[Element]]:
     groups: dict[int, list[Element]] = {}
     ungrouped = 1_000_000
     for element in document.pages[0].elements:
-        if element.kind != "text" or not element.text:
+        if (
+            element.kind != "text"
+            or not element.text
+            or element.metadata.get("markdown_excluded_reason")
+        ):
             continue
         key = element.metadata.get("line_group")
         if not isinstance(key, int):
@@ -232,101 +198,63 @@ def _title(document: PhysicalDocument) -> tuple[str, set[str]]:
     }
 
 
-def _dominant_font(elements: list[Element]) -> str | None:
-    widths: dict[str, float] = {}
-    for element in elements:
-        value = element.metadata.get("font_name")
-        if isinstance(value, str) and value:
-            widths[value] = widths.get(value, 0.0) + element.bbox.width
-    return max(widths, key=widths.get) if widths else None
+_BOLD_FONT_MARKERS = ("bold", "semibold", "demibold", "black", "heavy")
 
 
-def _looks_like_heading(text: str) -> bool:
-    letters = [character for character in text if character.isalpha()]
-    return (
-        len(text) <= 80
-        and bool(letters)
-        and sum(character.isupper() for character in letters) / len(letters) >= 0.85
+def _is_bold_text_element(element: Element) -> bool:
+    if element.kind != "text" or not element.text:
+        return False
+    font_name = element.metadata.get("font_name")
+    if not isinstance(font_name, str) or not font_name.strip():
+        return False
+    normalized = font_name.casefold().replace(" ", "")
+    return any(marker in normalized for marker in _BOLD_FONT_MARKERS)
+
+
+def _format_markdown_paragraph(
+    text: str,
+    element_ids: list[str],
+    elements: tuple[Element, ...],
+    *,
+    first_line_indented: bool = False,
+) -> str:
+    """Preserve native bold and a confirmed first-line paragraph indent."""
+    selected_ids = set(element_ids)
+    selected = [
+        element
+        for element in elements
+        if element.element_id in selected_ids
+        and element.kind == "text"
+        and element.text
+    ]
+    value = (
+        f"**{text}**"
+        if selected
+        and all(_is_bold_text_element(element) for element in selected)
+        else text
+    )
+    return "&emsp;" + value if first_line_indented else value
+
+
+def _markdown_text_groups_detailed(
+    elements: tuple[Element, ...],
+) -> list[ReconstructedText]:
+    return reconstruct_text_groups(
+        tuple(
+            element
+            for element in elements
+            if not element.metadata.get("markdown_excluded_reason")
+        )
     )
 
 
-def _markdown_text_groups(elements: tuple[Element, ...]) -> list[tuple[list[str], str]]:
-    line_groups: list[list[Element]] = []
-    current_key: object = object()
-    current: list[Element] = []
-    for element in elements:
-        if element.kind != "text" or not element.text:
-            continue
-        key = element.metadata.get("line_group", element.element_id)
-        if current and key != current_key:
-            line_groups.append(current)
-            current = []
-        current_key = key
-        current.append(element)
-    if current:
-        line_groups.append(current)
-
-    paragraphs: list[list[list[Element]]] = []
-    for line in line_groups:
-        if not paragraphs:
-            paragraphs.append([line])
-            continue
-        previous = paragraphs[-1][-1]
-        previous_text = _join_line_elements(previous)
-        current_text = _join_line_elements(line)
-        previous_top = min(item.bbox.y for item in previous)
-        previous_bottom = max(item.bbox.bottom for item in previous)
-        current_top = min(item.bbox.y for item in line)
-        previous_height = previous_bottom - previous_top
-        current_height = max(item.bbox.bottom for item in line) - current_top
-        vertical_gap = current_top - previous_bottom
-        indent_delta = abs(
-            min(item.bbox.x for item in line)
-            - min(item.bbox.x for item in previous)
-        )
-        previous_font = _dominant_font(previous)
-        current_font = _dominant_font(line)
-        same_font = (
-            previous_font is None
-            or current_font is None
-            or previous_font == current_font
-        )
-        continues = (
-            -1.0 <= vertical_gap <= max(5.0, min(previous_height, current_height) * 0.9)
-            and indent_delta <= max(14.0, min(previous_height, current_height) * 2.0)
-            and same_font
-            and not _looks_like_heading(previous_text)
-            and not _looks_like_heading(current_text)
-        )
-        if continues:
-            paragraphs[-1].append(line)
-        else:
-            paragraphs.append([line])
-
-    result: list[tuple[list[str], str]] = []
-    for paragraph in paragraphs:
-        element_ids = [
-            item.element_id for line in paragraph for item in line
-        ]
-        text = ""
-        for index, line in enumerate(paragraph):
-            line_text = _join_line_elements(line)
-            if not line_text:
-                continue
-            if not text:
-                text = line_text
-                continue
-            previous_line = paragraph[index - 1]
-            has_soft_break_marker = any(
-                any(
-                    unicodedata.category(character) == "Cc"
-                    for character in (item.text or "")
-                )
-                for item in previous_line
-            )
-            text += ("" if has_soft_break_marker else " ") + line_text
-        result.append((element_ids, re.sub(r"[ \t]+", " ", text).strip()))
-    return result
+def _markdown_text_groups(
+    elements: tuple[Element, ...],
+) -> list[tuple[list[str], str]]:
+    return [
+        (list(item.element_ids), item.text)
+        for item in _markdown_text_groups_detailed(elements)
+    ]
 
 
 def _table_degradation(page_elements: tuple[Element, ...]) -> bool:
@@ -738,7 +666,9 @@ def write_outputs(
                     "",
                 ]
             )
-        for element_ids, text in _markdown_text_groups(page.elements):
+        for paragraph in _markdown_text_groups_detailed(page.elements):
+            element_ids = list(paragraph.element_ids)
+            text = paragraph.text
             if any(element_id in title_element_ids for element_id in element_ids):
                 continue
             matched_ids = {
@@ -749,11 +679,17 @@ def write_outputs(
             for figure_id in sorted(matched_ids):
                 emit_figure(figure_by_id[figure_id], "caption-adjacent")
             if text:
+                markdown_text = _format_markdown_paragraph(
+                    text,
+                    element_ids,
+                    page.elements,
+                    first_line_indented=paragraph.first_line_indented,
+                )
                 lines.extend(
                     [
                         f"<!-- elements: {','.join(element_ids)}; "
                         f"page: {page.page_index + 1} -->",
-                        text,
+                        markdown_text,
                         "",
                     ]
                 )

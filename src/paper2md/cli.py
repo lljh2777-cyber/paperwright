@@ -18,6 +18,9 @@ from .exceptions import (
     ConfigurationError,
     Paper2MDError,
 )
+from .layout_models import FinalLayout, LayoutTask
+from .layout_dataset import export_layout_dataset
+from .layout_review import validate_layout_review
 from .models import PhysicalDocument
 
 
@@ -76,6 +79,136 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate.add_argument("model_json", type=Path)
 
+    validate_layout_task = commands.add_parser(
+        "validate-layout-task",
+        help="验证混合布局候选任务 JSON",
+    )
+    validate_layout_task.add_argument("task_json", type=Path)
+
+    validate_final_layout = commands.add_parser(
+        "validate-final-layout",
+        help="验证最终页面布局 JSON",
+    )
+    validate_final_layout.add_argument("layout_json", type=Path)
+    validate_final_layout.add_argument(
+        "--task",
+        type=Path,
+        help="同时验证最终布局是否与候选任务匹配",
+    )
+
+    benchmark_extract = commands.add_parser(
+        "benchmark-extract",
+        help="只读运行一次物理提取并输出逐页、逐阶段计时",
+    )
+    benchmark_extract.add_argument("input_pdf", type=Path)
+    benchmark_extract.add_argument("--config", type=Path)
+    benchmark_extract.add_argument(
+        "--backend",
+        choices=("pdfium", "pdfbox"),
+        default=None,
+    )
+    benchmark_extract.add_argument(
+        "--mode",
+        choices=("full", "text-only", "raster"),
+        default="full",
+        help=(
+            "full 为当前完整提取；text-only 只读取 TextPage；"
+            "raster 再执行低分辨率占用图分析"
+        ),
+    )
+
+    prepare_layout = commands.add_parser(
+        "layout-prepare",
+        help="导出候选区块、页面预览和 AI 审查协议",
+    )
+    prepare_layout.add_argument("input_pdf", type=Path)
+    prepare_layout.add_argument("output_dir", type=Path)
+    prepare_layout.add_argument("--config", type=Path)
+    prepare_layout.add_argument(
+        "--backend",
+        choices=("pdfium", "pdfbox"),
+        default=None,
+    )
+    prepare_layout.add_argument("--workspace-root", type=Path)
+    prepare_layout.add_argument(
+        "--preview-scale",
+        type=float,
+        default=1.5,
+    )
+    prepare_layout.add_argument(
+        "--content-roi-json",
+        type=Path,
+        help=(
+            "AI/人工确认后的 content-roi.json；省略时生成规则提案，"
+            "提案不可直接 layout-apply"
+        ),
+    )
+    prepare_layout.add_argument(
+        "--extraction-profile",
+        choices=("fast", "standard", "forensic"),
+        default="forensic",
+        help="fast uses TextPage plus raster evidence; forensic keeps the full object walk",
+    )
+
+    apply_layout = commands.add_parser(
+        "layout-apply",
+        help="应用已验证的 AI 布局计划并生成 Markdown",
+    )
+    apply_layout.add_argument("input_pdf", type=Path)
+    apply_layout.add_argument("review_dir", type=Path)
+    apply_layout.add_argument("output_dir", type=Path)
+    apply_layout.add_argument("--config", type=Path)
+    apply_layout.add_argument(
+        "--backend",
+        choices=("pdfium", "pdfbox"),
+        default=None,
+    )
+    apply_layout.add_argument("--workspace-root", type=Path)
+    apply_layout.add_argument(
+        "--visual-scale",
+        type=float,
+        default=2.0,
+    )
+    apply_layout.add_argument(
+        "--references",
+        choices=("keep", "omit", "separate"),
+        default="keep",
+        help=(
+            "后置内容处理：保留；省略参考文献及行政性后置内容；"
+            "或将参考文献单独写入 references.md（补充材料保留）"
+        ),
+    )
+    apply_layout.add_argument(
+        "--evidence",
+        choices=("minimal", "standard", "full"),
+        default="standard",
+        help="证据包级别；默认 standard",
+    )
+    apply_layout.add_argument(
+        "--include-source-pdf",
+        action="store_true",
+        help="将原 PDF 复制到 _paper2md/source.pdf；默认只记录路径和哈希",
+    )
+    apply_layout.add_argument(
+        "--extraction-profile",
+        choices=("fast", "standard", "forensic"),
+        default=None,
+        help="defaults to the profile recorded by layout-prepare",
+    )
+
+    export_dataset = commands.add_parser(
+        "layout-export-dataset",
+        help="从已复核布局导出不含正文和页面图像的数值训练数据",
+    )
+    export_dataset.add_argument("output_dir", type=Path)
+    export_dataset.add_argument(
+        "--review-root",
+        type=Path,
+        action="append",
+        required=True,
+        help="包含 layout-task.json 和 final-layout.json 的复核根目录；可重复",
+    )
+
     convert = commands.add_parser("convert", help="转换单个 born-digital PDF")
     convert.add_argument("input_pdf", type=Path)
     convert.add_argument("output_dir", type=Path)
@@ -130,6 +263,50 @@ def _validate_model(path: Path) -> int:
     return 0
 
 
+def _validate_layout_task(path: Path) -> int:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    task = LayoutTask.from_dict(value)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": task.contract_version,
+                "page_index": task.page.page_index,
+                "candidate_count": len(task.candidates),
+                "separator_count": len(task.separators),
+                "deterministic_sha256": task.deterministic_sha256(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _validate_final_layout(path: Path, task_path: Path | None) -> int:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    layout = FinalLayout.from_dict(value)
+    if task_path is not None:
+        task_value = json.loads(task_path.read_text(encoding="utf-8"))
+        validate_layout_review(layout, LayoutTask.from_dict(task_value))
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": layout.contract_version,
+                "page_index": layout.page.page_index,
+                "region_count": len(layout.regions),
+                "action_count": len(layout.actions),
+                "validated_against_task": task_path is not None,
+                "deterministic_sha256": layout.deterministic_sha256(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _configuration(args: argparse.Namespace, *, batch: bool):
     base = load_config(args.config)
     pages = getattr(args, "region_render_page", None)
@@ -144,6 +321,30 @@ def _configuration(args: argparse.Namespace, *, batch: bool):
     if batch and config.region_render.effective_mode == "explicit":
         raise ConfigurationError("batch 只允许 region_render off 或 auto")
     return config
+
+
+def _benchmark_configuration(args: argparse.Namespace):
+    base = load_config(args.config)
+    return with_cli_overrides(
+        base,
+        backend=args.backend,
+        workspace_root=None,
+        region_mode=None,
+        region_pages=None,
+        region_max_candidates=None,
+    )
+
+
+def _layout_configuration(args: argparse.Namespace):
+    base = load_config(args.config)
+    return with_cli_overrides(
+        base,
+        backend=args.backend,
+        workspace_root=args.workspace_root,
+        region_mode=None,
+        region_pages=None,
+        region_max_candidates=None,
+    )
 
 
 def _product(config) -> Paper2MD:
@@ -165,6 +366,105 @@ def _convert(args: argparse.Namespace) -> int:
                 "output_dir": str(result.output_dir),
                 "page_count": result.manifest["page_count"],
                 "backend": result.manifest["backend"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _benchmark_extract(args: argparse.Namespace) -> int:
+    result = _product(_benchmark_configuration(args)).benchmark_extraction(
+        args.input_pdf,
+        mode=args.mode,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "profiled",
+                "source_sha256": result.source_sha256,
+                "page_count": result.page_count,
+                "backend": result.backend,
+                "performance": result.performance,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _prepare_layout(args: argparse.Namespace) -> int:
+    config = _layout_configuration(args)
+    result = _product(config).prepare_layout_review(
+        args.input_pdf,
+        args.output_dir,
+        preview_scale=args.preview_scale,
+        content_roi_json=args.content_roi_json,
+        extraction_profile=args.extraction_profile,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "prepared",
+                "output_dir": str(result.output_dir),
+                "page_count": result.index["page_count"],
+                "source_sha256": result.index["source_sha256"],
+                "ocr_used": False,
+                "extraction_profile": args.extraction_profile,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _apply_layout(args: argparse.Namespace) -> int:
+    config = _layout_configuration(args)
+    result = _product(config).apply_layout_review(
+        args.input_pdf,
+        args.review_dir,
+        args.output_dir,
+        visual_scale=args.visual_scale,
+        references_mode=args.references,
+        evidence_level=args.evidence,
+        include_source_pdf=args.include_source_pdf,
+        extraction_profile=args.extraction_profile,
+    )
+    print(
+        json.dumps(
+            {
+                "status": result.manifest["status"],
+                "output_dir": str(result.output_dir),
+                "page_count": result.manifest["page_count"],
+                "manifest_version": result.manifest["manifest_version"],
+                "layout_mode": "hybrid-reviewed",
+                "references_mode": args.references,
+                "evidence_level": args.evidence,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _export_layout_dataset(args: argparse.Namespace) -> int:
+    result = export_layout_dataset(args.review_root, args.output_dir)
+    print(
+        json.dumps(
+            {
+                "status": "exported",
+                "output_dir": str(result.output_dir),
+                "schema_version": result.manifest["schema_version"],
+                "document_count": result.manifest["document_count"],
+                "page_count": result.manifest["page_count"],
+                "record_counts": result.manifest["record_counts"],
+                "deterministic_content_sha256": result.manifest[
+                    "deterministic_content_sha256"
+                ],
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -236,6 +536,18 @@ def main(argv: list[str] | None = None) -> int:
         args = parser.parse_args(argv)
         if args.command == "validate-model":
             return _validate_model(args.model_json)
+        if args.command == "validate-layout-task":
+            return _validate_layout_task(args.task_json)
+        if args.command == "validate-final-layout":
+            return _validate_final_layout(args.layout_json, args.task)
+        if args.command == "benchmark-extract":
+            return _benchmark_extract(args)
+        if args.command == "layout-prepare":
+            return _prepare_layout(args)
+        if args.command == "layout-apply":
+            return _apply_layout(args)
+        if args.command == "layout-export-dataset":
+            return _export_layout_dataset(args)
         if args.command == "batch":
             return _batch(args)
         return _convert(args)
