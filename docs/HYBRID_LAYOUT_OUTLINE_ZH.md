@@ -438,6 +438,14 @@ Figure/Table 与 caption 使用一对一几何绑定。同页优先根据上下�
 manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 的对象单独计数，
 不作为正文遗漏。
 
+### 15.2.1 用户阅读层
+
+`article.md` 默认只保留标题、正文、图片和图注，不再包含页码、region
+ID、caption 绑定或跨页拼接等内部 HTML 注释。完整段落映射、图注绑定与
+跨页修复仍保存在 `_paper2md/04-provenance/layout-provenance.json` 和
+验证报告中。图片替代文本优先使用已绑定图注的首句，Figure/Table 标签
+在 Markdown 中单独加粗。
+
 ### 15.3 导出本地机器学习数据
 
 ```powershell

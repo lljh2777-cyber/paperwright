@@ -385,6 +385,68 @@ def _region_trace_comment(
     )
 
 
+_INTERNAL_MARKDOWN_COMMENTS = (
+    "<!-- page:",
+    "<!-- layout-region:",
+    "<!-- caption-for:",
+    "<!-- cross-page-continuation:",
+)
+
+
+def _clean_user_markdown(lines: Sequence[str]) -> list[str]:
+    """Remove internal trace comments while keeping readable spacing."""
+
+    cleaned: list[str] = []
+    for line in lines:
+        if line.lstrip().startswith(_INTERNAL_MARKDOWN_COMMENTS):
+            continue
+        if not line and (not cleaned or not cleaned[-1]):
+            continue
+        cleaned.append(line)
+    while cleaned and not cleaned[-1]:
+        cleaned.pop()
+    return cleaned
+
+
+_CAPTION_LABEL = re.compile(
+    r"^(?P<label>(?:fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?)"
+    r"\s*(?:[|.:])?\s*(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+
+
+def _format_caption_markdown(text: str) -> str:
+    """Emphasize only a leading Figure/Table label, not the whole caption."""
+
+    match = _CAPTION_LABEL.match(text.strip())
+    if match is None:
+        return text
+    label = match.group("label").rstrip(". :|") + "."
+    rest = match.group("rest").strip()
+    return f"**{label}** {rest}".rstrip()
+
+
+def _image_alt_text(role: str, page_number: int, caption: str | None) -> str:
+    """Return concise, Markdown-safe alternative text for a visual region."""
+
+    if not caption:
+        return f"{role.capitalize()} from page {page_number}"
+    plain = re.sub(r"[*_`#]", "", " ".join(caption.split()))
+    plain = plain.replace("[", "(").replace("]", ")")
+    match = _CAPTION_LABEL.match(plain)
+    if match is not None:
+        label = match.group("label").rstrip(". :|")
+        rest = match.group("rest").strip()
+        summary = re.split(r"(?<=[.!?])\s+", rest, maxsplit=1)[0]
+        first_sentence = f"{label}: {summary}" if summary else label
+    else:
+        first_sentence = re.split(r"(?<=[.!?])\s+", plain, maxsplit=1)[0]
+    if len(first_sentence) <= 180:
+        return first_sentence
+    shortened = first_sentence[:177].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return shortened + "..."
+
+
 def _intersection_area(left: BBox, right: BBox) -> float:
     width = max(0.0, min(left.right, right.right) - max(left.x, right.x))
     height = max(0.0, min(left.bottom, right.bottom) - max(left.y, right.y))
@@ -808,6 +870,24 @@ def write_layout_outputs(
     caption_by_region, caption_by_visual, caption_binding_quality = (
         _bind_caption_regions(document, materialized_layouts)
     )
+    caption_text_by_visual: dict[tuple[int, str], str] = {}
+    for binding in caption_by_visual.values():
+        caption_page = document.pages[binding.caption_page_index]
+        caption_layout = materialized_layouts[binding.caption_page_index]
+        caption_region = next(
+            item
+            for item in caption_layout.regions
+            if item.region_id == binding.caption_region_id
+        )
+        caption_text_by_visual[
+            (binding.visual_page_index, binding.visual_region_id)
+        ] = " ".join(
+            text
+            for _, text in _markdown_text_groups(
+                _ordered_text_elements(caption_page, caption_region)
+            )
+            if text
+        )
     reference_paragraphs: list[ReferenceParagraph] = []
     for page, materialized in zip(
         document.pages,
@@ -970,6 +1050,13 @@ def write_layout_outputs(
                     ),
                 }
                 image_records.append(image_record)
+                image_alt = _image_alt_text(
+                    region.role,
+                    page.page_index + 1,
+                    caption_text_by_visual.get(
+                        (page.page_index, region.region_id)
+                    ),
+                )
                 lines.extend(
                     [
                         _region_trace_comment(
@@ -978,8 +1065,7 @@ def write_layout_outputs(
                             page_number=page.page_index + 1,
                             element_ids=region.source_element_ids,
                         ),
-                        f"![{region.role} from page {page.page_index + 1}]"
-                        f"({relative})",
+                        f"![{image_alt}]({relative})",
                         "",
                     ]
                 )
@@ -1194,6 +1280,8 @@ def write_layout_outputs(
                         text_elements,
                     )
                 )
+                if region.role == "caption" and paragraph_index == 0:
+                    markdown_text = _format_caption_markdown(markdown_text)
                 target_lines: list[str] | None
                 if destination == "article":
                     target_lines = lines
@@ -1303,6 +1391,8 @@ def write_layout_outputs(
         page_marker_indexes,
     )
     reconstruction_events.extend(cross_page_events)
+    lines = _clean_user_markdown(lines)
+    reference_lines = _clean_user_markdown(reference_lines)
     article_path = root / "article.md"
     article_path.write_text(
         "\n".join(lines).rstrip() + "\n",
@@ -1425,13 +1515,14 @@ def write_layout_outputs(
             }
         )
     provenance = {
-        "contract_version": "paper2md-layout-provenance-v0.1",
+        "contract_version": "paper2md-layout-provenance-v0.2",
         "source_sha256": document.source_sha256,
         "candidate_generator_version": tasks[0].candidate_generator_version,
         "feature_schema_version": tasks[0].feature_schema_version,
         "prompt_version": layouts[0].prompt_version,
         "ocr_used": False,
         "references": references_summary,
+        "cross_page_repairs": cross_page_events,
         "pages": provenance_pages,
     }
     status = "success_with_degradation" if warnings else "success"

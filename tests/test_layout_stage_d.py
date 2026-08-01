@@ -17,7 +17,10 @@ from paper2md.layout_models import (
 from paper2md.layout_writer import (
     CrossPageParagraphBlock,
     _bind_caption_regions,
+    _clean_user_markdown,
     _detect_native_matrix_equations,
+    _format_caption_markdown,
+    _image_alt_text,
     _merge_cross_page_paragraph_blocks,
     _text_region_non_text_diagnostics,
 )
@@ -154,6 +157,54 @@ class CrossPageParagraphTests(unittest.TestCase):
             {0: 0, 1: 3},
         )
         self.assertIn("interaction", lines)
+
+    def test_user_markdown_removes_only_internal_trace_comments(self):
+        lines = _clean_user_markdown(
+            [
+                "# Title",
+                "",
+                "<!-- page: 1 -->",
+                "",
+                "<!-- layout-region: R1 -->",
+                "Body",
+                "",
+                "<!-- an author-supplied comment -->",
+                "",
+            ]
+        )
+        self.assertEqual(
+            lines,
+            [
+                "# Title",
+                "",
+                "Body",
+                "",
+                "<!-- an author-supplied comment -->",
+            ],
+        )
+
+    def test_caption_and_image_text_are_reader_facing(self):
+        caption = (
+            "Figure 2 | Topological boundaries demonstrate insulation. "
+            "Details."
+        )
+        self.assertEqual(
+            _format_caption_markdown(caption),
+            "**Figure 2.** Topological boundaries demonstrate insulation. "
+            "Details.",
+        )
+        self.assertEqual(
+            _image_alt_text("figure", 2, caption),
+            "Figure 2: Topological boundaries demonstrate insulation.",
+        )
+        self.assertEqual(
+            _image_alt_text(
+                "figure",
+                3,
+                "Fig. 1. Study design and workflow. More details.",
+            ),
+            "Fig. 1: Study design and workflow.",
+        )
 
     def test_terminal_sentence_is_not_merged_across_page(self):
         lines = ["t1", "Complete.", "", "p2", "", "t2", "next", ""]
@@ -563,22 +614,18 @@ class LayoutStageDTests(unittest.TestCase):
                 sha256_file(provenance),
                 manifest["layout_review"]["provenance_sha256"],
             )
-            self.assertIn(
-                "layout-region:",
-                (output / "article.md").read_text(encoding="utf-8"),
-            )
             article = (output / "article.md").read_text(encoding="utf-8")
-            comments = [
-                line
-                for line in article.splitlines()
-                if line.startswith("<!-- layout-region:")
-            ]
-            self.assertTrue(comments)
-            self.assertTrue(all(len(line) < 260 for line in comments))
-            self.assertTrue(all("element-count:" in line for line in comments))
-            self.assertTrue(all("elements-sha256:" in line for line in comments))
+            self.assertNotIn("<!-- page:", article)
+            self.assertNotIn("<!-- layout-region:", article)
+            self.assertNotIn("<!-- caption-for:", article)
+            self.assertNotIn("<!-- cross-page-continuation:", article)
             self.assertNotIn("; elements: ", article)
             provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
+            self.assertEqual(
+                provenance_value["contract_version"],
+                "paper2md-layout-provenance-v0.2",
+            )
+            self.assertIn("cross_page_repairs", provenance_value)
             self.assertTrue(
                 any(
                     region["source_element_ids"]
