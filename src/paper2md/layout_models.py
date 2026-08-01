@@ -18,10 +18,16 @@ from .exceptions import ContractValidationError
 from .models import BBox, Page
 
 LAYOUT_TASK_VERSION = "paper2md-layout-task-v0.1"
+RASTER_LAYOUT_TASK_VERSION = "paper2md-layout-task-v0.2"
+LAYOUT_TASK_VERSIONS = frozenset(
+    {LAYOUT_TASK_VERSION, RASTER_LAYOUT_TASK_VERSION}
+)
 FINAL_LAYOUT_VERSION = "paper2md-final-layout-v0.1"
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
-_ELEMENT_KINDS = frozenset({"text", "image", "vector", "link", "annotation"})
+_ELEMENT_KINDS = frozenset(
+    {"text", "image", "vector", "raster", "link", "annotation"}
+)
 _FEATURE_SCALARS = (str, int, float, bool, type(None))
 _ACTIONS = frozenset(
     {
@@ -377,7 +383,7 @@ class LayoutTask:
     contract_version: str = LAYOUT_TASK_VERSION
 
     def __post_init__(self) -> None:
-        if self.contract_version != LAYOUT_TASK_VERSION:
+        if self.contract_version not in LAYOUT_TASK_VERSIONS:
             raise ContractValidationError("布局任务契约版本不匹配")
         object.__setattr__(
             self,

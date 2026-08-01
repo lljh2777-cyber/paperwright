@@ -159,7 +159,9 @@ class CLITests(unittest.TestCase):
                 "paper2md-raster-benchmark-v0.1",
             )
             self.assertEqual(len(raster["pages"]), 2)
+            self.assertEqual(len(raster["layout_tasks"]), 2)
             self.assertGreaterEqual(raster["render_total_ms"], 0)
+            self.assertGreaterEqual(raster["layout_task_total_ms"], 0)
             for page in raster["pages"]:
                 self.assertEqual(
                     page["contract_version"],
@@ -168,6 +170,17 @@ class CLITests(unittest.TestCase):
                 self.assertEqual(len(page["mask_sha256"]["ink"]), 64)
                 self.assertGreaterEqual(page["analysis_ms"], 0)
             self.assertTrue(raster["pages"][0]["regions"])
+            self.assertTrue(
+                all(
+                    task["contract_version"]
+                    == "paper2md-layout-task-v0.2"
+                    for task in raster["layout_tasks"]
+                )
+            )
+            self.assertGreater(
+                raster["layout_tasks"][0]["raster_candidate_count"],
+                0,
+            )
 
 
 if __name__ == "__main__":

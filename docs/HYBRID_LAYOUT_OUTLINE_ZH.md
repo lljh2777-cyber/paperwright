@@ -497,6 +497,14 @@ paper2md benchmark-extract input.pdf --mode text-only
 正文 ROI、栏结构、相邻图注和阅读顺序将在下一层负责排除页眉并把同一
 Figure 的面板组合成最终视觉区块。
 
+`raster` 证据接入布局任务时使用 `paper2md-layout-task-v0.2`。原生文字/对象候选仍由
+空白带规则生成；栅格候选作为独立的 `raster` 区域加入，不与文字候选混成大框，也不
+伪造 PDF 对象 ID。被栅格区域覆盖的图内标签会记录到
+`raster_suppressed_element_ids`，避免作为正文碎片输出。靠近页面上下边缘的小型期刊
+徽标会标记为外围视觉内容，并与其覆盖的文字一起从正文 ROI 中排除。v0.1 任务格式和
+无栅格证据的既有输出保持兼容；v0.2 仍保留原子视觉候选，复杂多面板 Figure 的合并
+由后续布局确认层完成。
+
 ### 15.3 导出本地机器学习数据
 
 ```powershell

@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from statistics import median
 from typing import Iterable, Mapping, Sequence
 
@@ -19,13 +19,20 @@ from .layout_models import (
     LayoutPage,
     LayoutSeparator,
     LayoutTask,
+    LAYOUT_TASK_VERSION,
     NormalizedBBox,
+    RASTER_LAYOUT_TASK_VERSION,
 )
 from .models import BBox, Element, Page, PhysicalDocument
+from .raster_layout import RasterPageAnalysis
 from .references import is_reference_heading
 
 CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
 FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
+RASTER_CANDIDATE_GENERATOR_VERSION = (
+    "paper2md-whitespace-raster-candidates-v0.1"
+)
+RASTER_FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.2"
 
 _PAGE_NUMBER = re.compile(
     r"^\s*(?:page\s+)?(?:\d+|[ivxlcdm]+)(?:\s+(?:of|/)\s+\d+)?\s*$",
@@ -87,6 +94,7 @@ class _Atom:
     element_ids: tuple[str, ...]
     kinds: tuple[str, ...]
     text: str = ""
+    features: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -119,10 +127,41 @@ def _padded_content_roi(
     edge_band_max_width_ratio: float,
     edge_band_gap_ratio: float,
 ) -> NormalizedBBox:
+    peripheral_raster_boxes = [
+        atom.bbox
+        for atom in atoms
+        if bool(atom.features.get("raster_peripheral_hint"))
+    ]
+
+    def covered_by_peripheral_raster(atom: _Atom) -> bool:
+        if "raster" in atom.kinds:
+            return bool(atom.features.get("raster_peripheral_hint"))
+        area = atom.bbox.width * atom.bbox.height
+        if area <= 0:
+            return False
+        return any(
+            (
+                max(
+                    0.0,
+                    min(atom.bbox.right, box.right)
+                    - max(atom.bbox.x, box.x),
+                )
+                * max(
+                    0.0,
+                    min(atom.bbox.bottom, box.bottom)
+                    - max(atom.bbox.y, box.y),
+                )
+                / area
+                >= 0.50
+            )
+            for box in peripheral_raster_boxes
+        )
+
     retained = [
         atom
         for atom in atoms
-        if not (
+        if not covered_by_peripheral_raster(atom)
+        and not (
             atom.element_ids
             and set(atom.element_ids).issubset(peripheral_ids)
             and (
@@ -400,6 +439,47 @@ def _graphics_atoms(page: Page, proximity: float) -> list[_Atom]:
                 bbox=_union_bbox(item.bbox for item in ordered),
                 element_ids=tuple(item.element_id for item in ordered),
                 kinds=tuple(sorted({item.kind for item in ordered})),
+            )
+        )
+    return result
+
+
+def _raster_atoms(
+    page: Page,
+    analysis: RasterPageAnalysis | None,
+) -> list[_Atom]:
+    if analysis is None:
+        return []
+    if analysis.page_index != page.page_index:
+        raise ValueError("raster analysis page index does not match page")
+    result: list[_Atom] = []
+    for item in analysis.regions:
+        bbox = item.bbox.to_pdf_bbox(
+            page_width=page.width,
+            page_height=page.height,
+        )
+        peripheral_hint = (
+            (
+                item.bbox.y <= 0.025
+                or item.bbox.bottom >= 0.975
+            )
+            and item.bbox.height <= 0.06
+            and item.bbox.width <= 0.40
+            and item.page_area_ratio <= 0.02
+        )
+        result.append(
+            _Atom(
+                atom_id=f"raster-{item.region_id}",
+                bbox=bbox,
+                element_ids=(),
+                kinds=("raster",),
+                features={
+                    "raster_ink_coverage": item.ink_coverage,
+                    "raster_residual_coverage": item.residual_coverage,
+                    "raster_text_mask_coverage": item.text_mask_coverage,
+                    "raster_page_area_ratio": item.page_area_ratio,
+                    "raster_peripheral_hint": peripheral_hint,
+                },
             )
         )
     return result
@@ -893,6 +973,16 @@ def _candidate_from_leaf(
     kinds = tuple(
         sorted({kind for atom in leaf.atoms for kind in atom.kinds})
     )
+    features = _candidate_features(
+        page,
+        bbox,
+        element_ids,
+        page_has_native_text=page_has_native_text,
+        peripheral_hint=peripheral_hint,
+        furniture_reason=furniture_reason,
+        band_index=leaf.band_index,
+        column_index=leaf.column_index,
+    )
     return LayoutCandidate(
         candidate_id=candidate_id,
         bbox=NormalizedBBox.from_pdf_bbox(
@@ -902,16 +992,56 @@ def _candidate_from_leaf(
         ),
         source_element_ids=element_ids,
         element_kinds=kinds,
-        features=_candidate_features(
-            page,
-            bbox,
-            element_ids,
-            page_has_native_text=page_has_native_text,
-            peripheral_hint=peripheral_hint,
-            furniture_reason=furniture_reason,
-            band_index=leaf.band_index,
-            column_index=leaf.column_index,
+        features=features,
+    )
+
+
+def _candidate_from_raster_atom(
+    page: Page,
+    atom: _Atom,
+    *,
+    candidate_id: str,
+    page_has_native_text: bool,
+) -> LayoutCandidate:
+    features = _candidate_features(
+        page,
+        atom.bbox,
+        (),
+        page_has_native_text=page_has_native_text,
+        peripheral_hint=bool(atom.features.get("raster_peripheral_hint")),
+        furniture_reason=(
+            "raster_edge_badge"
+            if bool(atom.features.get("raster_peripheral_hint"))
+            else None
         ),
+        band_index=-1,
+        column_index=-1,
+    )
+    features.update(
+        {
+            "raster_evidence": True,
+            "raster_region_count": 1,
+            "raster_ink_coverage_max": atom.features[
+                "raster_ink_coverage"
+            ],
+            "raster_residual_coverage_max": atom.features[
+                "raster_residual_coverage"
+            ],
+            "raster_text_mask_coverage_max": atom.features[
+                "raster_text_mask_coverage"
+            ],
+        }
+    )
+    return LayoutCandidate(
+        candidate_id=candidate_id,
+        bbox=NormalizedBBox.from_pdf_bbox(
+            atom.bbox,
+            page_width=page.width,
+            page_height=page.height,
+        ),
+        source_element_ids=(),
+        element_kinds=("raster",),
+        features=features,
     )
 
 
@@ -1005,6 +1135,7 @@ def propose_content_rois(
     document: PhysicalDocument,
     *,
     config: CandidateGenerationConfig | None = None,
+    raster_analyses: Mapping[int, RasterPageAnalysis] | None = None,
 ) -> dict[int, NormalizedBBox]:
     """Propose a conservative analysis ROI for every page.
 
@@ -1014,6 +1145,11 @@ def propose_content_rois(
     """
 
     settings = config or CandidateGenerationConfig()
+    raster_by_page = dict(raster_analyses or {})
+    if raster_analyses is not None:
+        expected = {page.page_index for page in document.pages}
+        if set(raster_by_page) != expected:
+            raise ValueError("raster analysis pages do not match document")
     furniture, _ = _furniture_element_ids(document, settings)
     proposals: dict[int, NormalizedBBox] = {}
     for page in document.pages:
@@ -1025,6 +1161,7 @@ def propose_content_rois(
                 page,
                 proximity=line_height * settings.graphics_cluster_line_ratio,
             )
+            + _raster_atoms(page, raster_by_page.get(page.page_index))
             + _other_atoms(page)
         )
         proposals[page.page_index] = _padded_content_roi(
@@ -1048,6 +1185,7 @@ def generate_layout_tasks(
     config: CandidateGenerationConfig | None = None,
     content_rois: Mapping[int, NormalizedBBox] | None = None,
     content_roi_source: str = "rule_proposed",
+    raster_analyses: Mapping[int, RasterPageAnalysis] | None = None,
 ) -> tuple[LayoutTask, ...]:
     """Generate one deterministic, AI-reviewable layout task per page.
 
@@ -1057,11 +1195,23 @@ def generate_layout_tasks(
     """
 
     settings = config or CandidateGenerationConfig()
+    raster_by_page = dict(raster_analyses or {})
+    if raster_analyses is not None:
+        expected = {page.page_index for page in document.pages}
+        if set(raster_by_page) != expected:
+            raise ValueError("raster analysis pages do not match document")
+        for page_index, analysis in raster_by_page.items():
+            if analysis.page_index != page_index:
+                raise ValueError("raster analysis mapping key mismatch")
     furniture, furniture_reasons = _furniture_element_ids(document, settings)
     rois = (
         dict(content_rois)
         if content_rois is not None
-        else propose_content_rois(document, config=settings)
+        else propose_content_rois(
+            document,
+            config=settings,
+            raster_analyses=raster_analyses,
+        )
     )
     expected_pages = {page.page_index for page in document.pages}
     if set(rois) != expected_pages:
@@ -1082,6 +1232,7 @@ def generate_layout_tasks(
                 page,
                 proximity=line_height * settings.graphics_cluster_line_ratio,
             )
+            + _raster_atoms(page, raster_by_page.get(page.page_index))
             + _other_atoms(page)
         )
         peripheral_ids = furniture.get(page.page_index, set())
@@ -1121,8 +1272,51 @@ def generate_layout_tasks(
                     element_ids=atom.element_ids,
                     kinds=atom.kinds,
                     text=atom.text,
+                    features=dict(atom.features),
                 )
             )
+
+        structural_content_atoms = [
+            atom for atom in content_atoms if "raster" not in atom.kinds
+        ]
+        raster_content_atoms = [
+            atom
+            for atom in content_atoms
+            if "raster" in atom.kinds
+            and not bool(atom.features.get("raster_peripheral_hint"))
+        ]
+        raster_suppressed_element_ids: set[str] = set()
+        if raster_content_atoms:
+            retained_structural_atoms: list[_Atom] = []
+            for atom in structural_content_atoms:
+                atom_area = atom.bbox.width * atom.bbox.height
+                covered_ratio = (
+                    max(
+                        (
+                            _overlap_length(
+                                atom.bbox.x,
+                                atom.bbox.right,
+                                raster_atom.bbox.x,
+                                raster_atom.bbox.right,
+                            )
+                            * _overlap_length(
+                                atom.bbox.y,
+                                atom.bbox.bottom,
+                                raster_atom.bbox.y,
+                                raster_atom.bbox.bottom,
+                            )
+                            / atom_area
+                        )
+                        for raster_atom in raster_content_atoms
+                    )
+                    if atom_area > 0
+                    else 0.0
+                )
+                if covered_ratio >= 0.50:
+                    raster_suppressed_element_ids.update(atom.element_ids)
+                    continue
+                retained_structural_atoms.append(atom)
+            structural_content_atoms = retained_structural_atoms
 
         horizontal_gap = max(
             line_height * settings.horizontal_gap_line_ratio,
@@ -1135,11 +1329,11 @@ def generate_layout_tasks(
         leaves: list[_Leaf] = []
         for band_index, band in enumerate(
             _horizontal_bands(
-                content_atoms,
+                structural_content_atoms,
                 minimum_gap=horizontal_gap,
                 max_depth=settings.max_split_depth,
             )
-            if content_atoms
+            if structural_content_atoms
             else []
         ):
             columns = _vertical_columns(
@@ -1172,6 +1366,26 @@ def generate_layout_tasks(
                     page_has_native_text=page_has_native_text,
                 )
             )
+        next_candidate_index = len(candidates) + 1
+        for raster_atom in sorted(
+            raster_content_atoms,
+            key=lambda item: (
+                item.bbox.y,
+                item.bbox.x,
+                item.bbox.height,
+                item.bbox.width,
+                item.atom_id,
+            ),
+        ):
+            candidates.append(
+                _candidate_from_raster_atom(
+                    page,
+                    raster_atom,
+                    candidate_id=f"C{next_candidate_index:03d}",
+                    page_has_native_text=page_has_native_text,
+                )
+            )
+            next_candidate_index += 1
         content_boxes = [
             item.bbox
             for item in candidates
@@ -1188,10 +1402,23 @@ def generate_layout_tasks(
             else None
         )
         task = LayoutTask(
+            contract_version=(
+                RASTER_LAYOUT_TASK_VERSION
+                if raster_analyses is not None
+                else LAYOUT_TASK_VERSION
+            ),
             source_sha256=document.source_sha256,
             page=LayoutPage.from_page(page),
-            candidate_generator_version=CANDIDATE_GENERATOR_VERSION,
-            feature_schema_version=FEATURE_SCHEMA_VERSION,
+            candidate_generator_version=(
+                RASTER_CANDIDATE_GENERATOR_VERSION
+                if raster_analyses is not None
+                else CANDIDATE_GENERATOR_VERSION
+            ),
+            feature_schema_version=(
+                RASTER_FEATURE_SCHEMA_VERSION
+                if raster_analyses is not None
+                else FEATURE_SCHEMA_VERSION
+            ),
             candidates=tuple(candidates),
             separators=_candidate_separators(candidates),
             metadata={
@@ -1217,6 +1444,9 @@ def generate_layout_tasks(
                 "boundary_crossing_element_ids": sorted(
                     boundary_crossing_element_ids
                 ),
+                "raster_suppressed_element_ids": sorted(
+                    raster_suppressed_element_ids
+                ),
                 "furniture_reasons": {
                     element_id: reason
                     for element_id, reason in sorted(
@@ -1225,6 +1455,33 @@ def generate_layout_tasks(
                     if element_id in excluded_element_ids
                 },
                 "ocr_used": False,
+                "raster_evidence": (
+                    {
+                        "contract_version": raster_by_page[
+                            page.page_index
+                        ].contract_version,
+                        "preview_width": raster_by_page[
+                            page.page_index
+                        ].preview_width,
+                        "preview_height": raster_by_page[
+                            page.page_index
+                        ].preview_height,
+                        "ink_mask_sha256": raster_by_page[
+                            page.page_index
+                        ].ink_mask_sha256,
+                        "text_mask_sha256": raster_by_page[
+                            page.page_index
+                        ].text_mask_sha256,
+                        "residual_mask_sha256": raster_by_page[
+                            page.page_index
+                        ].residual_mask_sha256,
+                        "region_count": len(
+                            raster_by_page[page.page_index].regions
+                        ),
+                    }
+                    if raster_analyses is not None
+                    else None
+                ),
             },
         )
         tasks.append(task)

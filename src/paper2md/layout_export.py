@@ -14,6 +14,7 @@ _CANDIDATE_COLORS = {
     "text": (32, 117, 255),
     "image": (38, 166, 91),
     "vector": (145, 80, 210),
+    "raster": (220, 45, 55),
     "mixed": (230, 74, 25),
     "unknown": (96, 96, 96),
 }
@@ -67,7 +68,11 @@ def render_content_roi_overlay(
 
 
 def _candidate_color(kinds: tuple[str, ...]) -> tuple[int, int, int]:
-    relevant = tuple(item for item in kinds if item in {"text", "image", "vector"})
+    relevant = tuple(
+        item
+        for item in kinds
+        if item in {"text", "image", "vector", "raster"}
+    )
     if len(set(relevant)) > 1:
         return _CANDIDATE_COLORS["mixed"]
     if relevant:

@@ -5,6 +5,12 @@ import unittest
 from PIL import Image, ImageDraw
 
 from paper2md.models import BBox, Element, Page, Provenance
+from paper2md.models import PhysicalDocument
+from paper2md.layout_candidates import (
+    generate_layout_tasks,
+    propose_content_rois,
+)
+from paper2md.layout_models import LayoutTask
 from paper2md.raster_layout import (
     RasterLayoutConfig,
     analyze_page_raster,
@@ -127,6 +133,82 @@ class RasterLayoutTests(unittest.TestCase):
         self.assertEqual(overlay.mode, "RGB")
         self.assertEqual(overlay.size, preview.size)
         self.assertEqual(preview.getpixel((0, 0)), (255, 255, 255))
+
+    def test_raster_evidence_generates_v2_task_without_fake_object_ids(self):
+        page = Page(
+            page_index=0,
+            width=300,
+            height=400,
+            rotation=0,
+            elements=(
+                _text("body", BBox(30, 75, 240, 20), "body"),
+                _text("panel", BBox(50, 210, 30, 10), "A"),
+                _text("caption", BBox(30, 330, 240, 25), "Figure 1."),
+            ),
+        )
+        document = PhysicalDocument(
+            source_sha256="a" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        preview = Image.new("RGB", (300, 400), "white")
+        draw = ImageDraw.Draw(preview)
+        draw.rectangle((215, 8, 285, 24), fill="black")
+        draw.rectangle((32, 78, 268, 92), fill="black")
+        draw.rectangle((35, 190, 265, 315), outline="black", width=5)
+        draw.line((45, 300, 250, 205), fill=(20, 80, 180), width=7)
+        draw.rectangle((50, 210, 80, 220), fill="black")
+        draw.rectangle((32, 332, 268, 352), fill="black")
+        raster = analyze_page_raster(preview, page).analysis
+
+        rois = propose_content_rois(
+            document,
+            raster_analyses={0: raster},
+        )
+        tasks = generate_layout_tasks(
+            document,
+            content_rois=rois,
+            content_roi_source="raster_rule_proposed",
+            raster_analyses={0: raster},
+        )
+
+        self.assertGreater(rois[0].y, 0.03)
+        task = tasks[0]
+        self.assertEqual(task.contract_version, "paper2md-layout-task-v0.2")
+        self.assertEqual(
+            task.candidate_generator_version,
+            "paper2md-whitespace-raster-candidates-v0.1",
+        )
+        self.assertEqual(
+            task.metadata["raster_evidence"]["ink_mask_sha256"],
+            raster.ink_mask_sha256,
+        )
+        raster_candidates = [
+            item for item in task.candidates if "raster" in item.element_kinds
+        ]
+        self.assertTrue(raster_candidates)
+        self.assertTrue(
+            all(
+                candidate.element_kinds == ("raster",)
+                for candidate in raster_candidates
+            )
+        )
+        self.assertTrue(
+            all(candidate.bbox.y > 0.10 for candidate in raster_candidates)
+        )
+        self.assertTrue(task.metadata["raster_suppressed_element_ids"])
+        self.assertTrue(
+            all(
+                not source_id.startswith("raster-")
+                for candidate in raster_candidates
+                for source_id in candidate.source_element_ids
+            )
+        )
+        self.assertEqual(
+            LayoutTask.from_dict(task.to_dict()).canonical_json(),
+            task.canonical_json(),
+        )
 
 
 if __name__ == "__main__":

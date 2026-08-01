@@ -114,6 +114,7 @@ class Paper2MD:
                 3,
             )
             raster_pages: list[dict[str, Any]] = []
+            raster_analyses: dict[int, Any] = {}
             analysis_started = time.perf_counter_ns()
             for page, preview in zip(
                 result.document.pages,
@@ -122,6 +123,7 @@ class Paper2MD:
             ):
                 page_started = time.perf_counter_ns()
                 raster = analyze_page_raster(preview, page)
+                raster_analyses[page.page_index] = raster.analysis
                 record = raster.analysis.to_dict()
                 record["analysis_ms"] = round(
                     (time.perf_counter_ns() - page_started) / 1_000_000,
@@ -132,12 +134,59 @@ class Paper2MD:
                 (time.perf_counter_ns() - analysis_started) / 1_000_000,
                 3,
             )
+            layout_started = time.perf_counter_ns()
+            content_rois = propose_content_rois(
+                result.document,
+                raster_analyses=raster_analyses,
+            )
+            tasks = generate_layout_tasks(
+                result.document,
+                content_rois=content_rois,
+                content_roi_source="raster_rule_proposed",
+                raster_analyses=raster_analyses,
+            )
+            layout_ms = round(
+                (time.perf_counter_ns() - layout_started) / 1_000_000,
+                3,
+            )
             performance["raster_layout"] = {
                 "schema_version": "paper2md-raster-benchmark-v0.1",
                 "preview_scale": 1.5,
                 "render_total_ms": render_ms,
                 "analysis_total_ms": analysis_ms,
+                "layout_task_total_ms": layout_ms,
                 "pages": raster_pages,
+                "layout_tasks": [
+                    {
+                        "page_index": task.page.page_index,
+                        "contract_version": task.contract_version,
+                        "candidate_count": len(task.candidates),
+                        "raster_candidate_count": sum(
+                            "raster" in candidate.element_kinds
+                            for candidate in task.candidates
+                        ),
+                        "analysis_roi": task.metadata["analysis_roi"]["bbox"],
+                        "raster_suppressed_element_count": len(
+                            task.metadata.get(
+                                "raster_suppressed_element_ids",
+                                [],
+                            )
+                        ),
+                        "candidates": [
+                            {
+                                "candidate_id": candidate.candidate_id,
+                                "bbox": candidate.bbox.to_dict(),
+                                "element_kinds": list(candidate.element_kinds),
+                                "raster_region_count": candidate.features.get(
+                                    "raster_region_count",
+                                    0,
+                                ),
+                            }
+                            for candidate in task.candidates
+                        ],
+                    }
+                    for task in tasks
+                ],
             }
         performance["pipeline_total_ms"] = round(
             (time.perf_counter_ns() - pipeline_started) / 1_000_000,

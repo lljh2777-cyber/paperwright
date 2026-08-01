@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://paper2md.local/schemas/layout_task.schema.json",
-  "title": "Paper2MD layout task v0.1",
+  "title": "Paper2MD layout task v0.1/v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "paper2md-layout-task-v0.1"
+      "enum": ["paper2md-layout-task-v0.1", "paper2md-layout-task-v0.2"]
     },
     "source_sha256": {
       "type": "string",
@@ -124,7 +124,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "enum": ["text", "image", "vector", "link", "annotation"]
+            "enum": ["text", "image", "vector", "raster", "link", "annotation"]
           }
         },
         "features": {"$ref": "#/$defs/featureMap"}
