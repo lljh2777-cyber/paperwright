@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper2MD Convert"
+  short_description: "Convert scientific PDFs with Paper2MD"
+  default_prompt: "Use $paper2md-convert to choose and run the appropriate Paper2MD conversion workflow for these PDFs."

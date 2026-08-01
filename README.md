@@ -168,6 +168,21 @@ python -m paper2md convert input.pdf output-dir
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
 
+## AI Agent skills
+
+仓库的 `skills/` 目录提供三个可分发的 Agent skill：
+
+- [`paper2md-install`](skills/paper2md-install/SKILL.md)：下载、安装与 CLI 验证；
+- [`paper2md-convert`](skills/paper2md-convert/SKILL.md)：直接转换、批量转换与人工/视觉 AI 混合复核；
+- [`paper2md-contribute`](skills/paper2md-contribute/SKILL.md)：理解架构、修改代码、测试和参与贡献。
+
+支持仓库内 skill 发现的 Agent 可以直接加载 `skills/`。其他工具可把对应 skill
+目录复制到自身的 skills 目录，或在提示中明确要求参照对应 `SKILL.md`。安装后可使用
+`$paper2md-install`、`$paper2md-convert` 或 `$paper2md-contribute` 显式调用。
+
+这些 skills 只指导 Agent 调用现有命令和遵守项目契约，不会替 Paper2MD 隐式增加
+联网、LLM、OCR 或外部 API 行为。
+
 ## 已知限制
 
 - 不支持扫描 PDF 的 OCR；
