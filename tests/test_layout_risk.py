@@ -74,6 +74,125 @@ class LayoutRiskTests(unittest.TestCase):
             assessment.pages[1].reasons,
             ("raster_region_ambiguity_high",),
         )
+        self.assertEqual(
+            assessment.policy_version,
+            "paper2md-layout-risk-v0.2",
+        )
+
+    def test_independent_moderate_signals_combine_into_upgrade(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        page = Page(
+            page_index=0,
+            width=100,
+            height=100,
+            rotation=0,
+            elements=(
+                Element(
+                    "p0-text",
+                    "text",
+                    0,
+                    BBox(10, 10, 80, 10),
+                    provenance,
+                    text="body",
+                ),
+            ),
+        )
+        document = PhysicalDocument(
+            source_sha256="b" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        candidates = tuple(
+            LayoutCandidate(
+                candidate_id=f"C{index + 1:03d}",
+                bbox=NormalizedBBox(0.1, 0.1, 0.2, 0.2),
+                element_kinds=(
+                    ("text", "raster")
+                    if index < 3
+                    else (("raster",) if index == 3 else ("text",))
+                ),
+            )
+            for index in range(16)
+        )
+        task = LayoutTask(
+            source_sha256=document.source_sha256,
+            page=LayoutPage.from_page(page),
+            candidate_generator_version="fixture",
+            feature_schema_version="fixture",
+            candidates=candidates,
+            contract_version=RASTER_LAYOUT_TASK_VERSION,
+        )
+
+        assessment = assess_layout_risk((task,), document)
+        risk = assessment.pages[0]
+
+        self.assertEqual(risk.reasons, ("combined_layout_ambiguity",))
+        self.assertEqual(risk.risk_score, 3)
+        self.assertEqual(
+            risk.signals,
+            (
+                "candidate_fragmentation_elevated",
+                "raster_region_ambiguity_elevated",
+                "mixed_content_ambiguity_elevated",
+            ),
+        )
+        self.assertEqual(risk.metrics["mixed_candidate_count"], 3)
+        serialized = assessment.to_dict()
+        self.assertEqual(
+            serialized["policy"]["composite_score_threshold"],
+            3,
+        )
+        self.assertEqual(serialized["pages"][0]["risk_score"], 3)
+
+    def test_one_moderate_signal_does_not_force_upgrade(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        page = Page(
+            page_index=0,
+            width=100,
+            height=100,
+            rotation=0,
+            elements=(
+                Element(
+                    "p0-text",
+                    "text",
+                    0,
+                    BBox(10, 10, 80, 10),
+                    provenance,
+                    text="body",
+                ),
+            ),
+        )
+        document = PhysicalDocument(
+            source_sha256="c" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        task = LayoutTask(
+            source_sha256=document.source_sha256,
+            page=LayoutPage.from_page(page),
+            candidate_generator_version="fixture",
+            feature_schema_version="fixture",
+            candidates=tuple(
+                LayoutCandidate(
+                    candidate_id=f"C{index + 1:03d}",
+                    bbox=NormalizedBBox(0.1, 0.1, 0.2, 0.2),
+                    element_kinds=("text",),
+                )
+                for index in range(16)
+            ),
+            contract_version=RASTER_LAYOUT_TASK_VERSION,
+        )
+
+        risk = assess_layout_risk((task,), document).pages[0]
+
+        self.assertFalse(risk.requires_full_object_analysis)
+        self.assertEqual(risk.risk_score, 1)
+        self.assertEqual(
+            risk.signals,
+            ("candidate_fragmentation_elevated",),
+        )
 
     def test_pdfium_hybrid_walks_only_selected_pages(self):
         with tempfile.TemporaryDirectory() as temp:
