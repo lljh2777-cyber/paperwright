@@ -109,9 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     benchmark_extract.add_argument(
         "--mode",
-        choices=("full", "text-only"),
+        choices=("full", "text-only", "raster"),
         default="full",
-        help="full 为当前完整提取；text-only 只读取 TextPage",
+        help=(
+            "full 为当前完整提取；text-only 只读取 TextPage；"
+            "raster 再执行低分辨率占用图分析"
+        ),
     )
 
     prepare_layout = commands.add_parser(

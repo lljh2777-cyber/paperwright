@@ -489,6 +489,14 @@ paper2md benchmark-extract input.pdf --mode text-only
 对照一致；metadata 明确标记图片和矢量 inventory 未枚举。在栅格视觉候选及
 相应质量检查完成前，该模式只允许用于只读基准，不能直接替代产品转换。
 
+`raster` 基准在 text-only 之后，以 1.5 scale 批量渲染页面；同一 PDF 只打开
+一次。分析同时保留三层确定性证据：完整页面 `ink_mask`、原生文字 bbox 的
+`text_mask`，以及两者相减得到的 `residual_mask`。背景颜色从页面边缘稳健
+估计，不假定必须是纯白；三张掩膜均记录尺寸相关 SHA-256。低分辨率网格对
+残余视觉信号产生高召回原子候选，但不在这一层盲目合并多面板 Figure。
+正文 ROI、栏结构、相邻图注和阅读顺序将在下一层负责排除页眉并把同一
+Figure 的面板组合成最终视觉区块。
+
 ### 15.3 导出本地机器学习数据
 
 ```powershell

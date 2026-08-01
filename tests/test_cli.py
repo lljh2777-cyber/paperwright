@@ -136,6 +136,39 @@ class CLITests(unittest.TestCase):
                     0,
                 )
 
+    def test_benchmark_raster_reports_masks_and_visual_candidates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "fixture.pdf"
+            create_born_digital_fixture(source)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(
+                    [
+                        "benchmark-extract",
+                        str(source),
+                        "--mode",
+                        "raster",
+                    ]
+                )
+
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            raster = result["performance"]["raster_layout"]
+            self.assertEqual(
+                raster["schema_version"],
+                "paper2md-raster-benchmark-v0.1",
+            )
+            self.assertEqual(len(raster["pages"]), 2)
+            self.assertGreaterEqual(raster["render_total_ms"], 0)
+            for page in raster["pages"]:
+                self.assertEqual(
+                    page["contract_version"],
+                    "paper2md-raster-layout-v0.1",
+                )
+                self.assertEqual(len(page["mask_sha256"]["ink"]), 64)
+                self.assertGreaterEqual(page["analysis_ms"], 0)
+            self.assertTrue(raster["pages"][0]["regions"])
+
 
 if __name__ == "__main__":
     unittest.main()

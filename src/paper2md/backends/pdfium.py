@@ -731,33 +731,54 @@ class PDFiumBackend:
     ) -> Any:
         """Render one complete page for layout review, without OCR."""
 
+        return self.render_page_previews(
+            source,
+            (page_index,),
+            scale=scale,
+            max_pixels=max_pixels,
+        )[0]
+
+    def render_page_previews(
+        self,
+        source: Path,
+        page_indices: tuple[int, ...],
+        *,
+        scale: float = 1.5,
+        max_pixels: int = 16_000_000,
+    ) -> tuple[Any, ...]:
+        """Render multiple previews while opening the PDF only once."""
+
         if not math.isfinite(scale) or scale <= 0:
             raise BackendExecutionError("layout preview scale 必须是正有限数")
         if max_pixels <= 0:
             raise BackendExecutionError("layout preview max_pixels 必须为正")
+        if len(set(page_indices)) != len(page_indices):
+            raise BackendExecutionError("layout preview 页码不得重复")
         document = self._pdfium.PdfDocument(source)
+        results: list[Any] = []
         try:
-            if not 0 <= page_index < len(document):
-                raise BackendExecutionError("layout preview 页码越界")
-            page = document[page_index]
-            try:
-                width_px = int(math.ceil(float(page.get_width()) * scale))
-                height_px = int(math.ceil(float(page.get_height()) * scale))
-                if width_px * height_px > max_pixels:
-                    raise BackendExecutionError("layout preview 超过像素上限")
-                bitmap = page.render(
-                    scale=scale,
-                    rotation=0,
-                    may_draw_forms=False,
-                    draw_annots=False,
-                    rev_byteorder=True,
-                )
+            for page_index in page_indices:
+                if not 0 <= page_index < len(document):
+                    raise BackendExecutionError("layout preview 页码越界")
+                page = document[page_index]
                 try:
-                    return bitmap.to_pil().convert("RGB")
+                    width_px = int(math.ceil(float(page.get_width()) * scale))
+                    height_px = int(math.ceil(float(page.get_height()) * scale))
+                    if width_px * height_px > max_pixels:
+                        raise BackendExecutionError("layout preview 超过像素上限")
+                    bitmap = page.render(
+                        scale=scale,
+                        rotation=0,
+                        may_draw_forms=False,
+                        draw_annots=False,
+                        rev_byteorder=True,
+                    )
+                    try:
+                        results.append(bitmap.to_pil().convert("RGB"))
+                    finally:
+                        bitmap.close()
                 finally:
-                    bitmap.close()
-            finally:
-                page.close()
+                    page.close()
         except BackendExecutionError:
             raise
         except Exception as exc:
@@ -766,6 +787,7 @@ class PDFiumBackend:
             ) from exc
         finally:
             document.close()
+        return tuple(results)
 
     def render_region(
         self,

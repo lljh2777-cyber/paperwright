@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,7 @@ from .layout_roi import (
 from .layout_writer import write_layout_outputs
 from .models import PhysicalDocument
 from .paths import validate_conversion_paths, validate_input_pdf
+from .raster_layout import analyze_page_raster
 from .writer import write_outputs
 
 
@@ -70,12 +72,13 @@ class Paper2MD:
     ) -> ExtractionBenchmarkResult:
         """Run one read-only extraction and return non-deterministic timings."""
 
-        if mode not in {"full", "text-only"}:
-            raise ValueError("benchmark mode must be full or text-only")
+        if mode not in {"full", "text-only", "raster"}:
+            raise ValueError("benchmark mode must be full, text-only, or raster")
+        pipeline_started = time.perf_counter_ns()
         source = validate_input_pdf(input_pdf)
         backend = self.registry.get(self.config.backend)
         extractor = backend.extract
-        if mode == "text-only":
+        if mode in {"text-only", "raster"}:
             extractor = getattr(backend, "extract_text_only", None)
             if not callable(extractor):
                 raise BackendExecutionError(
@@ -93,11 +96,58 @@ class Paper2MD:
             raise BackendExecutionError(
                 f"{backend.identity.name} 后端没有提供性能计时"
             )
+        performance = dict(result.performance)
+        if mode == "raster":
+            render_previews = getattr(backend, "render_page_previews", None)
+            if not callable(render_previews):
+                raise BackendExecutionError(
+                    f"{backend.identity.name} 后端不支持批量页面预览"
+                )
+            render_started = time.perf_counter_ns()
+            previews = render_previews(
+                source,
+                tuple(range(len(result.document.pages))),
+                scale=1.5,
+            )
+            render_ms = round(
+                (time.perf_counter_ns() - render_started) / 1_000_000,
+                3,
+            )
+            raster_pages: list[dict[str, Any]] = []
+            analysis_started = time.perf_counter_ns()
+            for page, preview in zip(
+                result.document.pages,
+                previews,
+                strict=True,
+            ):
+                page_started = time.perf_counter_ns()
+                raster = analyze_page_raster(preview, page)
+                record = raster.analysis.to_dict()
+                record["analysis_ms"] = round(
+                    (time.perf_counter_ns() - page_started) / 1_000_000,
+                    3,
+                )
+                raster_pages.append(record)
+            analysis_ms = round(
+                (time.perf_counter_ns() - analysis_started) / 1_000_000,
+                3,
+            )
+            performance["raster_layout"] = {
+                "schema_version": "paper2md-raster-benchmark-v0.1",
+                "preview_scale": 1.5,
+                "render_total_ms": render_ms,
+                "analysis_total_ms": analysis_ms,
+                "pages": raster_pages,
+            }
+        performance["pipeline_total_ms"] = round(
+            (time.perf_counter_ns() - pipeline_started) / 1_000_000,
+            3,
+        )
         return ExtractionBenchmarkResult(
             source_sha256=result.document.source_sha256,
             page_count=len(result.document.pages),
             backend=result.document.backend,
-            performance=result.performance,
+            performance=performance,
         )
 
     def extract_physical_document(
