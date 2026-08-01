@@ -774,6 +774,39 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((output / "article.md").is_file())
 
+    def test_layout_apply_rejects_tampered_extraction_cache(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, review = self._prepare(
+                root,
+                extraction_profile="fast",
+            )
+            cached_document = (
+                review / "extraction-cache" / "physical-document.json"
+            )
+            cached_document.write_text(
+                cached_document.read_text(encoding="utf-8") + "\n",
+                encoding="utf-8",
+            )
+            output = root / "tampered-cache-output"
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                        "--evidence",
+                        "minimal",
+                    ]
+                )
+
+            self.assertNotEqual(code, 0)
+            self.assertFalse(output.exists())
+
     def test_layout_apply_rejects_unconfirmed_content_roi(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -312,6 +312,12 @@ paper2md layout-prepare input.pdf roi-proposal-dir `
 省略参数时仍使用兼容既有行为的 `forensic` 全文完整对象遍历。`layout-apply` 默认读取
 `review-index.json` 中记录的请求模式和实际模式，拒绝用另一种模式重新生成不一致的任务。
 
+布局准备包还包含 `extraction-cache/physical-document.json` 和
+`extraction-cache/backend-warnings.json`。索引同时记录文件 SHA-256 与
+`PhysicalDocument` 确定性哈希。`layout-apply` 会先核对输入 PDF、缓存文件和每页栅格
+掩膜哈希，再复用准备阶段的提取结果和 `page.png`；任一哈希不一致立即拒绝，不静默
+回退。旧版没有缓存的复核包仍按原流程重新提取。
+
 先检查每页 `content-roi.png`。确认红框没有裁掉正文、脚注、Figure、Table 或
 caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为
 `confirmed` 并填写 `reviewer`。

@@ -277,6 +277,21 @@ class LayoutStageCTests(unittest.TestCase):
                 index["layout_task_versions"],
                 ["paper2md-layout-task-v0.2"],
             )
+            cache = index["extraction_cache"]
+            self.assertEqual(
+                cache["schema_version"],
+                "paper2md-layout-extraction-cache-v0.1",
+            )
+            self.assertTrue(
+                (
+                    destination
+                    / cache["physical_document"]["path"]
+                ).is_file()
+            )
+            self.assertEqual(
+                len(cache["physical_document"]["sha256"]),
+                64,
+            )
             task = json.loads(
                 (
                     destination

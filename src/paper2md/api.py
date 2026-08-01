@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 import os
 import shutil
@@ -10,6 +11,8 @@ import tempfile
 import time
 from dataclasses import dataclass
 from typing import Any
+
+from PIL import Image
 
 from .backends.base import Backend, BackendRegistry, BackendResult
 from .config import Paper2MDConfig
@@ -54,6 +57,128 @@ class ExtractionBenchmarkResult:
 
 def _backend_result(value: PhysicalDocument | BackendResult) -> BackendResult:
     return value if isinstance(value, BackendResult) else BackendResult(value)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_layout_extraction_cache(
+    root: Path,
+    result: BackendResult,
+) -> dict[str, object]:
+    cache_root = root / "extraction-cache"
+    cache_root.mkdir()
+    document_path = cache_root / "physical-document.json"
+    warnings_path = cache_root / "backend-warnings.json"
+    document_path.write_text(
+        result.document.canonical_json(),
+        encoding="utf-8",
+        newline="\n",
+    )
+    warnings_path.write_text(
+        json.dumps(
+            list(result.warnings),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "schema_version": "paper2md-layout-extraction-cache-v0.1",
+        "physical_document": {
+            "path": "extraction-cache/physical-document.json",
+            "sha256": _sha256_file(document_path),
+            "deterministic_sha256": result.document.deterministic_sha256(),
+        },
+        "backend_warnings": {
+            "path": "extraction-cache/backend-warnings.json",
+            "sha256": _sha256_file(warnings_path),
+            "count": len(result.warnings),
+        },
+    }
+
+
+def _review_cache_path(root: Path, relative: object) -> Path:
+    if not isinstance(relative, str) or not relative:
+        raise BackendExecutionError("invalid extraction cache path")
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise BackendExecutionError("extraction cache path escapes review root") from exc
+    return candidate
+
+
+def _load_layout_extraction_cache(
+    review_root: Path,
+    review_index: dict[str, Any],
+    source: Path,
+) -> BackendResult | None:
+    cache = review_index.get("extraction_cache")
+    if cache is None:
+        return None
+    if not isinstance(cache, dict) or cache.get("schema_version") != (
+        "paper2md-layout-extraction-cache-v0.1"
+    ):
+        raise BackendExecutionError("unsupported extraction cache contract")
+    document_record = cache.get("physical_document")
+    warnings_record = cache.get("backend_warnings")
+    if not isinstance(document_record, dict) or not isinstance(
+        warnings_record,
+        dict,
+    ):
+        raise BackendExecutionError("incomplete extraction cache record")
+    document_path = _review_cache_path(
+        review_root,
+        document_record.get("path"),
+    )
+    warnings_path = _review_cache_path(
+        review_root,
+        warnings_record.get("path"),
+    )
+    for path, record in (
+        (document_path, document_record),
+        (warnings_path, warnings_record),
+    ):
+        if not path.is_file() or _sha256_file(path) != record.get("sha256"):
+            raise BackendExecutionError("layout extraction cache hash mismatch")
+    if _sha256_file(source) != review_index.get("source_sha256"):
+        raise BackendExecutionError("input PDF does not match layout review cache")
+    document = PhysicalDocument.from_dict(
+        json.loads(document_path.read_text(encoding="utf-8"))
+    )
+    if (
+        document.source_sha256 != review_index.get("source_sha256")
+        or document.backend != review_index.get("backend")
+        or document.backend_version != review_index.get("backend_version")
+    ):
+        raise BackendExecutionError(
+            "cached PhysicalDocument identity does not match review index"
+        )
+    if document.deterministic_sha256() != document_record.get(
+        "deterministic_sha256"
+    ):
+        raise BackendExecutionError("cached PhysicalDocument hash mismatch")
+    warnings_value = json.loads(warnings_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(warnings_value, list)
+        or not all(isinstance(item, dict) for item in warnings_value)
+        or len(warnings_value) != warnings_record.get("count")
+    ):
+        raise BackendExecutionError("cached backend warnings are invalid")
+    return BackendResult(
+        document=document,
+        warnings=tuple(dict(item) for item in warnings_value),
+    )
 
 
 class Paper2MD:
@@ -463,6 +588,10 @@ class Paper2MD:
                 encoding="utf-8",
                 newline="\n",
             )
+            extraction_cache = _write_layout_extraction_cache(
+                temporary,
+                result,
+            )
             index = {
                 "contract_version": "paper2md-layout-review-index-v0.1",
                 "source_sha256": result.document.source_sha256,
@@ -486,6 +615,7 @@ class Paper2MD:
                 "layout_task_versions": sorted(
                     {task.contract_version for task in tasks}
                 ),
+                "extraction_cache": extraction_cache,
                 "page_count": len(tasks),
                 "content_roi": {
                     "path": "content-roi.json",
@@ -588,10 +718,26 @@ class Paper2MD:
         )
         try:
             raster_analyses: dict[int, Any] | None = None
-            if effective_profile in {"fast", "hybrid-standard"}:
+            cached_result = _load_layout_extraction_cache(
+                review_root,
+                review_index,
+                source,
+            )
+            assessment = review_index.get("layout_risk_assessment")
+            escalation_pages: tuple[int, ...] = ()
+            if effective_profile == "hybrid-standard":
+                if not isinstance(assessment, dict):
+                    raise BackendExecutionError(
+                        "standard review index lacks layout risk assessment"
+                    )
+                escalation_pages = tuple(
+                    assessment.get("escalation_page_indices", ())
+                )
+            if cached_result is not None:
+                result = cached_result
+            elif effective_profile in {"fast", "hybrid-standard"}:
                 extract_text_only = getattr(backend, "extract_text_only", None)
-                render_previews = getattr(backend, "render_page_previews", None)
-                if not callable(extract_text_only) or not callable(render_previews):
+                if not callable(extract_text_only):
                     raise BackendExecutionError(
                         f"{backend.identity.name} backend does not support fast layout extraction"
                     )
@@ -601,14 +747,6 @@ class Paper2MD:
                         raise BackendExecutionError(
                             f"{backend.identity.name} backend does not support standard selective escalation"
                         )
-                    assessment = review_index.get("layout_risk_assessment")
-                    if not isinstance(assessment, dict):
-                        raise BackendExecutionError(
-                            "standard review index lacks layout risk assessment"
-                        )
-                    escalation_pages = tuple(
-                        assessment.get("escalation_page_indices", ())
-                    )
                     result = _backend_result(
                         extract_hybrid(
                             source,
@@ -616,24 +754,57 @@ class Paper2MD:
                             full_page_indices=escalation_pages,
                         )
                     )
-                    page_indices = tuple(
-                        page.page_index
-                        for page in result.document.pages
-                        if page.page_index not in escalation_pages
-                    )
                 else:
                     result = _backend_result(
                         extract_text_only(source, self.config)
                     )
-                    page_indices = tuple(
-                        page.page_index for page in result.document.pages
-                    )
-                preview_scale = float(review_index.get("preview_scale", 1.5))
-                previews = render_previews(
-                    source,
-                    page_indices,
-                    scale=preview_scale,
+            else:
+                result = _backend_result(backend.extract(source, self.config))
+            if result.document.backend != backend.identity.name:
+                raise BackendExecutionError(
+                    "cached/extracted backend identity does not match configuration"
                 )
+            if effective_profile in {"fast", "hybrid-standard"}:
+                page_indices = tuple(
+                    page.page_index
+                    for page in result.document.pages
+                    if page.page_index not in escalation_pages
+                )
+                if cached_result is not None:
+                    previews = []
+                    for page_index in page_indices:
+                        preview_path = (
+                            review_root
+                            / f"page-{page_index + 1:04d}"
+                            / "page.png"
+                        )
+                        try:
+                            with Image.open(preview_path) as image:
+                                previews.append(image.convert("RGB"))
+                        except OSError as exc:
+                            raise BackendExecutionError(
+                                f"cannot read cached page preview: {preview_path}"
+                            ) from exc
+                else:
+                    render_previews = getattr(
+                        backend,
+                        "render_page_previews",
+                        None,
+                    )
+                    if not callable(render_previews):
+                        raise BackendExecutionError(
+                            f"{backend.identity.name} backend does not support batch preview rendering"
+                        )
+                    preview_scale = float(
+                        review_index.get("preview_scale", 1.5)
+                    )
+                    previews = list(
+                        render_previews(
+                            source,
+                            page_indices,
+                            scale=preview_scale,
+                        )
+                    )
                 pages_by_index = {
                     page.page_index: page for page in result.document.pages
                 }
@@ -644,8 +815,32 @@ class Paper2MD:
                     ).analysis
                     for page_index, preview in zip(page_indices, previews)
                 }
-            else:
-                result = _backend_result(backend.extract(source, self.config))
+                for page_index, analysis in raster_analyses.items():
+                    task_path = (
+                        review_root
+                        / f"page-{page_index + 1:04d}"
+                        / "layout-task.json"
+                    )
+                    recorded_task = LayoutTask.from_dict(
+                        json.loads(task_path.read_text(encoding="utf-8"))
+                    )
+                    evidence = recorded_task.metadata.get("raster_evidence")
+                    expected_hashes = (
+                        evidence
+                        if isinstance(evidence, dict)
+                        else {}
+                    )
+                    if (
+                        analysis.ink_mask_sha256
+                        != expected_hashes.get("ink_mask_sha256")
+                        or analysis.text_mask_sha256
+                        != expected_hashes.get("text_mask_sha256")
+                        or analysis.residual_mask_sha256
+                        != expected_hashes.get("residual_mask_sha256")
+                    ):
+                        raise BackendExecutionError(
+                            f"cached/regenerated raster evidence mismatch on page {page_index}"
+                        )
             content_rois, roi_source = load_confirmed_content_rois(
                 review_root / "content-roi.json",
                 result.document,
