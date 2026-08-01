@@ -434,6 +434,14 @@ Figure/Table 与 caption 使用一对一几何绑定。同页优先根据上下�
 `caption_binding` 质量检查。未绑定 caption 产生 warning；没有显式 caption 的
 图形摘要等视觉块只作信息记录，不降低转换状态。
 
+图注内部续接使用独立规则，不复用正文段落规则。只有同页、同一 caption
+region、绑定到同一个 Figure/Table 且在 Markdown 中直接相邻的两个图注片段
+才进入判断；后一片段不能以新的 `Figure`/`Fig.`/`Table` 编号开头。前一片段
+没有句末标点时可以续接；前一片段已有句末标点时，仅当后一片段以 `a,`、
+`(A)` 或 `f–i,` 等面板说明标记开头才续接。未绑定、绑定目标不同或证据不足
+时一律保留分段。事件单独写入 `caption_continuation_repairs`，不会进入
+`body_continuation_repairs`，也不会改变正文续接判定。
+
 文字模式识别属于启发式检查，只产生 `warning` 和可定位的片段；图片、
 manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 的对象单独计数，
 不作为正文遗漏。

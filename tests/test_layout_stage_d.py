@@ -110,6 +110,7 @@ class CrossPageParagraphTests(unittest.TestCase):
         ends_soft: bool = False,
         region_id: str | None = None,
         indent_state: str = "unknown",
+        caption_binding_key: tuple[int, str] | None = None,
     ) -> CrossPageParagraphBlock:
         return CrossPageParagraphBlock(
             page_index=page_index,
@@ -124,6 +125,7 @@ class CrossPageParagraphTests(unittest.TestCase):
             element_ids=(f"e{page_index + 1}",),
             first_line_indented=indent_state == "indented",
             first_line_indent_state=indent_state,
+            caption_binding_key=caption_binding_key,
         )
 
     def test_direct_body_continuation_is_merged_across_page_marker(self):
@@ -236,6 +238,110 @@ class CrossPageParagraphTests(unittest.TestCase):
         )
 
         self.assertEqual(events, [])
+
+    def test_fragments_of_same_bound_caption_are_joined(self):
+        lines = [
+            "trace-caption-1",
+            "**Figure 3.** Boundaries are conserved in",
+            "",
+            "trace-caption-2",
+            "evolution. a, Overlap of boundaries.",
+            "",
+        ]
+        binding = (0, "figure-3")
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "**Figure 3.** Boundaries are conserved in",
+                    role="caption",
+                    region_id="caption-3",
+                    caption_binding_key=binding,
+                ),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "evolution. a, Overlap of boundaries.",
+                    role="caption",
+                    region_id="caption-3",
+                    caption_binding_key=binding,
+                ),
+            ),
+            {0: 0},
+        )
+
+        self.assertEqual(
+            [item["code"] for item in events],
+            ["joined_caption_fragment"],
+        )
+        self.assertIn(
+            "**Figure 3.** Boundaries are conserved in evolution. "
+            "a, Overlap of boundaries.",
+            lines,
+        )
+
+    def test_caption_panel_marker_can_follow_terminal_sentence(self):
+        binding = (0, "figure-1")
+        lines = ["t1", "**Figure 1.** Overview.", "", "t2", "a, First panel.", ""]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "**Figure 1.** Overview.",
+                    role="caption",
+                    region_id="caption-1",
+                    caption_binding_key=binding,
+                ),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "a, First panel.",
+                    role="caption",
+                    region_id="caption-1",
+                    caption_binding_key=binding,
+                ),
+            ),
+            {0: 0},
+        )
+
+        self.assertEqual(events[0]["code"], "joined_caption_fragment")
+
+    def test_caption_sentence_or_different_binding_is_not_joined(self):
+        for second_binding in ((0, "figure-2"), (0, "figure-1")):
+            lines = ["t1", "**Figure 1.** Complete.", "", "t2", "Details follow.", ""]
+            events = _merge_cross_page_paragraph_blocks(
+                lines,
+                (
+                    self._block(
+                        0,
+                        0,
+                        1,
+                        "**Figure 1.** Complete.",
+                        role="caption",
+                        region_id="caption-1",
+                        caption_binding_key=(0, "figure-1"),
+                    ),
+                    self._block(
+                        0,
+                        3,
+                        4,
+                        "Details follow.",
+                        role="caption",
+                        region_id="caption-1",
+                        caption_binding_key=second_binding,
+                    ),
+                ),
+                {0: 0},
+            )
+            self.assertEqual(events, [])
 
     def test_indented_or_unknown_body_region_is_not_joined(self):
         for indent_state in ("indented", "unknown"):
@@ -735,9 +841,10 @@ class LayoutStageDTests(unittest.TestCase):
             provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
             self.assertEqual(
                 provenance_value["contract_version"],
-                "paper2md-layout-provenance-v0.3",
+                "paper2md-layout-provenance-v0.4",
             )
             self.assertIn("body_continuation_repairs", provenance_value)
+            self.assertIn("caption_continuation_repairs", provenance_value)
             self.assertIn("cross_page_repairs", provenance_value)
             self.assertTrue(
                 any(

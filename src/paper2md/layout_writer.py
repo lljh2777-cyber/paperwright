@@ -92,6 +92,7 @@ class CrossPageParagraphBlock:
     first_line_indented: bool = False
     first_line_indent_state: str = "unknown"
     first_line_indent_offset: float | None = None
+    caption_binding_key: tuple[int, str] | None = None
 
 
 def _dominant_font_name(elements: Sequence[Element]) -> str | None:
@@ -150,11 +151,48 @@ def _same_page_pair_is_continuation(
     )
 
 
-def _body_pair_continuation_kind(
+_CAPTION_PANEL_START = re.compile(
+    r"^(?:\(?[A-Za-z]\)?[.,:]|[a-z][\u2013-][a-z][.,:])(?:\s|$)"
+)
+
+
+def _caption_pair_is_continuation(
+    previous: CrossPageParagraphBlock,
+    current: CrossPageParagraphBlock,
+) -> bool:
+    current_text = current.text.lstrip().removeprefix("&emsp;")
+    previous_text = previous.text.rstrip().rstrip("*_`")
+    starts_new_caption = bool(
+        re.match(
+            r"^(?:fig(?:ure)?\.?|table)\s+S?\d+",
+            current_text,
+            re.IGNORECASE,
+        )
+    )
+    return (
+        previous.role == "caption"
+        and current.role == "caption"
+        and previous.page_index == current.page_index
+        and previous.region_id == current.region_id
+        and previous.caption_binding_key is not None
+        and previous.caption_binding_key == current.caption_binding_key
+        and current.trace_index == previous.text_index + 2
+        and bool(current_text)
+        and not starts_new_caption
+        and (
+            not previous_text.endswith((".", "!", "?", ":", ";"))
+            or bool(_CAPTION_PANEL_START.match(current_text))
+        )
+    )
+
+
+def _paragraph_pair_continuation_kind(
     previous: CrossPageParagraphBlock,
     current: CrossPageParagraphBlock,
     page_markers: dict[int, int],
 ) -> str | None:
+    if _caption_pair_is_continuation(previous, current):
+        return "caption_internal_boundary"
     if _same_page_pair_is_continuation(previous, current):
         return "same_page_region_boundary"
     if _cross_page_pair_is_continuation(previous, current, page_markers):
@@ -167,13 +205,13 @@ def _merge_cross_page_paragraph_blocks(
     blocks: Sequence[CrossPageParagraphBlock],
     page_markers: dict[int, int],
 ) -> list[dict[str, Any]]:
-    """Merge direct, high-confidence body continuations across boundaries."""
+    """Merge isolated caption fragments and high-confidence body continuations."""
 
     ordered = sorted(blocks, key=lambda item: item.trace_index)
     chains: list[list[CrossPageParagraphBlock]] = []
     index = 0
     while index < len(ordered) - 1:
-        if _body_pair_continuation_kind(
+        if _paragraph_pair_continuation_kind(
             ordered[index], ordered[index + 1], page_markers
         ) is None:
             index += 1
@@ -182,7 +220,7 @@ def _merge_cross_page_paragraph_blocks(
         index += 1
         while (
             index < len(ordered) - 1
-            and _body_pair_continuation_kind(
+            and _paragraph_pair_continuation_kind(
                 ordered[index], ordered[index + 1], page_markers
             ) is not None
         ):
@@ -196,7 +234,7 @@ def _merge_cross_page_paragraph_blocks(
         merged = chain[0].text
         boundary_records: list[dict[str, Any]] = []
         for previous, current in zip(chain, chain[1:]):
-            method = _body_pair_continuation_kind(
+            method = _paragraph_pair_continuation_kind(
                 previous,
                 current,
                 page_markers,
@@ -211,9 +249,13 @@ def _merge_cross_page_paragraph_blocks(
             boundary_records.append(
                 {
                     "code": (
-                        "joined_same_page_body_continuation"
-                        if method == "same_page_region_boundary"
-                        else "joined_cross_page_paragraph"
+                        "joined_caption_fragment"
+                        if method == "caption_internal_boundary"
+                        else (
+                            "joined_same_page_body_continuation"
+                            if method == "same_page_region_boundary"
+                            else "joined_cross_page_paragraph"
+                        )
                     ),
                     "method": method,
                     "from_page": previous.page_index + 1,
@@ -230,7 +272,7 @@ def _merge_cross_page_paragraph_blocks(
         traces = [lines[item.trace_index] for item in chain]
         regions = ",".join(item.region_id for item in chain)
         replacement = traces + [
-            f"<!-- body-continuation: regions: {regions}; "
+            f"<!-- paragraph-continuation: regions: {regions}; "
             "method: native-geometry -->",
             merged,
             "",
@@ -442,6 +484,7 @@ _INTERNAL_MARKDOWN_COMMENTS = (
     "<!-- caption-for:",
     "<!-- cross-page-continuation:",
     "<!-- body-continuation:",
+    "<!-- paragraph-continuation:",
 )
 
 
@@ -1437,6 +1480,14 @@ def write_layout_outputs(
                                 first_line_indent_offset=(
                                     paragraph.first_line_indent_offset
                                 ),
+                                caption_binding_key=(
+                                    (
+                                        caption_binding.visual_page_index,
+                                        caption_binding.visual_region_id,
+                                    )
+                                    if caption_binding is not None
+                                    else None
+                                ),
                             )
                         )
             page_regions.append(
@@ -1599,14 +1650,27 @@ def write_layout_outputs(
             }
         )
     provenance = {
-        "contract_version": "paper2md-layout-provenance-v0.3",
+        "contract_version": "paper2md-layout-provenance-v0.4",
         "source_sha256": document.source_sha256,
         "candidate_generator_version": tasks[0].candidate_generator_version,
         "feature_schema_version": tasks[0].feature_schema_version,
         "prompt_version": layouts[0].prompt_version,
         "ocr_used": False,
         "references": references_summary,
-        "body_continuation_repairs": continuation_events,
+        "body_continuation_repairs": [
+            item
+            for item in continuation_events
+            if item["code"]
+            in {
+                "joined_same_page_body_continuation",
+                "joined_cross_page_paragraph",
+            }
+        ],
+        "caption_continuation_repairs": [
+            item
+            for item in continuation_events
+            if item["code"] == "joined_caption_fragment"
+        ],
         "cross_page_repairs": [
             item
             for item in continuation_events
