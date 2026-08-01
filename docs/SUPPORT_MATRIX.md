@@ -3,7 +3,7 @@
 | 平台 / 运行时 | 状态 | 说明 |
 |---|---|---|
 | Linux / Python 3.12 | 已实测 | Phase 6 Alpha RC 云端安装与端到端检查通过 |
-| Windows / Python 3.11.2 | 已实测 | Alpha 基线的 batch 与安装检查通过；混合布局完整套件记录为 219 passed、8 subtests passed |
+| Windows / Python 3.11.2 | 已实测 | Alpha 基线的 batch 与安装检查通过；2026-08-01 维护验证为 223/223 单测与 13/13 内容 smoke 通过 |
 | macOS | 未验证 | 不声明支持 |
 | Python 3.10–3.12 | 声明范围 | 打包元数据与测试约束 |
 | PDFium | 主后端 | 锁定验证组合为 pypdfium2 5.3.0 / PDFium 145.0.7616.0 |

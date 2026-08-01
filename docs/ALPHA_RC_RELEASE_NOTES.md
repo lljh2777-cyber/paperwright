@@ -38,6 +38,15 @@ OCR/扫描 PDF 识别、语义表格、公式 LaTeX、完整 PDFBox 后端、GUI
 
 Paper2MD 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
 
+## 当前验证记录
+
+2026-08-01 在 Windows / Python 3.11.2、`pypdfium2==5.3.0`、
+PDFium 145.0.7616.0 和 `Pillow==12.2.0` 的隔离环境中：
+
+- 223/223 单元测试通过；
+- 内容 smoke 13/13 通过，包含双轮逐文件确定性检查；
+- fixture、字节码编译、仓库策略和 `git diff --check` 通过。
+
 ## 许可证与第三方依赖
 
 项目源码采用 Apache License 2.0，分发源码或衍生作品时应保留 `LICENSE` 和
