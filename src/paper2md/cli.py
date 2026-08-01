@@ -107,6 +107,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("pdfium", "pdfbox"),
         default=None,
     )
+    benchmark_extract.add_argument(
+        "--mode",
+        choices=("full", "text-only"),
+        default="full",
+        help="full 为当前完整提取；text-only 只读取 TextPage",
+    )
 
     prepare_layout = commands.add_parser(
         "layout-prepare",
@@ -355,7 +361,8 @@ def _convert(args: argparse.Namespace) -> int:
 
 def _benchmark_extract(args: argparse.Namespace) -> int:
     result = _product(_benchmark_configuration(args)).benchmark_extraction(
-        args.input_pdf
+        args.input_pdf,
+        mode=args.mode,
     )
     print(
         json.dumps(

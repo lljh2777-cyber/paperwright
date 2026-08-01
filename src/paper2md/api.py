@@ -65,12 +65,23 @@ class Paper2MD:
     def benchmark_extraction(
         self,
         input_pdf: str | Path,
+        *,
+        mode: str = "full",
     ) -> ExtractionBenchmarkResult:
         """Run one read-only extraction and return non-deterministic timings."""
 
+        if mode not in {"full", "text-only"}:
+            raise ValueError("benchmark mode must be full or text-only")
         source = validate_input_pdf(input_pdf)
         backend = self.registry.get(self.config.backend)
-        extracted = backend.extract(source, self.config)
+        extractor = backend.extract
+        if mode == "text-only":
+            extractor = getattr(backend, "extract_text_only", None)
+            if not callable(extractor):
+                raise BackendExecutionError(
+                    f"{backend.identity.name} 后端不支持 text-only 基准"
+                )
+        extracted = extractor(source, self.config)
         result = (
             extracted
             if isinstance(extracted, BackendResult)

@@ -474,6 +474,7 @@ provenance，便于复核和后续训练。
 
 ```powershell
 paper2md benchmark-extract input.pdf
+paper2md benchmark-extract input.pdf --mode text-only
 ```
 
 输出使用 `paper2md-extraction-timing-v0.1`，包含源文件哈希、总耗时，以及
@@ -481,6 +482,12 @@ paper2md benchmark-extract input.pdf
 耗时；同时记录文字、图片、矢量等对象数量。该命令不创建产品输出目录，
 用于判断 fast 提取应优先绕开的实际瓶颈。计时使用单调时钟，数值本身不作为
 回归断言，只检查字段、非负性和对象计数。
+
+`text-only` 是 fast 管线的第一段实验实现。它直接按 TextPage 中的文字对象
+分组字符及坐标，读取必要字体信息，但不调用 `page.get_objects()`，也不解码
+原生位图或枚举矢量路径。输出文字的内容、bbox、字体名和字号必须与完整提取
+对照一致；metadata 明确标记图片和矢量 inventory 未枚举。在栅格视觉候选及
+相应质量检查完成前，该模式只允许用于只读基准，不能直接替代产品转换。
 
 ### 15.3 导出本地机器学习数据
 

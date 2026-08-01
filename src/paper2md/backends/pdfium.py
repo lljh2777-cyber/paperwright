@@ -274,6 +274,120 @@ def _character_runs_by_object(
     return runs
 
 
+def _text_elements_from_textpage(
+    textpage: Any,
+    *,
+    page_index: int,
+    page_width: float,
+    page_height: float,
+) -> tuple[list[Element], dict[str, int]]:
+    """Build native text elements without walking all PDF page objects."""
+
+    groups: dict[int, dict[str, Any]] = {}
+    missing_charboxes = 0
+    for character_index in range(textpage.count_chars()):
+        text_object = textpage.get_textobj(character_index)
+        if text_object is None:
+            continue
+        character = textpage.get_text_range(character_index, 1)
+        if not character:
+            continue
+        try:
+            box = tuple(
+                float(value) for value in textpage.get_charbox(character_index)
+            )
+        except Exception:
+            missing_charboxes += 1
+            continue
+        address = _object_address(text_object.raw)
+        group = groups.setdefault(
+            address,
+            {
+                "first_character_index": character_index,
+                "text_object": text_object,
+                "characters": [],
+            },
+        )
+        group["characters"].append((character, box))
+
+    elements: list[Element] = []
+    object_bounds_fallbacks = 0
+    for text_index, group in enumerate(
+        sorted(groups.values(), key=lambda value: value["first_character_index"])
+    ):
+        text_object = group["text_object"]
+        characters = group["characters"]
+        text, geometry_spaces_inserted = _restore_missing_spaces_from_charboxes(
+            characters
+        )
+        text = text.strip()
+        if not text:
+            continue
+        try:
+            bounds = tuple(float(value) for value in text_object.get_bounds())
+            bbox = _clamped_bbox(bounds, page_width, page_height)
+        except Exception:
+            bbox = None
+        if bbox is None:
+            object_bounds_fallbacks += 1
+            boxes = [item[1] for item in characters]
+            bounds = (
+                min(item[0] for item in boxes),
+                min(item[1] for item in boxes),
+                max(item[2] for item in boxes),
+                max(item[3] for item in boxes),
+            )
+            bbox = _clamped_bbox(bounds, page_width, page_height)
+        if bbox is None:
+            continue
+        try:
+            font_name = text_object.get_font().get_base_name()
+        except Exception:
+            font_name = None
+        try:
+            font_size = float(text_object.get_font_size())
+        except Exception:
+            font_size = None
+        element_id = f"p{page_index:04d}-text-{text_index:05d}"
+        elements.append(
+            Element(
+                element_id=element_id,
+                kind="text",
+                page_index=page_index,
+                bbox=bbox,
+                text=text,
+                source_object_id=None,
+                provenance=Provenance(
+                    backend="pdfium",
+                    method="textpage_character_geometry_without_object_walk",
+                    source_ref=(
+                        f"page:{page_index}:text-object-sequence:{text_index}"
+                    ),
+                    confidence=1.0,
+                    unavailable_reason=(
+                        "stable native PDF object ID unavailable"
+                    ),
+                ),
+                metadata={
+                    "font_name": font_name,
+                    "font_size": font_size,
+                    "text_object_sequence": text_index,
+                    "native_order": text_index,
+                    "first_character_index": group["first_character_index"],
+                    "geometry_spaces_inserted": geometry_spaces_inserted,
+                },
+            )
+        )
+    return elements, {
+        "character_count": sum(
+            len(value["characters"]) for value in groups.values()
+        ),
+        "text_object_count": len(groups),
+        "missing_charbox_count": missing_charboxes,
+        "object_bounds_fallback_count": object_bounds_fallbacks,
+    }
+
+
 def _reading_order(elements: list[Element], page_width: float) -> list[Element]:
     """Deterministic basic column order without semantic paragraph inference."""
 
@@ -474,6 +588,24 @@ class PDFiumBackend:
         self._pdfium, self.identity = _pdfium_runtime()
 
     def extract(self, source: Path, config: Paper2MDConfig) -> BackendResult:
+        return self._extract(source, config, text_only=False)
+
+    def extract_text_only(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+    ) -> BackendResult:
+        """Benchmarkable fast path that never calls ``page.get_objects()``."""
+
+        return self._extract(source, config, text_only=True)
+
+    def _extract(
+        self,
+        source: Path,
+        config: Paper2MDConfig,
+        *,
+        text_only: bool,
+    ) -> BackendResult:
         pdfium = self._pdfium
         extraction_started = time.perf_counter_ns()
         hash_started = time.perf_counter_ns()
@@ -507,14 +639,20 @@ class PDFiumBackend:
             for page_index in range(len(document)):
                 page = document[page_index]
                 try:
-                    extracted_page, timing = self._extract_page(
-                        page,
-                        page_index,
-                        assets,
-                        warnings,
-                        degenerate_counts,
-                        degenerate_pages,
-                    )
+                    if text_only:
+                        extracted_page, timing = self._extract_text_only_page(
+                            page,
+                            page_index,
+                        )
+                    else:
+                        extracted_page, timing = self._extract_page(
+                            page,
+                            page_index,
+                            assets,
+                            warnings,
+                            degenerate_counts,
+                            degenerate_pages,
+                        )
                     pages.append(extracted_page)
                     page_performance.append(timing)
                 finally:
@@ -543,9 +681,19 @@ class PDFiumBackend:
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
                 "text_object_extraction": (
-                    "pdfium_native_text_object_character_geometry_v3"
+                    "pdfium_textpage_character_geometry_fast_v1"
+                    if text_only
+                    else "pdfium_native_text_object_character_geometry_v3"
                 ),
                 "text_line_reconstruction": "native_object_geometry_v2",
+                "extraction_profile": (
+                    "text-only-benchmark" if text_only else "full"
+                ),
+                "native_object_inventory": (
+                    "text_only; image_and_vector_objects_not_enumerated"
+                    if text_only
+                    else "complete_supported_page_object_walk"
+                ),
                 "degenerate_object_handling": {
                     "policy_version": "paper2md-degenerate-object-policy-v1",
                     "counts": dict(sorted(degenerate_counts.items())),
@@ -556,6 +704,7 @@ class PDFiumBackend:
         performance = {
             "schema_version": "paper2md-extraction-timing-v0.1",
             "clock": "time.perf_counter_ns",
+            "extraction_mode": "text-only" if text_only else "full",
             "total_ms": _milliseconds(
                 time.perf_counter_ns() - extraction_started
             ),
@@ -716,6 +865,106 @@ class PDFiumBackend:
             raise BackendExecutionError(f"PDFium region render 失败: {exc}") from exc
         finally:
             document.close()
+
+    def _extract_text_only_page(
+        self,
+        page: Any,
+        page_index: int,
+    ) -> tuple[Page, dict[str, object]]:
+        """Extract positioned native text without enumerating page objects."""
+
+        page_started = time.perf_counter_ns()
+        width, height = float(page.get_width()), float(page.get_height())
+        rotation = int(page.get_rotation())
+        text_page_started = time.perf_counter_ns()
+        textpage = page.get_textpage()
+        text_page_open_ns = time.perf_counter_ns() - text_page_started
+        try:
+            character_scan_started = time.perf_counter_ns()
+            elements, text_stats = _text_elements_from_textpage(
+                textpage,
+                page_index=page_index,
+                page_width=width,
+                page_height=height,
+            )
+            character_scan_ns = time.perf_counter_ns() - character_scan_started
+            reading_order_started = time.perf_counter_ns()
+            ordered = _reading_order(elements, width)
+            reading_order_ns = time.perf_counter_ns() - reading_order_started
+        finally:
+            textpage.close()
+
+        normalization_started = time.perf_counter_ns()
+        decorative_reasons = {
+            item.element_id: reason
+            for item in ordered
+            if (
+                reason := _decorative_line_end_symbol_reason(
+                    item,
+                    ordered,
+                    width,
+                )
+            )
+            is not None
+        }
+        normalized = [
+            Element(
+                element_id=item.element_id,
+                kind=item.kind,
+                page_index=item.page_index,
+                bbox=item.bbox,
+                provenance=item.provenance,
+                text=item.text,
+                source_object_id=item.source_object_id,
+                metadata={
+                    **item.metadata,
+                    "normalized_order": order,
+                    **(
+                        {
+                            "markdown_excluded_reason": decorative_reasons[
+                                item.element_id
+                            ]
+                        }
+                        if item.element_id in decorative_reasons
+                        else {}
+                    ),
+                },
+            )
+            for order, item in enumerate(ordered)
+        ]
+        result = Page(
+            page_index=page_index,
+            width=width,
+            height=height,
+            rotation=rotation,
+            elements=tuple(normalized),
+        )
+        normalization_ns = time.perf_counter_ns() - normalization_started
+        timing: dict[str, object] = {
+            "page_index": page_index,
+            "total_ms": _milliseconds(time.perf_counter_ns() - page_started),
+            "text_page_open_ms": _milliseconds(text_page_open_ns),
+            "character_scan_ms": _milliseconds(character_scan_ns),
+            "object_walk_ms": 0.0,
+            "image_decode_ms": 0.0,
+            "reading_order_ms": _milliseconds(reading_order_ns),
+            "normalization_ms": _milliseconds(normalization_ns),
+            "character_count": text_stats["character_count"],
+            "native_object_counts": {
+                "text": text_stats["text_object_count"],
+            },
+            "emitted_element_counts": {
+                "text": len(normalized),
+                "image": 0,
+                "vector": 0,
+            },
+            "degenerate_object_count": 0,
+            "missing_charbox_count": text_stats["missing_charbox_count"],
+            "object_bounds_fallback_count": text_stats[
+                "object_bounds_fallback_count"
+            ],
+        }
+        return result, timing
 
     def _extract_page(
         self,

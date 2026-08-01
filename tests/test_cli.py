@@ -104,6 +104,38 @@ class CLITests(unittest.TestCase):
                 self.assertIn("native_object_counts", page)
                 self.assertIn("emitted_element_counts", page)
 
+    def test_benchmark_text_only_skips_native_object_walk(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "fixture.pdf"
+            create_born_digital_fixture(source)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(
+                    [
+                        "benchmark-extract",
+                        str(source),
+                        "--mode",
+                        "text-only",
+                    ]
+                )
+
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                result["performance"]["extraction_mode"],
+                "text-only",
+            )
+            for page in result["performance"]["pages"]:
+                self.assertEqual(page["object_walk_ms"], 0.0)
+                self.assertEqual(
+                    page["emitted_element_counts"]["image"],
+                    0,
+                )
+                self.assertEqual(
+                    page["emitted_element_counts"]["vector"],
+                    0,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
