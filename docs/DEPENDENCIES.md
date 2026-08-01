@@ -20,9 +20,10 @@
 | PDFium / pypdfium2 | MVP 主后端 | 使用现场固定版本；不下载、不捆绑 |
 | Apache PDFBox | 对照或回退 | 仅接口，不下载 JAR、不运行 Java |
 
-`pypdfium2` 安装元数据列出了 bundled dependency licenses，其中历史
-审计的 `agg23=NOASSERTION` 尚无发布级结论。因此本阶段只批准本地开发和
-source-only 交付；正式分发 PDFium 二进制/wheel 继续锁定。
+项目源码采用 Apache License 2.0。`pypdfium2` 安装元数据列出的 bundled
+dependency licenses 中，历史审计的 `agg23=NOASSERTION` 尚无发布级结论；
+这不改变项目源码许可证，但正式分发 PDFium 二进制或包含其运行时的 wheel
+前仍需完成对应的第三方 notices 审查。
 
 ## 明确排除
 

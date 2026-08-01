@@ -1,7 +1,7 @@
 # Paper2MD
 
-Paper2MD 是一个本地、非生成式 AI 的科研 PDF 转换工具。当前版本为
-`0.6.0a0` 源码 Alpha。
+Paper2MD 是一个本地、可追溯、非生成式 AI 的科研 PDF 重建工具。当前版本为
+`0.7.0a0` 源码 Alpha。
 
 ```text
 PDF → PhysicalDocument → article.md + images/ + manifest.json
@@ -15,6 +15,9 @@ PDF → PhysicalDocument → article.md + images/ + manifest.json
 - 表格无法可靠结构化时明确标记 `degraded`；
 - 单文件与确定性批量转换；
 - manifest、batch summary、路径安全及原子输出；
+- Content ROI、布局候选、结构化复核和最终布局校验；
+- `fast`、`standard`、`forensic` 三种布局提取配置；
+- 自包含证据包、输出质量报告和无正文训练数据导出；
 - 完全本地运行，不调用 LLM、外部 API 或云 OCR。
 
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
@@ -114,6 +117,26 @@ paper2md convert input.pdf output-dir --region-render-mode auto
 
 该模式用于补充部分混合位图/矢量 Figure，但可能保守漏检。
 
+## 混合布局复核
+
+复杂双栏、跨栏 Figure/Table 或页面附属内容较多时，可以使用显式复核流程：
+
+```bash
+paper2md layout-prepare input.pdf roi-review --extraction-profile fast
+paper2md layout-prepare input.pdf layout-review \
+  --content-roi-json roi-review/content-roi.json
+paper2md validate-final-layout layout-review/page-0001/final-layout.json \
+  --task layout-review/page-0001/layout-task.json
+paper2md layout-apply input.pdf layout-review output-dir --evidence standard
+```
+
+第一步生成 Content ROI 提案；确认 ROI 后，第二步生成逐页候选、预览和复核说明。
+人工或视觉 AI 只填写结构化 `final-layout.json`，不转录论文正文。Paper2MD 随后
+重新校验输入、缓存、栅格证据、候选完整性和最终区块关系，再确定性生成结果。
+
+`fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 仅把高风险页面升级为
+完整对象分析；`forensic` 对全文执行完整对象遍历。
+
 ## 找不到 `paper2md` 命令
 
 确认虚拟环境已激活，或直接使用：
@@ -152,6 +175,13 @@ python -m paper2md convert input.pdf output-dir
 - 纯矢量且缺少可靠 Figure 证据时会保守拒绝；
 - PDFBox、GUI、Web/API 服务和容器不在当前范围；
 - macOS 和 ARM 平台尚未验证。
+
+## 版本与数据契约
+
+包版本与数据契约独立演进。当前包版本为 `0.7.0a0`，PhysicalDocument 使用
+v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.7。直接转换的
+兼容模式仍可能输出 manifest v0.4 或 v0.5；读取旧结果时继续接受混合布局
+manifest v0.6。升级包版本不代表已有数据契约会被隐式改写。
 
 ## 许可证与分发
 

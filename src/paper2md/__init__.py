@@ -1,4 +1,4 @@
-"""Paper2MD v2 MVP public API."""
+"""Paper2MD public API."""
 
 from .api import ConversionResult, Paper2MD
 from .config import Paper2MDConfig
@@ -15,4 +15,4 @@ __all__ = [
     "Provenance",
 ]
 
-__version__ = "0.6.0a0"
+__version__ = "0.7.0a0"

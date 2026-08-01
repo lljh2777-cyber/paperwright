@@ -1,3 +1,4 @@
+import re
 import tomllib
 import unittest
 from pathlib import Path
@@ -7,6 +8,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicOnboardingTests(unittest.TestCase):
+    def test_package_version_is_consistent_across_metadata_and_docs(self):
+        project = tomllib.loads(
+            (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]
+        init_text = (ROOT / "src/paper2md/__init__.py").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(r'^__version__ = "([^"]+)"$', init_text, re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(project["version"], match.group(1))
+        self.assertIn(
+            f'`{project["version"]}`',
+            (ROOT / "README.md").read_text(encoding="utf-8"),
+        )
+
     def test_readme_has_complete_windows_and_linux_install_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         for required in (
@@ -63,6 +79,22 @@ class PublicOnboardingTests(unittest.TestCase):
         self.assertTrue((ROOT / "NOTICE").is_file())
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("[Apache License 2.0](LICENSE)", readme)
+
+    def test_current_docs_describe_license_and_manifest_contracts(self):
+        support = (ROOT / "docs/SUPPORT_MATRIX.md").read_text(
+            encoding="utf-8"
+        )
+        release = (ROOT / "docs/ALPHA_RC_RELEASE_NOTES.md").read_text(
+            encoding="utf-8"
+        )
+        architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(
+            encoding="utf-8"
+        )
+        for document in (support, release):
+            self.assertIn("Apache License 2.0", document)
+            self.assertNotIn("项目许可证仍为 `NOASSERTION`", document)
+        self.assertIn("hybrid manifest | v0.7", architecture)
+        self.assertIn("继续接受旧 v0.6", architecture)
 
 
 if __name__ == "__main__":

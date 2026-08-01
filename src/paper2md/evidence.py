@@ -43,7 +43,7 @@ def package_version() -> str:
     try:
         return version("paper2md")
     except PackageNotFoundError:
-        return "0.6.0a0"
+        return "0.7.0a0"
 
 
 def build_run_record(

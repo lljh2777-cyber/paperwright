@@ -77,10 +77,14 @@ Alpha 不做 OCR。扫描件应被视为 unsupported/degraded 输入，而不是
 auto 模式要求可追溯的 native Figure group；纯矢量且没有 native group 时
 保守拒绝。Phase 4 的安全阈值本阶段没有修改。
 
-### manifest v0.4 与 v0.5
+### 为什么会看到不同 manifest 版本？
 
 - region render `off`：manifest v0.4，保持旧默认输出兼容；
 - `explicit/auto`：manifest v0.5，增加 `region_render_policy` 和区域证据。
+- 旧混合布局结果：manifest v0.6，仍可读取；
+- 当前 `layout-apply`：manifest v0.7，增加证据级别和自包含包清单。
+
+这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.7.0a0`。
 
 详见 `docs/MANIFEST_MIGRATION_V0.5.md`。
 
