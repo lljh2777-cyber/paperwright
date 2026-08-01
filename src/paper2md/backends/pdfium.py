@@ -14,6 +14,7 @@ import io
 import math
 from pathlib import Path
 import statistics
+import time
 from typing import Any
 import unicodedata
 
@@ -41,6 +42,10 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _milliseconds(nanoseconds: int) -> float:
+    return round(nanoseconds / 1_000_000, 3)
 
 
 def _pdfium_runtime() -> tuple[Any, BackendIdentity]:
@@ -470,40 +475,48 @@ class PDFiumBackend:
 
     def extract(self, source: Path, config: Paper2MDConfig) -> BackendResult:
         pdfium = self._pdfium
+        extraction_started = time.perf_counter_ns()
+        hash_started = time.perf_counter_ns()
         source_hash = _sha256(source)
+        source_hash_ns = time.perf_counter_ns() - hash_started
         assets: list[ExtractedAsset] = []
         warnings: list[dict[str, object]] = []
         pages: list[Page] = []
+        page_performance: list[dict[str, object]] = []
         degenerate_counts: Counter[str] = Counter()
         degenerate_pages: list[dict[str, object]] = []
+        open_started = time.perf_counter_ns()
         try:
             document = pdfium.PdfDocument(source)
         except Exception as exc:
             raise CorruptInputError(f"PDFium 无法打开 PDF: {exc}") from exc
+        document_open_ns = time.perf_counter_ns() - open_started
 
         try:
             if len(document) > config.limits.max_pages:
                 raise BackendExecutionError(
                     f"页数 {len(document)} 超过限制 {config.limits.max_pages}"
                 )
+            metadata_started = time.perf_counter_ns()
             metadata = {
                 key: value
                 for key, value in document.get_metadata_dict().items()
                 if value
             }
+            metadata_ns = time.perf_counter_ns() - metadata_started
             for page_index in range(len(document)):
                 page = document[page_index]
                 try:
-                    pages.append(
-                        self._extract_page(
-                            page,
-                            page_index,
-                            assets,
-                            warnings,
-                            degenerate_counts,
-                            degenerate_pages,
-                        )
+                    extracted_page, timing = self._extract_page(
+                        page,
+                        page_index,
+                        assets,
+                        warnings,
+                        degenerate_counts,
+                        degenerate_pages,
                     )
+                    pages.append(extracted_page)
+                    page_performance.append(timing)
                 finally:
                     page.close()
         except BackendExecutionError:
@@ -540,7 +553,24 @@ class PDFiumBackend:
                 },
             },
         )
-        return BackendResult(physical, tuple(assets), tuple(warnings))
+        performance = {
+            "schema_version": "paper2md-extraction-timing-v0.1",
+            "clock": "time.perf_counter_ns",
+            "total_ms": _milliseconds(
+                time.perf_counter_ns() - extraction_started
+            ),
+            "source_hash_ms": _milliseconds(source_hash_ns),
+            "document_open_ms": _milliseconds(document_open_ns),
+            "metadata_ms": _milliseconds(metadata_ns),
+            "page_count": len(pages),
+            "pages": page_performance,
+        }
+        return BackendResult(
+            physical,
+            tuple(assets),
+            tuple(warnings),
+            performance,
+        )
 
     def render_page_preview(
         self,
@@ -695,18 +725,36 @@ class PDFiumBackend:
         warnings: list[dict[str, object]],
         degenerate_counts: Counter[str],
         degenerate_pages: list[dict[str, object]],
-    ) -> Page:
+    ) -> tuple[Page, dict[str, object]]:
+        page_started = time.perf_counter_ns()
         pdfium = self._pdfium
         width, height = float(page.get_width()), float(page.get_height())
         rotation = int(page.get_rotation())
+        text_page_started = time.perf_counter_ns()
         textpage = page.get_textpage()
+        text_page_open_ns = time.perf_counter_ns() - text_page_started
+        character_scan_started = time.perf_counter_ns()
         character_runs = _character_runs_by_object(textpage)
+        character_scan_ns = time.perf_counter_ns() - character_scan_started
         elements: list[Element] = []
         image_index = 0
         vector_index = 0
+        native_object_counts: Counter[str] = Counter()
+        image_decode_ns = 0
         page_degenerate_counts: Counter[str] = Counter()
         try:
+            object_walk_started = time.perf_counter_ns()
             for raw_index, obj in enumerate(page.get_objects()):
+                if isinstance(obj, pdfium.PdfTextObj):
+                    native_object_counts["text"] += 1
+                elif isinstance(obj, pdfium.PdfImage):
+                    native_object_counts["image"] += 1
+                elif getattr(obj, "type", None) == 2:
+                    native_object_counts["vector"] += 1
+                elif getattr(obj, "type", None) == 5:
+                    native_object_counts["form"] += 1
+                else:
+                    native_object_counts["other"] += 1
                 bounds = obj.get_bounds()
                 bbox = _clamped_bbox(bounds, width, height)
                 if bbox is None:
@@ -852,6 +900,7 @@ class PDFiumBackend:
                 elif isinstance(obj, pdfium.PdfImage):
                     element_id = f"p{page_index:04d}-image-{image_index:04d}"
                     image_index += 1
+                    image_decode_started = time.perf_counter_ns()
                     bitmap = obj.get_bitmap(render=True, scale_to_original=True)
                     try:
                         pil_image = bitmap.to_pil().convert("RGB")
@@ -866,6 +915,9 @@ class PDFiumBackend:
                         width_px, height_px = pil_image.size
                     finally:
                         bitmap.close()
+                        image_decode_ns += (
+                            time.perf_counter_ns() - image_decode_started
+                        )
                     name = f"page-{page_index + 1:03d}-image-{image_index:03d}.png"
                     assets.append(
                         ExtractedAsset(
@@ -923,10 +975,14 @@ class PDFiumBackend:
                         )
                     )
                     vector_index += 1
+            object_walk_ns = time.perf_counter_ns() - object_walk_started
+            reading_order_started = time.perf_counter_ns()
             ordered = _reading_order(elements, width)
+            reading_order_ns = time.perf_counter_ns() - reading_order_started
         finally:
             textpage.close()
 
+        normalization_started = time.perf_counter_ns()
         if page_degenerate_counts:
             degenerate_pages.append(
                 {
@@ -972,10 +1028,30 @@ class PDFiumBackend:
             )
             for order, item in enumerate(ordered)
         ]
-        return Page(
+        result = Page(
             page_index=page_index,
             width=width,
             height=height,
             rotation=rotation,
             elements=tuple(normalized),
         )
+        normalization_ns = time.perf_counter_ns() - normalization_started
+        timing: dict[str, object] = {
+            "page_index": page_index,
+            "total_ms": _milliseconds(time.perf_counter_ns() - page_started),
+            "text_page_open_ms": _milliseconds(text_page_open_ns),
+            "character_scan_ms": _milliseconds(character_scan_ns),
+            "object_walk_ms": _milliseconds(object_walk_ns),
+            "image_decode_ms": _milliseconds(image_decode_ns),
+            "reading_order_ms": _milliseconds(reading_order_ns),
+            "normalization_ms": _milliseconds(normalization_ns),
+            "character_count": sum(len(run) for run in character_runs.values()),
+            "native_object_counts": dict(sorted(native_object_counts.items())),
+            "emitted_element_counts": {
+                "text": sum(item.kind == "text" for item in normalized),
+                "image": sum(item.kind == "image" for item in normalized),
+                "vector": sum(item.kind == "vector" for item in normalized),
+            },
+            "degenerate_object_count": sum(page_degenerate_counts.values()),
+        }
+        return result, timing

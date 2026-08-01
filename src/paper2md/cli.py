@@ -96,6 +96,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="同时验证最终布局是否与候选任务匹配",
     )
 
+    benchmark_extract = commands.add_parser(
+        "benchmark-extract",
+        help="只读运行一次物理提取并输出逐页、逐阶段计时",
+    )
+    benchmark_extract.add_argument("input_pdf", type=Path)
+    benchmark_extract.add_argument("--config", type=Path)
+    benchmark_extract.add_argument(
+        "--backend",
+        choices=("pdfium", "pdfbox"),
+        default=None,
+    )
+
     prepare_layout = commands.add_parser(
         "layout-prepare",
         help="导出候选区块、页面预览和 AI 审查协议",
@@ -290,6 +302,18 @@ def _configuration(args: argparse.Namespace, *, batch: bool):
     return config
 
 
+def _benchmark_configuration(args: argparse.Namespace):
+    base = load_config(args.config)
+    return with_cli_overrides(
+        base,
+        backend=args.backend,
+        workspace_root=None,
+        region_mode=None,
+        region_pages=None,
+        region_max_candidates=None,
+    )
+
+
 def _layout_configuration(args: argparse.Namespace):
     base = load_config(args.config)
     return with_cli_overrides(
@@ -321,6 +345,26 @@ def _convert(args: argparse.Namespace) -> int:
                 "output_dir": str(result.output_dir),
                 "page_count": result.manifest["page_count"],
                 "backend": result.manifest["backend"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _benchmark_extract(args: argparse.Namespace) -> int:
+    result = _product(_benchmark_configuration(args)).benchmark_extraction(
+        args.input_pdf
+    )
+    print(
+        json.dumps(
+            {
+                "status": "profiled",
+                "source_sha256": result.source_sha256,
+                "page_count": result.page_count,
+                "backend": result.backend,
+                "performance": result.performance,
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -471,6 +515,8 @@ def main(argv: list[str] | None = None) -> int:
             return _validate_layout_task(args.task_json)
         if args.command == "validate-final-layout":
             return _validate_final_layout(args.layout_json, args.task)
+        if args.command == "benchmark-extract":
+            return _benchmark_extract(args)
         if args.command == "layout-prepare":
             return _prepare_layout(args)
         if args.command == "layout-apply":

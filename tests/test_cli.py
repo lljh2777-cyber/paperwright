@@ -76,6 +76,34 @@ class CLITests(unittest.TestCase):
             self.assertEqual(result["page_count"], 2)
             self.assertTrue((root / "out/article.md").is_file())
 
+    def test_benchmark_extract_reports_stage_and_page_timings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "fixture.pdf"
+            create_born_digital_fixture(source)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main(["benchmark-extract", str(source)])
+
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(result["status"], "profiled")
+            self.assertEqual(result["page_count"], 2)
+            performance = result["performance"]
+            self.assertEqual(
+                performance["schema_version"],
+                "paper2md-extraction-timing-v0.1",
+            )
+            self.assertEqual(performance["page_count"], 2)
+            self.assertGreaterEqual(performance["total_ms"], 0)
+            self.assertEqual(len(performance["pages"]), 2)
+            for page in performance["pages"]:
+                self.assertGreaterEqual(page["character_scan_ms"], 0)
+                self.assertGreaterEqual(page["object_walk_ms"], 0)
+                self.assertGreaterEqual(page["reading_order_ms"], 0)
+                self.assertIn("native_object_counts", page)
+                self.assertIn("emitted_element_counts", page)
+
 
 if __name__ == "__main__":
     unittest.main()

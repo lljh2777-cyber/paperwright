@@ -467,6 +467,21 @@ provenance，便于复核和后续训练。
 不会被拼入正文。续接事件写入 `body_continuation_repairs` provenance；
 证据不足时保留分段，不做猜测性合并。
 
+### 15.2.2 提取性能基准
+
+性能计时不写入 `PhysicalDocument`、布局任务或 manifest，避免运行时间破坏
+确定性哈希。开发时可执行只读基准：
+
+```powershell
+paper2md benchmark-extract input.pdf
+```
+
+输出使用 `paper2md-extraction-timing-v0.1`，包含源文件哈希、总耗时，以及
+每页的 TextPage 打开、字符扫描、原生对象遍历、位图解码、阅读顺序和规范化
+耗时；同时记录文字、图片、矢量等对象数量。该命令不创建产品输出目录，
+用于判断 fast 提取应优先绕开的实际瓶颈。计时使用单调时钟，数值本身不作为
+回归断言，只检查字段、非负性和对象计数。
+
 ### 15.3 导出本地机器学习数据
 
 ```powershell

@@ -16,17 +16,24 @@ def _is_relative_to(path: Path, root: Path) -> bool:
         return False
 
 
+def validate_input_pdf(input_pdf: str | Path) -> Path:
+    """Resolve and validate a read-only PDF input."""
+
+    source = Path(input_pdf).expanduser().resolve()
+    if not source.exists() or not source.is_file():
+        raise PathSafetyError(f"输入 PDF 不存在或不是文件: {source}")
+    if source.suffix.lower() != ".pdf":
+        raise UnsupportedInputError("输入文件扩展名必须是 .pdf")
+    return source
+
+
 def validate_conversion_paths(
     input_pdf: str | Path,
     output_dir: str | Path,
     config: Paper2MDConfig,
 ) -> tuple[Path, Path]:
-    source = Path(input_pdf).expanduser().resolve()
+    source = validate_input_pdf(input_pdf)
     destination = Path(output_dir).expanduser().resolve()
-    if not source.exists() or not source.is_file():
-        raise PathSafetyError(f"输入 PDF 不存在或不是文件: {source}")
-    if source.suffix.lower() != ".pdf":
-        raise UnsupportedInputError("输入文件扩展名必须是 .pdf")
     if destination == source:
         raise OutputConflictError("输出目录不能与输入文件冲突")
     if destination in source.parents:

@@ -25,7 +25,7 @@ from .layout_roi import (
 )
 from .layout_writer import write_layout_outputs
 from .models import PhysicalDocument
-from .paths import validate_conversion_paths
+from .paths import validate_conversion_paths, validate_input_pdf
 from .writer import write_outputs
 
 
@@ -41,6 +41,14 @@ class LayoutPreparationResult:
     index: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ExtractionBenchmarkResult:
+    source_sha256: str
+    page_count: int
+    backend: str
+    performance: dict[str, Any]
+
+
 class Paper2MD:
     def __init__(
         self,
@@ -53,6 +61,33 @@ class Paper2MD:
 
     def register_backend(self, name: str, backend: Backend) -> None:
         self.registry.register(name, backend)
+
+    def benchmark_extraction(
+        self,
+        input_pdf: str | Path,
+    ) -> ExtractionBenchmarkResult:
+        """Run one read-only extraction and return non-deterministic timings."""
+
+        source = validate_input_pdf(input_pdf)
+        backend = self.registry.get(self.config.backend)
+        extracted = backend.extract(source, self.config)
+        result = (
+            extracted
+            if isinstance(extracted, BackendResult)
+            else BackendResult(extracted)
+        )
+        if result.document.backend != backend.identity.name:
+            raise BackendExecutionError("后端输出身份与注册身份不一致")
+        if not result.performance:
+            raise BackendExecutionError(
+                f"{backend.identity.name} 后端没有提供性能计时"
+            )
+        return ExtractionBenchmarkResult(
+            source_sha256=result.document.source_sha256,
+            page_count=len(result.document.pages),
+            backend=result.document.backend,
+            performance=result.performance,
+        )
 
     def extract_physical_document(
         self,
