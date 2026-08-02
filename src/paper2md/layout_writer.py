@@ -21,6 +21,7 @@ from .evidence import (
     validation_report_markdown,
     write_json,
 )
+from .exceptions import ContractValidationError
 from .layout_caption import CaptionBinding, bind_caption_regions
 from .layout_continuation import (
     CrossPageParagraphBlock,
@@ -48,6 +49,7 @@ from .quality import (
     analyze_markdown_exclusions,
     analyze_markdown_text,
     analyze_native_object_diagnostics,
+    analyze_semantic_layout,
     analyze_title,
     analyze_word_spacing,
 )
@@ -563,6 +565,31 @@ def _bind_caption_regions(
     )
 
 
+_STRONG_CAPTION_LINE = re.compile(
+    r"^\s*(?:fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?\s*(?:[|.:])",
+    re.IGNORECASE,
+)
+
+
+def _validate_materialized_semantics(
+    document: PhysicalDocument,
+    layouts: Sequence[FinalLayout],
+) -> None:
+    """Block packaging when an explicit caption remains in prose."""
+
+    for page, layout in zip(document.pages, layouts, strict=True):
+        for region in layout.regions:
+            if region.content_class != "text" or region.role == "caption":
+                continue
+            for element in _ordered_text_elements(page, region):
+                if element.text and _STRONG_CAPTION_LINE.match(element.text):
+                    raise ContractValidationError(
+                        "semantic layout failure: explicit Figure/Table "
+                        f"caption remains in {region.role} region "
+                        f"{region.region_id} on page {page.page_index + 1}"
+                    )
+
+
 def write_layout_outputs(
     *,
     root: Path,
@@ -617,6 +644,7 @@ def write_layout_outputs(
             strict=True,
         )
     )
+    _validate_materialized_semantics(document, materialized_layouts)
     caption_by_region, caption_by_visual, caption_binding_quality = (
         _bind_caption_regions(document, materialized_layouts)
     )
@@ -1215,6 +1243,12 @@ def write_layout_outputs(
         "word_spacing": analyze_word_spacing(quality_paragraphs),
         "caption_binding": caption_binding_quality,
         "figure_label_leakage": figure_label_quality,
+        "semantic_layout": analyze_semantic_layout(
+            quality_paragraphs,
+            markdown_text=markdown_quality,
+            figure_label_leakage=figure_label_quality,
+            runtime_warnings=warnings,
+        ),
         "title_integrity": analyze_title(title, article_text),
         "image_links": analyze_image_links(article_path, images_dir),
         "layout_element_coverage": element_quality["coverage"],
@@ -1252,6 +1286,7 @@ def write_layout_outputs(
         "word_spacing": "quality_word_spacing_suspected",
         "caption_binding": "quality_caption_binding_incomplete",
         "figure_label_leakage": "quality_figure_label_leak_suspected",
+        "semantic_layout": "quality_semantic_layout_failed",
         "title_integrity": "quality_title_integrity_suspected",
         "image_links": "quality_image_links_invalid",
         "layout_element_coverage": "quality_unassigned_text_objects",
@@ -1355,7 +1390,13 @@ def write_layout_outputs(
         ],
         "pages": provenance_pages,
     }
-    status = "success_with_degradation" if warnings else "success"
+    status = (
+        "failed"
+        if quality_checks["semantic_layout"]["status"] == "fail"
+        else "success_with_degradation"
+        if warnings
+        else "success"
+    )
     evidence_paths: list[Path] = []
     provenance_path: Path | None = None
     if evidence_level in {"standard", "full"}:

@@ -17,6 +17,10 @@ _WORD = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿΑ-ω0-9]+(?:[-'][A-Za-z0-9]+)*")
 _REPEATED_WORD = re.compile(r"\b([A-Za-z]{2,})\s+\1\b", re.IGNORECASE)
 _SPACED_CAPS = re.compile(r"\b(?:[A-Z]{1,4}\s+){2,}[A-Z]{1,4}\b")
 _PANEL_OR_NUMBER = re.compile(r"^(?:[A-Z]|\d+(?:\.\d+)?%?)$")
+_STRONG_CAPTION_PREFIX = re.compile(
+    r"^\s*(?:fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?\s*(?:[|.:])",
+    re.IGNORECASE,
+)
 _GLUED_SCIENTIFIC_TOKEN = re.compile(
     r"(?:\b[A-Z]{2,}\d+[A-Z]?|[Α-Ωα-ω])(?=[a-z]{2,}\b)"
 )
@@ -150,6 +154,74 @@ def analyze_word_spacing(
         "repairs_by_code": dict(sorted(repairs.items())),
         "findings": glued[:_MAX_FINDINGS],
         "soft_break_findings": soft_breaks[:_MAX_FINDINGS],
+    }
+
+
+def analyze_semantic_layout(
+    paragraphs: Sequence[dict[str, Any]],
+    *,
+    markdown_text: dict[str, Any],
+    figure_label_leakage: dict[str, Any],
+    runtime_warnings: Sequence[dict[str, Any]],
+) -> dict[str, Any]:
+    """Detect high-confidence semantic layout failures in rendered output."""
+
+    findings: list[dict[str, Any]] = []
+    for record in paragraphs:
+        if (
+            record.get("role") != "caption"
+            and _STRONG_CAPTION_PREFIX.match(str(record.get("text", "")))
+        ):
+            findings.append(
+                _finding(record, "caption_like_text_in_non_caption_region")
+            )
+
+    fragment_pages = {
+        int(item["page"])
+        for item in markdown_text.get("findings", ())
+        if item.get("code") == "short_body_fragment"
+        and isinstance(item.get("page"), int)
+    }
+    figure_label_pages = {
+        int(item["page"])
+        for item in figure_label_leakage.get("findings", ())
+        if isinstance(item.get("page"), int)
+    }
+    non_text_pages = {
+        int(item["page"])
+        for item in runtime_warnings
+        if item.get("code") == "text_region_contains_non_text_elements"
+        and isinstance(item.get("page"), int)
+    }
+    for page in sorted(fragment_pages | figure_label_pages | non_text_pages):
+        signals = [
+            name
+            for name, pages in (
+                ("short_body_fragments", fragment_pages),
+                ("figure_label_leakage", figure_label_pages),
+                ("non_text_in_text_region", non_text_pages),
+            )
+            if page in pages
+        ]
+        if len(signals) >= 2:
+            findings.append(
+                {
+                    "code": "compound_layout_fragmentation",
+                    "page": page,
+                    "signals": signals,
+                }
+            )
+    return {
+        "status": "fail" if findings else "pass",
+        "caption_like_non_caption_count": sum(
+            item["code"] == "caption_like_text_in_non_caption_region"
+            for item in findings
+        ),
+        "compound_fragmentation_page_count": sum(
+            item["code"] == "compound_layout_fragmentation"
+            for item in findings
+        ),
+        "findings": findings[:_MAX_FINDINGS],
     }
 
 

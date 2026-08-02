@@ -7,6 +7,7 @@ from unittest import mock
 from pathlib import Path
 
 from paper2md.cli import main
+from paper2md.exceptions import ContractValidationError
 from paper2md.layout_models import (
     FinalLayout,
     LayoutAction,
@@ -24,6 +25,7 @@ from paper2md.layout_writer import (
     _image_alt_text,
     _merge_cross_page_paragraph_blocks,
     _text_region_non_text_diagnostics,
+    _validate_materialized_semantics,
 )
 from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
 from paper2md.layout_risk import LayoutRiskAssessment, PageLayoutRisk
@@ -572,6 +574,38 @@ class CaptionBindingTests(unittest.TestCase):
 
 
 class LayoutStageDTests(unittest.TestCase):
+    def test_materialized_body_cannot_contain_explicit_caption(self):
+        element = Element(
+            "caption-text",
+            "text",
+            0,
+            BBox(10, 70, 80, 10),
+            Provenance("fixture", "native", "caption-text"),
+            text="Figure 1 | Explicit caption.",
+        )
+        page = Page(0, 100, 100, 0, (element,))
+        document = PhysicalDocument("7" * 64, "fixture", "1", (page,))
+        layout = FinalLayout(
+            source_sha256=document.source_sha256,
+            page=LayoutPage.from_page(page),
+            regions=(
+                LayoutRegion(
+                    "R1",
+                    NormalizedBBox(0.1, 0.7, 0.8, 0.1),
+                    "text",
+                    "body",
+                    1,
+                    source_element_ids=(element.element_id,),
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "explicit Figure/Table caption remains",
+        ):
+            _validate_materialized_semantics(document, (layout,))
+
     def test_native_matrix_equation_is_detected_from_frame_geometry(self):
         provenance = Provenance("fixture", "native", "fixture")
         elements = []
@@ -1094,6 +1128,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "word_spacing",
                     "caption_binding",
                     "figure_label_leakage",
+                    "semantic_layout",
                     "title_integrity",
                     "image_links",
                     "layout_element_coverage",

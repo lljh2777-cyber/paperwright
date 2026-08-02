@@ -19,12 +19,49 @@ from paper2md.quality import (
     analyze_markdown_exclusions,
     analyze_markdown_text,
     analyze_native_object_diagnostics,
+    analyze_semantic_layout,
     analyze_title,
     analyze_word_spacing,
 )
 
 
 class QualityValidationTests(unittest.TestCase):
+    def test_semantic_layout_rejects_caption_text_in_body(self):
+        paragraphs = [
+            {
+                "page_index": 4,
+                "region_id": "R21",
+                "paragraph_index": 0,
+                "role": "body",
+                "text": "Fig. 3 | Benchmark of spatial domains.",
+            }
+        ]
+
+        result = analyze_semantic_layout(
+            paragraphs,
+            markdown_text={"findings": []},
+            figure_label_leakage={"findings": []},
+            runtime_warnings=(),
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["caption_like_non_caption_count"], 1)
+
+    def test_semantic_layout_combines_independent_page_signals(self):
+        result = analyze_semantic_layout(
+            (),
+            markdown_text={
+                "findings": [
+                    {"code": "short_body_fragment", "page": 5}
+                ]
+            },
+            figure_label_leakage={"findings": [{"page": 5}]},
+            runtime_warnings=(),
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["compound_fragmentation_page_count"], 1)
+
     def test_markdown_exclusions_remain_auditable(self):
         element = Element(
             "dingbat",
