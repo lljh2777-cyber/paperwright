@@ -146,6 +146,46 @@ def _write_fixture_reviews(review_root: Path) -> None:
         )
 
 
+def _write_visual_direct_fixture_reviews(review_root: Path) -> None:
+    for page_root in sorted(review_root.glob("page-*")):
+        task = LayoutTask.from_dict(
+            json.loads(
+                (page_root / "layout-task.json").read_text(encoding="utf-8")
+            )
+        )
+        bbox = NormalizedBBox.from_dict(
+            task.metadata["analysis_roi"]["bbox"]
+        )
+        region_id = f"page-{task.page.page_index + 1:04d}-content"
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="fixture-visual-reviewer",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(
+                LayoutRegion(
+                    region_id,
+                    bbox,
+                    "unknown",
+                    "unknown",
+                    1,
+                ),
+            ),
+            actions=(
+                LayoutAction(
+                    f"add-{region_id}",
+                    "add",
+                    result_region_ids=(region_id,),
+                    bbox=bbox,
+                ),
+            ),
+        )
+        (page_root / "final-layout.json").write_text(
+            layout.canonical_json(),
+            encoding="utf-8",
+        )
+
+
 class CrossPageParagraphTests(unittest.TestCase):
     def _block(
         self,
@@ -579,6 +619,10 @@ class LayoutStageDTests(unittest.TestCase):
         provenance = Provenance("fixture", "native", "fixture")
         elements = (
             Element(
+                "journal-header", "text", 0, BBox(10, 1, 70, 3),
+                provenance, text="Journal header",
+            ),
+            Element(
                 "body-text", "text", 0, BBox(10, 10, 35, 8),
                 provenance, text="Body text",
             ),
@@ -598,10 +642,22 @@ class LayoutStageDTests(unittest.TestCase):
             candidate_generator_version="fixture",
             feature_schema_version="fixture",
             candidates=(),
-            metadata={"review_mode": "visual-direct"},
+            metadata={
+                "review_mode": "visual-direct",
+                "analysis_roi": {
+                    "bbox": {
+                        "x": 0.05,
+                        "y": 0.05,
+                        "width": 0.90,
+                        "height": 0.85,
+                    },
+                    "source": "confirmed:fixture-ai",
+                },
+            },
         )
         body_bbox = NormalizedBBox(0.05, 0.05, 0.45, 0.20)
         figure_bbox = NormalizedBBox(0.05, 0.35, 0.90, 0.55)
+        header_bbox = NormalizedBBox(0.05, 0.00, 0.90, 0.05)
         layout = FinalLayout(
             source_sha256=task.source_sha256,
             page=task.page,
@@ -611,6 +667,9 @@ class LayoutStageDTests(unittest.TestCase):
                 LayoutRegion("body", body_bbox, "text", "body", 1),
                 LayoutRegion(
                     "figure", figure_bbox, "visual", "figure", 2
+                ),
+                LayoutRegion(
+                    "header", header_bbox, "exclude", "header", None
                 ),
             ),
             actions=(
@@ -622,6 +681,10 @@ class LayoutStageDTests(unittest.TestCase):
                     "add-figure", "add", result_region_ids=("figure",),
                     bbox=figure_bbox,
                 ),
+                LayoutAction(
+                    "add-header", "add", result_region_ids=("header",),
+                    bbox=header_bbox,
+                ),
             ),
         )
 
@@ -632,6 +695,14 @@ class LayoutStageDTests(unittest.TestCase):
         self.assertEqual(
             set(by_id["figure"].source_element_ids),
             {"figure-image", "figure-label"},
+        )
+        self.assertNotIn(
+            "journal-header",
+            by_id["body"].source_element_ids,
+        )
+        self.assertEqual(
+            by_id["header"].source_element_ids,
+            ("journal-header",),
         )
 
     def test_materialized_body_cannot_contain_explicit_caption(self):
@@ -758,6 +829,7 @@ class LayoutStageDTests(unittest.TestCase):
         *,
         include_references: bool = False,
         extraction_profile: str = "forensic",
+        review_mode: str = "candidate-assisted",
     ) -> tuple[Path, Path]:
         source = root / "fixture.pdf"
         proposal = root / "roi-proposal"
@@ -777,7 +849,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "--extraction-profile",
                     extraction_profile,
                     "--review-mode",
-                    "candidate-assisted",
+                    review_mode,
                 ]
             )
         self.assertEqual(code, 0)
@@ -808,12 +880,54 @@ class LayoutStageDTests(unittest.TestCase):
                     "--extraction-profile",
                     extraction_profile,
                     "--review-mode",
-                    "candidate-assisted",
+                    review_mode,
                 ]
             )
         self.assertEqual(code, 0)
-        _write_fixture_reviews(review)
+        if review_mode == "visual-direct":
+            _write_visual_direct_fixture_reviews(review)
+        else:
+            _write_fixture_reviews(review)
         return source, review
+
+    def test_visual_direct_apply_replays_confirmed_roi_guard(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, review = self._prepare(
+                root,
+                extraction_profile="fast",
+                review_mode="visual-direct",
+            )
+            task = json.loads(
+                (review / "page-0001" / "layout-task.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(task["candidates"], [])
+            self.assertTrue(
+                task["metadata"]["analysis_roi"]["source"].startswith(
+                    "confirmed:"
+                )
+            )
+            output = root / "visual-direct-output"
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(source),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                        "--evidence",
+                        "minimal",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            self.assertTrue((output / "article.md").is_file())
+            self.assertTrue(any((output / "images").glob("*.png")))
 
     def test_fast_layout_prepare_and_apply_use_recorded_profile(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -18,7 +18,7 @@ Choose the least complex workflow that meets the requested layout fidelity, then
 ## Choose a workflow
 
 - Use **direct conversion** for ordinary born-digital papers when deterministic extraction and baseline double-column ordering are sufficient.
-- Use **hybrid reviewed layout** for complex columns, spanning Figure/Table regions, ambiguous captions, page furniture, or when semantic reading order matters. Its default `visual-direct` mode requires a human or multimodal visual AI to inspect the clean `page.png`, draw final regions directly, and create each page's structured `final-layout.json`. Do not infer final Figure/Table bounds from rule-generated candidates.
+- Use **hybrid reviewed layout** for complex columns, spanning Figure/Table regions, ambiguous captions, page furniture, or when semantic reading order matters. Its default `visual-direct` mode first requires confirmation of the coarse Content ROI, then requires a human or multimodal visual AI to inspect the clean `page.png`, draw final regions inside that ROI, and create each page's structured `final-layout.json`. Do not infer final Figure/Table bounds from rule-generated candidates.
 - Use **batch conversion** only for independent direct conversions. It scans one directory level and never makes hybrid review decisions.
 
 Read [references/direct-and-batch.md](references/direct-and-batch.md) for direct commands and [references/hybrid-review.md](references/hybrid-review.md) for the review protocol.

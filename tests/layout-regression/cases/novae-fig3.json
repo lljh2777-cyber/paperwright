@@ -6,6 +6,7 @@
     "page": 5,
     "review_mode": "visual-direct",
     "expected_review_candidate_count": 0,
+    "expected_confirmed_content_roi_guard": true,
     "expected_figure_count": 1,
     "expected_table_count": 0,
     "expected_caption_grouping": "one two-column caption attached to Figure 3",

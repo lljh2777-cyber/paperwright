@@ -33,7 +33,7 @@ from .layout_models import (
     LayoutRegion,
     LayoutTask,
 )
-from .layout_review import validate_layout_review
+from .layout_review import layout_task_content_roi, validate_layout_review
 from .manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     OutputFile,
@@ -375,6 +375,27 @@ def materialize_layout_sources(
     if page.page_index != task.page.page_index:
         raise ValueError("布局任务与 PhysicalDocument 页面不一致")
     elements = {item.element_id: item for item in page.elements}
+    content_roi = layout_task_content_roi(task)
+    content_roi_box = (
+        content_roi.to_pdf_bbox(
+            page_width=page.width,
+            page_height=page.height,
+        )
+        if content_roi is not None
+        else None
+    )
+
+    def eligible_for_region(element: Element, region: LayoutRegion) -> bool:
+        if region.content_class == "exclude" or content_roi_box is None:
+            return True
+        element_area = element.bbox.width * element.bbox.height
+        if element_area <= 0:
+            return False
+        return (
+            _intersection_area(element.bbox, content_roi_box) / element_area
+            >= 0.50
+        )
+
     candidates = {item.candidate_id: item for item in task.candidates}
     assignments: dict[str, list[LayoutRegion]] = {
         candidate_id: [] for candidate_id in candidates
@@ -391,7 +412,12 @@ def materialize_layout_sources(
             continue
         source_ids = candidates[candidate_id].source_element_ids
         if len(regions) == 1:
-            region_elements[regions[0].region_id].update(source_ids)
+            region = regions[0]
+            region_elements[region.region_id].update(
+                element_id
+                for element_id in source_ids
+                if eligible_for_region(elements[element_id], region)
+            )
             continue
         region_boxes = {
             region.region_id: region.bbox.to_pdf_bbox(
@@ -402,8 +428,15 @@ def materialize_layout_sources(
         }
         for element_id in source_ids:
             element = elements[element_id]
+            eligible_regions = tuple(
+                region
+                for region in regions
+                if eligible_for_region(element, region)
+            )
+            if not eligible_regions:
+                continue
             selected = max(
-                regions,
+                eligible_regions,
                 key=lambda region: (
                     _intersection_area(
                         element.bbox,
@@ -451,6 +484,8 @@ def materialize_layout_sources(
                 continue
             options: list[tuple[float, float, int, str]] = []
             for region in direct_regions:
+                if not eligible_for_region(element, region):
+                    continue
                 intersection = _intersection_area(
                     element.bbox,
                     direct_boxes[region.region_id],

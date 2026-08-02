@@ -237,6 +237,13 @@ class LayoutStageCTests(unittest.TestCase):
                             image.convert("RGB").tobytes(),
                             preview.convert("RGB").tobytes(),
                         )
+                        with Image.open(
+                            page_root / "content-roi.png"
+                        ) as roi_preview:
+                            self.assertNotEqual(
+                                roi_preview.convert("RGB").tobytes(),
+                                preview.convert("RGB").tobytes(),
+                            )
                 task = json.loads(
                     (page_root / "layout-task.json").read_text(
                         encoding="utf-8"
@@ -248,6 +255,7 @@ class LayoutStageCTests(unittest.TestCase):
                 )
                 self.assertEqual(task["candidates"], [])
                 self.assertEqual(task["separators"], [])
+                self.assertIn("analysis_roi", task["metadata"])
 
             def content(root_path: Path):
                 return {

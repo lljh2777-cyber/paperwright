@@ -140,7 +140,10 @@ Reader ID 由源 PDF 哈希和规范化源区域生成，不依赖 Markdown 行�
 
 混合布局流程默认由人工或视觉 AI 直接依据原页图像输出结构化区块计划。审核者用
 `add` 和规范化 bbox 绘制最终区块；Paper2MD 再按几何覆盖把原生 PDF 元素归属到
-区块。`candidate-assisted` 仅作为显式兼容模式保留。AI 不转录、改写正文，
+区块。确认后的 Content ROI 是粗粒度语义内容边界：非排除区块不得越界，元素回接
+也会过滤 ROI 外围内容；页眉、页脚等仍可作为 `exclude` 区块保留审计来源。ROI
+包含标题、作者、脚注、Figure/Table 和 caption，不等同于狭义段落正文。
+`candidate-assisted` 仅作为显式兼容模式保留。AI 不转录、改写正文，
 也不读取 Figure/Table 内部文字。规则候选通过不代表最终语义布局正确；正式应用
 前必须验证 `final-layout.json`。项目不实现 OCR、语义表格或公式 LaTeX。
 PDFium 运行时不进入源码交付包；PDFBox 只是可替换接口。

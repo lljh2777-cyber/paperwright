@@ -8,10 +8,33 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .exceptions import ContractValidationError
-from .layout_models import FinalLayout, LayoutTask
+from .layout_models import FinalLayout, LayoutTask, NormalizedBBox
 
-LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.3"
+LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.4"
 LAYOUT_REVIEW_MODES = frozenset({"visual-direct", "candidate-assisted"})
+ROI_BOUNDARY_TOLERANCE = 0.002
+
+
+def layout_task_content_roi(task: LayoutTask) -> NormalizedBBox | None:
+    """Return the coarse semantic-content guard carried by a layout task."""
+
+    value = task.metadata.get("analysis_roi")
+    if not isinstance(value, dict) or not isinstance(value.get("bbox"), dict):
+        return None
+    return NormalizedBBox.from_dict(value["bbox"])
+
+
+def _bbox_within_roi(
+    bbox: NormalizedBBox,
+    roi: NormalizedBBox,
+) -> bool:
+    tolerance = ROI_BOUNDARY_TOLERANCE
+    return (
+        bbox.x >= roi.x - tolerance
+        and bbox.y >= roi.y - tolerance
+        and bbox.right <= roi.right + tolerance
+        and bbox.bottom <= roi.bottom + tolerance
+    )
 
 
 def configure_layout_review_task(
@@ -47,6 +70,9 @@ def configure_layout_review_task(
             "visual_geometry_authority": "reviewer-page-image",
             "candidate_policy": "omitted-from-review-task",
         }
+        analysis_roi = task.metadata.get("analysis_roi")
+        if isinstance(analysis_roi, dict):
+            metadata["analysis_roi"] = analysis_roi
         raster_evidence = task.metadata.get("raster_evidence")
         if isinstance(raster_evidence, dict):
             metadata["raster_evidence"] = raster_evidence
@@ -69,6 +95,11 @@ def build_layout_review_instructions(task: LayoutTask) -> str:
 
 - Treat `{task.preview_filename}` as the only authority for final geometry.
 - `{task.overlay_filename}` intentionally contains no rule-generated boxes.
+- Use `content-roi.png` and `metadata.analysis_roi` as the coarse semantic-
+  content guard. Every non-exclude region must stay inside that confirmed ROI.
+- Content outside the ROI is page furniture by default. Adjust and reconfirm
+  the ROI instead of silently importing outside content when the proposal is
+  too narrow.
 - The review task intentionally contains no rule-generated candidates or
   separators. Decide every final boundary from the page image itself.
 - Draw every final logical block directly in normalized page coordinates.
@@ -299,6 +330,31 @@ def validate_layout_review(
     )
     if review_mode not in LAYOUT_REVIEW_MODES:
         raise ContractValidationError("unsupported layout review mode")
+    content_roi = layout_task_content_roi(task)
+    if review_mode == "visual-direct" and content_roi is None:
+        raise ContractValidationError(
+            "visual-direct task requires a Content ROI"
+        )
+    if review_mode == "visual-direct":
+        roi_value = task.metadata.get("analysis_roi")
+        roi_source = (
+            roi_value.get("source") if isinstance(roi_value, dict) else None
+        )
+        if not isinstance(roi_source, str) or not roi_source.startswith(
+            "confirmed:"
+        ):
+            raise ContractValidationError(
+                "visual-direct task requires a confirmed Content ROI"
+            )
+    if content_roi is not None:
+        for region in layout.regions:
+            if region.content_class == "exclude":
+                continue
+            if not _bbox_within_roi(region.bbox, content_roi):
+                raise ContractValidationError(
+                    f"non-exclude region {region.region_id} is outside "
+                    "the confirmed Content ROI"
+                )
 
     known_candidates = {item.candidate_id for item in task.candidates}
     assignments: dict[str, list[str]] = {

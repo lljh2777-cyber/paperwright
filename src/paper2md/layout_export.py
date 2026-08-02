@@ -7,8 +7,11 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from .exceptions import OutputConflictError
-from .layout_models import LayoutTask, NormalizedBBox
-from .layout_review import write_layout_review_instructions
+from .layout_models import LayoutTask
+from .layout_review import (
+    layout_task_content_roi,
+    write_layout_review_instructions,
+)
 
 _CANDIDATE_COLORS = {
     "text": (32, 117, 255),
@@ -22,13 +25,6 @@ _SEPARATOR_COLOR = (255, 166, 0)
 _ROI_COLOR = (255, 48, 48)
 
 
-def _task_content_roi(task: LayoutTask) -> NormalizedBBox | None:
-    value = task.metadata.get("analysis_roi")
-    if not isinstance(value, dict) or not isinstance(value.get("bbox"), dict):
-        return None
-    return NormalizedBBox.from_dict(value["bbox"])
-
-
 def render_content_roi_overlay(
     preview: Image.Image,
     task: LayoutTask,
@@ -36,7 +32,7 @@ def render_content_roi_overlay(
     """Darken the excluded perimeter and outline the analysis ROI."""
 
     base = preview.convert("RGBA")
-    roi = _task_content_roi(task)
+    roi = layout_task_content_roi(task)
     if roi is None:
         return base.convert("RGB")
     left, top, right, bottom = roi.to_pixel_box(

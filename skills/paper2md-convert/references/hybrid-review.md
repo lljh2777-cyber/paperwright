@@ -31,7 +31,7 @@ paper2md layout-prepare input.pdf layout-review \
   --review-mode visual-direct
 ```
 
-Use the same selected profile unless a deliberate new preparation is being created. For each `page-XXXX/`, read `review-instructions.md` and inspect the clean `page.png`. In `visual-direct` mode, `overlay.png` intentionally has no rule boxes, and `layout-task.json` omits rule-generated candidate coordinates.
+Use the same selected profile unless a deliberate new preparation is being created. For each `page-XXXX/`, read `review-instructions.md`, inspect the clean `page.png`, and use `content-roi.png` as the single coarse content guard. In `visual-direct` mode, `overlay.png` intentionally has no rule boxes, and `layout-task.json` omits rule-generated candidate coordinates while retaining the confirmed `metadata.analysis_roi`.
 
 ## 3. Produce structured review
 
@@ -39,6 +39,8 @@ Create `page-XXXX/final-layout.json` according to `paper2md-final-layout-v0.1` a
 
 - use `add` actions and normalized bboxes to draw all final regions directly
   from `page.png`;
+- keep every non-`exclude` region inside the confirmed Content ROI; if genuine
+  content falls outside, correct and reconfirm the ROI before reviewing layout;
 - leave `source_candidate_ids` empty for directly drawn regions;
 - include all panels, axes, legends, and labels of one multi-panel Figure in a
   single visual region;

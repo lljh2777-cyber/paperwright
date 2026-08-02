@@ -136,6 +136,11 @@ paper2md layout-apply input.pdf layout-review output-dir --evidence standard
 第一步生成 Content ROI 提案；确认 ROI 后，第二步生成原页预览和复核说明。
 `visual-direct` 是默认审核模式：人工或视觉 AI 以干净的 `page.png` 为准，直接绘制
 最终正文、Figure/Table、caption 和页眉页脚区块；审核任务不包含规则候选坐标。
+`content-roi.png` 只显示一个粗粒度有效内容框。非排除区块必须位于已确认 ROI 内，
+Paper2MD 在回接原始 PDF 元素时也会过滤 ROI 外围内容，避免页眉、页脚和页码中断正文。
+ROI 必须包含标题、作者、脚注、Figure/Table 和 caption；提案过窄时应先修正并重新确认。
+旧的 `visual-direct` 审核包若没有 `metadata.analysis_roi`，必须重新运行 `layout-prepare`，
+不会在 `layout-apply` 时静默放宽或迁移边界。
 旧的规则叠加流程可通过 `--review-mode candidate-assisted` 显式启用。审核者只填写
 结构化 `final-layout.json`，不转录论文正文。Paper2MD 随后
 重新校验输入、缓存、栅格证据、审核任务完整性和最终区块关系，再确定性生成结果。

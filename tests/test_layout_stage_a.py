@@ -263,6 +263,69 @@ class LayoutStageATests(unittest.TestCase):
         ):
             validate_layout_review(layout, task)
 
+    def test_visual_direct_rejects_non_exclude_region_outside_roi(self):
+        task = configure_layout_review_task(_task(), "visual-direct")
+        bbox = NormalizedBBox(0.01, 0.05, 0.90, 0.75)
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="visual-fixture",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(LayoutRegion("R01", bbox, "text", "body", 1),),
+            actions=(
+                LayoutAction(
+                    "A01",
+                    "add",
+                    result_region_ids=("R01",),
+                    bbox=bbox,
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "outside the confirmed Content ROI",
+        ):
+            validate_layout_review(layout, task)
+
+    def test_visual_direct_requires_confirmed_roi(self):
+        base = _task()
+        task = configure_layout_review_task(
+            replace(
+                base,
+                metadata={
+                    **base.metadata,
+                    "analysis_roi": {
+                        **base.metadata["analysis_roi"],
+                        "source": "raster_rule_proposed",
+                    },
+                },
+            ),
+            "visual-direct",
+        )
+        bbox = NormalizedBBox(0.05, 0.05, 0.80, 0.70)
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="visual-fixture",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(LayoutRegion("R01", bbox, "text", "body", 1),),
+            actions=(
+                LayoutAction(
+                    "A01",
+                    "add",
+                    result_region_ids=("R01",),
+                    bbox=bbox,
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "requires a confirmed Content ROI",
+        ):
+            validate_layout_review(layout, task)
+
     def test_high_confidence_caption_cannot_be_body(self):
         base = _task()
         caption = replace(
@@ -453,6 +516,10 @@ class LayoutStageATests(unittest.TestCase):
         self.assertEqual(overlay.tobytes(), preview.tobytes())
         self.assertEqual(task.candidates, ())
         self.assertEqual(task.separators, ())
+        self.assertEqual(
+            task.metadata["analysis_roi"],
+            _task().metadata["analysis_roi"],
+        )
         self.assertEqual(
             task.metadata["candidate_policy"],
             "omitted-from-review-task",
