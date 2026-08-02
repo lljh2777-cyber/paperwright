@@ -12,6 +12,14 @@ from .models import BBox, Element, Page
 
 _FIGURE_PREFIX = re.compile(r"^\s*(?:fig(?:ure)?\.?)\s*\d", re.IGNORECASE)
 _TABLE_PREFIX = re.compile(r"^\s*table\s*\d", re.IGNORECASE)
+_STRONG_FIGURE_CAPTION_PREFIX = re.compile(
+    r"^\s*(?:fig(?:ure)?\.?)\s*\d+[A-Za-z]?\s*(?:[.:|]|\|)",
+    re.IGNORECASE,
+)
+_STRONG_TABLE_CAPTION_PREFIX = re.compile(
+    r"^\s*table\s*\d+[A-Za-z]?\s*(?:[.:|]|\|)",
+    re.IGNORECASE,
+)
 _PANEL_LABEL = re.compile(r"^\s*[A-J]\s*$")
 _NUMBER_TOKEN = re.compile(r"^[+\-−]?(?:\d+(?:[.,]\d+)?|\.\d+)%?$")
 
@@ -148,6 +156,14 @@ def candidate_features(
         and math.isfinite(float(value))
     ]
     text_value = " ".join(_text_for(item) for item in text).strip()
+    text_lines = tuple(_text_for(item) for item in text)
+    strong_caption_kind = (
+        "figure"
+        if any(_STRONG_FIGURE_CAPTION_PREFIX.match(item) for item in text_lines)
+        else "table"
+        if any(_STRONG_TABLE_CAPTION_PREFIX.match(item) for item in text_lines)
+        else None
+    )
     tokens = text_value.split()
     numeric_tokens = sum(bool(_NUMBER_TOKEN.fullmatch(item)) for item in tokens)
     return {
@@ -202,6 +218,7 @@ def candidate_features(
         / area,
         "starts_with_figure": bool(_FIGURE_PREFIX.match(text_value)),
         "starts_with_table": bool(_TABLE_PREFIX.match(text_value)),
+        "high_confidence_caption_kind": strong_caption_kind,
         "panel_label_count": sum(
             bool(_PANEL_LABEL.fullmatch(_text_for(item))) for item in text
         ),

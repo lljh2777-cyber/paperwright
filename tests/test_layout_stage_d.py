@@ -49,21 +49,48 @@ def _write_fixture_reviews(review_root: Path) -> None:
         regions = []
         actions = []
         order = 1
+        region_id_by_candidate = {
+            candidate.candidate_id: f"R{index:03d}"
+            for index, candidate in enumerate(task.candidates, start=1)
+        }
+        caption_parent_by_candidate: dict[str, str] = {}
+        hinted_visual_roles: dict[str, str] = {}
+        for hint in task.metadata.get("semantic_review_hints", ()):
+            visual_ids = hint.get("visual_candidate_ids", ())
+            caption_ids = hint.get("caption_candidate_ids", ())
+            if len(visual_ids) != 1:
+                continue
+            visual_id = visual_ids[0]
+            parent_region_id = region_id_by_candidate[visual_id]
+            hinted_visual_roles[visual_id] = hint["visual_role"]
+            for caption_id in caption_ids:
+                caption_parent_by_candidate[caption_id] = parent_region_id
         for index, candidate in enumerate(task.candidates, start=1):
             region_id = f"R{index:03d}"
             peripheral = bool(candidate.features.get("peripheral_hint"))
             visual = bool(
                 {"image", "vector", "raster"} & set(candidate.element_kinds)
             )
+            caption = candidate.features.get(
+                "high_confidence_caption_kind"
+            ) in {"figure", "table"}
             content_class = (
-                "exclude" if peripheral else "visual" if visual else "text"
+                "exclude"
+                if peripheral
+                else "text"
+                if caption
+                else "visual"
+                if visual
+                else "text"
             )
             role = (
                 "footer"
                 if peripheral and candidate.bbox.y > 0.5
                 else "header"
                 if peripheral
-                else "figure"
+                else "caption"
+                if caption
+                else hinted_visual_roles.get(candidate.candidate_id, "figure")
                 if visual
                 else "body"
             )
@@ -75,6 +102,9 @@ def _write_fixture_reviews(review_root: Path) -> None:
                     role=role,
                     order=None if peripheral else order,
                     source_candidate_ids=(candidate.candidate_id,),
+                    parent_region_id=caption_parent_by_candidate.get(
+                        candidate.candidate_id
+                    ),
                 )
             )
             actions.append(
@@ -85,6 +115,18 @@ def _write_fixture_reviews(review_root: Path) -> None:
                     result_region_ids=(region_id,),
                 )
             )
+            if candidate.candidate_id in caption_parent_by_candidate:
+                actions.append(
+                    LayoutAction(
+                        action_id=f"AC{index:03d}",
+                        action="attach-caption",
+                        source_candidate_ids=(candidate.candidate_id,),
+                        result_region_ids=(region_id,),
+                        target_region_id=caption_parent_by_candidate[
+                            candidate.candidate_id
+                        ],
+                    )
+                )
             if not peripheral:
                 order += 1
         layout = FinalLayout(

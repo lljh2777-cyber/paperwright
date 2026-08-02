@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
@@ -23,7 +24,10 @@ from paper2md.layout_models import (
     LayoutTask,
     NormalizedBBox,
 )
-from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
+from paper2md.layout_review import (
+    LAYOUT_REVIEW_PROMPT_VERSION,
+    validate_layout_review,
+)
 from paper2md.models import BBox
 
 
@@ -205,6 +209,148 @@ class LayoutStageATests(unittest.TestCase):
         layout.validate_against(task)
         restored = FinalLayout.from_dict(json.loads(layout.canonical_json()))
         self.assertEqual(restored, layout)
+
+    def test_high_confidence_caption_cannot_be_body(self):
+        base = _task()
+        caption = replace(
+            base.candidates[1],
+            features={
+                **base.candidates[1].features,
+                "high_confidence_caption_kind": "figure",
+            },
+        )
+        task = replace(
+            base,
+            candidates=(base.candidates[0], caption, base.candidates[2]),
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "must be assigned to a caption region",
+        ):
+            validate_layout_review(_final_layout(task), task)
+
+    def test_compound_raster_candidate_cannot_be_body(self):
+        base = _task()
+        compound = replace(
+            base.candidates[2],
+            element_kinds=("raster",),
+            features={
+                **base.candidates[2].features,
+                "raster_region_count": 6,
+            },
+        )
+        task = replace(
+            base,
+            candidates=(base.candidates[0], base.candidates[1], compound),
+        )
+        valid = _final_layout(task)
+        regions = tuple(
+            replace(item, content_class="text", role="body")
+            if item.region_id == "R03"
+            else item
+            for item in valid.regions
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "compound raster candidate C03",
+        ):
+            validate_layout_review(replace(valid, regions=regions), task)
+
+    def test_captioned_visual_hint_requires_one_attached_caption(self):
+        base = _task()
+        task = replace(
+            base,
+            metadata={
+                **base.metadata,
+                "semantic_review_hints": [
+                    {
+                        "hint_id": "H001",
+                        "kind": "captioned_visual",
+                        "visual_role": "figure",
+                        "visual_candidate_ids": ["C03"],
+                        "caption_candidate_ids": ["C01", "C02"],
+                        "confidence": "high",
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "requires one merged caption region",
+        ):
+            validate_layout_review(_final_layout(task), task)
+
+    def test_attached_caption_satisfies_semantic_hint(self):
+        base = _task()
+        caption = replace(
+            base.candidates[1],
+            features={
+                **base.candidates[1].features,
+                "high_confidence_caption_kind": "figure",
+            },
+        )
+        compound = replace(
+            base.candidates[2],
+            element_kinds=("raster",),
+            features={
+                **base.candidates[2].features,
+                "raster_region_count": 6,
+            },
+        )
+        task = replace(
+            base,
+            candidates=(base.candidates[0], caption, compound),
+            metadata={
+                **base.metadata,
+                "semantic_review_hints": [
+                    {
+                        "hint_id": "H001",
+                        "kind": "captioned_visual",
+                        "visual_role": "figure",
+                        "visual_candidate_ids": ["C03"],
+                        "caption_candidate_ids": ["C02"],
+                        "confidence": "high",
+                    }
+                ],
+            },
+        )
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="fixture-ai",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            actions=(
+                LayoutAction("A01", "keep", ("C01",), ("R01",)),
+                LayoutAction("A02", "keep", ("C02",), ("R02",)),
+                LayoutAction("A03", "keep", ("C03",), ("R03",)),
+                LayoutAction(
+                    "A04",
+                    "attach-caption",
+                    ("C02",),
+                    ("R02",),
+                    target_region_id="R03",
+                ),
+            ),
+            regions=(
+                LayoutRegion(
+                    "R01", task.candidates[0].bbox, "text", "body", 1,
+                    ("C01",),
+                ),
+                LayoutRegion(
+                    "R03", task.candidates[2].bbox, "visual", "figure", 2,
+                    ("C03",),
+                ),
+                LayoutRegion(
+                    "R02", task.candidates[1].bbox, "text", "caption", 3,
+                    ("C02",), parent_region_id="R03",
+                ),
+            ),
+        )
+
+        validate_layout_review(layout, task)
 
     def test_final_layout_rejects_duplicate_reading_order(self):
         task = _task()

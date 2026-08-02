@@ -36,6 +36,13 @@ Use the same selected profile unless a deliberate new preparation is being creat
 
 Create `page-XXXX/final-layout.json` according to `paper2md-final-layout-v0.1` and the page instructions:
 
+- treat candidates as geometric evidence, not as one-to-one final regions;
+- follow high-confidence `semantic_review_hints` unless the page image clearly
+  contradicts them;
+- merge all panels, axes, legends, and labels of one multi-panel Figure into a
+  single visual region instead of emitting internal labels as body text;
+- merge multi-column caption fragments into one caption region and attach it to
+  the corresponding Figure/Table;
 - classify and order regions;
 - use keep, merge, split, resize, discard, or add actions as justified;
 - attach captions to Figure/Table regions;

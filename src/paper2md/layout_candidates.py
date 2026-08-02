@@ -29,11 +29,11 @@ from .raster_layout import RasterPageAnalysis
 from .references import is_reference_heading
 
 CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
-FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
+FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.2"
 RASTER_CANDIDATE_GENERATOR_VERSION = (
     "paper2md-whitespace-raster-candidates-v0.2"
 )
-RASTER_FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.2"
+RASTER_FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.3"
 
 _PAGE_NUMBER = re.compile(
     r"^\s*(?:page\s+)?(?:\d+|[ivxlcdm]+)(?:\s+(?:of|/)\s+\d+)?\s*$",
@@ -1100,6 +1100,115 @@ def _candidate_separators(
     )
 
 
+def _semantic_review_hints(
+    candidates: Sequence[LayoutCandidate],
+) -> list[dict[str, object]]:
+    """Return conservative machine hints for captioned visual groups."""
+
+    text_candidates = [
+        item
+        for item in candidates
+        if item.element_kinds
+        and set(item.element_kinds) <= {"text"}
+        and not bool(item.features.get("peripheral_hint"))
+    ]
+    visual_candidates = [
+        item
+        for item in candidates
+        if {"image", "vector", "raster"} & set(item.element_kinds)
+        and not bool(item.features.get("peripheral_hint"))
+    ]
+    hints: list[dict[str, object]] = []
+    claimed_caption_ids: set[str] = set()
+    for seed in text_candidates:
+        caption_kind = seed.features.get("high_confidence_caption_kind")
+        if caption_kind not in {"figure", "table"}:
+            continue
+        if seed.candidate_id in claimed_caption_ids:
+            continue
+        caption_group = [seed]
+        for other in text_candidates:
+            if other.candidate_id == seed.candidate_id:
+                continue
+            vertical_overlap = _overlap_length(
+                seed.bbox.y,
+                seed.bbox.bottom,
+                other.bbox.y,
+                other.bbox.bottom,
+            )
+            horizontal_gap = max(
+                seed.bbox.x - other.bbox.right,
+                other.bbox.x - seed.bbox.right,
+                0.0,
+            )
+            if (
+                vertical_overlap / min(seed.bbox.height, other.bbox.height)
+                >= 0.5
+                and horizontal_gap <= 0.08
+                and abs(seed.bbox.bottom - other.bbox.bottom) <= 0.03
+            ):
+                caption_group.append(other)
+        caption_group = sorted(
+            caption_group,
+            key=lambda item: (item.bbox.x, item.bbox.y, item.candidate_id),
+        )
+        caption_bbox = NormalizedBBox(
+            min(item.bbox.x for item in caption_group),
+            min(item.bbox.y for item in caption_group),
+            max(item.bbox.right for item in caption_group)
+            - min(item.bbox.x for item in caption_group),
+            max(item.bbox.bottom for item in caption_group)
+            - min(item.bbox.y for item in caption_group),
+        )
+        visual_options: list[tuple[float, str, LayoutCandidate]] = []
+        for visual in visual_candidates:
+            if visual.bbox.y > caption_bbox.y + 0.02:
+                continue
+            overlap = _overlap_length(
+                caption_bbox.x,
+                caption_bbox.right,
+                visual.bbox.x,
+                visual.bbox.right,
+            )
+            if overlap / min(caption_bbox.width, visual.bbox.width) < 0.25:
+                continue
+            gap = max(caption_bbox.y - visual.bbox.bottom, 0.0)
+            if gap <= 0.08:
+                visual_options.append((gap, visual.candidate_id, visual))
+        if not visual_options:
+            continue
+        nearest_gap = min(item[0] for item in visual_options)
+        visual_group = [
+            item[2]
+            for item in sorted(visual_options)
+            if item[0] <= nearest_gap + 0.02
+        ]
+        caption_ids = [item.candidate_id for item in caption_group]
+        claimed_caption_ids.update(caption_ids)
+        hints.append(
+            {
+                "hint_id": f"H{len(hints) + 1:03d}",
+                "kind": "captioned_visual",
+                "visual_role": caption_kind,
+                "visual_candidate_ids": [
+                    item.candidate_id for item in visual_group
+                ],
+                "caption_candidate_ids": caption_ids,
+                "confidence": "high",
+                "reasons": [
+                    "explicit_caption_prefix",
+                    "caption_below_visual",
+                    *(
+                        ["multi_column_caption"]
+                        if len(caption_group) > 1
+                        else []
+                    ),
+                ],
+            }
+        )
+    return hints
+
+
 def propose_content_rois(
     document: PhysicalDocument,
     *,
@@ -1432,6 +1541,7 @@ def generate_layout_tasks(
                     if element_id in excluded_element_ids
                 },
                 "ocr_used": False,
+                "semantic_review_hints": _semantic_review_hints(candidates),
                 **(
                     {
                         "raster_suppressed_element_ids": sorted(

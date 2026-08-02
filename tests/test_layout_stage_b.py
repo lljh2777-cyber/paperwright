@@ -315,7 +315,7 @@ class LayoutStageBTests(unittest.TestCase):
                 _text(
                     "caption",
                     0,
-                    BBox(40, 690, 520, 40),
+                    BBox(40, 455, 520, 40),
                     "Fig. 1 | Multi-panel benchmark.",
                     1,
                 ),
@@ -379,6 +379,21 @@ class LayoutStageBTests(unittest.TestCase):
         self.assertEqual(
             task.metadata["raster_candidate_groups"][0]["component_ids"],
             [f"R{index:03d}" for index in range(1, 7)],
+        )
+        caption_candidate = next(
+            item
+            for item in task.candidates
+            if item.features.get("high_confidence_caption_kind") == "figure"
+        )
+        hint = task.metadata["semantic_review_hints"][0]
+        self.assertEqual(hint["visual_role"], "figure")
+        self.assertEqual(
+            hint["caption_candidate_ids"],
+            [caption_candidate.candidate_id],
+        )
+        self.assertEqual(
+            hint["visual_candidate_ids"],
+            [raster_candidates[0].candidate_id],
         )
 
     def test_separate_raster_figures_remain_separate(self):

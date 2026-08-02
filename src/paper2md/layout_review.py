@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .exceptions import ContractValidationError
 from .layout_models import FinalLayout, LayoutTask
 
-LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.1"
+LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.2"
 
 
 def build_layout_review_instructions(task: LayoutTask) -> str:
@@ -63,6 +63,19 @@ bbox 自动分配真实元素，AI 不得填写或猜测元素 ID。
 
 非排除区块的 order 必须从 1 连续递增。无法判断时使用
 content_class=`unknown`、role=`unknown`，并保留在阅读顺序中。
+## Semantic grouping rules
+
+- A candidate is geometric evidence, not necessarily one final logical region.
+- Follow high-confidence `semantic_review_hints` unless the page image clearly
+  contradicts them.
+- Merge panels, axes, legends, and labels belonging to one multi-panel Figure
+  into one visual region. Do not emit their internal text as body text.
+- Merge all columns/fragments of one caption into one caption region, set its
+  `parent_region_id` to the Figure/Table region, and record `attach-caption`.
+- A candidate with `high_confidence_caption_kind` must not be body/other or
+  discarded.
+- A raster candidate with `raster_region_count >= 3` is a compound visual;
+  split it only when the page visibly contains multiple independent visuals.
 """
 
 
@@ -111,6 +124,125 @@ def _semantic_role_validation(layout: FinalLayout) -> None:
                 )
 
 
+def _semantic_evidence_validation(
+    layout: FinalLayout,
+    task: LayoutTask,
+    assignments: Mapping[str, list[str]],
+    discarded: set[str],
+) -> None:
+    candidates_by_id = {
+        item.candidate_id: item for item in task.candidates
+    }
+    regions_by_id = {item.region_id: item for item in layout.regions}
+    for candidate_id, candidate in candidates_by_id.items():
+        caption_kind = candidate.features.get(
+            "high_confidence_caption_kind"
+        )
+        if caption_kind in {"figure", "table"}:
+            if candidate_id in discarded:
+                raise ContractValidationError(
+                    f"high-confidence caption candidate {candidate_id} "
+                    "cannot be discarded"
+                )
+            assigned_regions = [
+                regions_by_id[item] for item in assignments[candidate_id]
+            ]
+            if not assigned_regions or any(
+                item.role != "caption" for item in assigned_regions
+            ):
+                raise ContractValidationError(
+                    f"high-confidence caption candidate {candidate_id} "
+                    "must be assigned to a caption region"
+                )
+        if int(candidate.features.get("raster_region_count", 0) or 0) >= 3:
+            assigned_regions = [
+                regions_by_id[item] for item in assignments[candidate_id]
+            ]
+            if any(
+                item.content_class != "visual"
+                or item.role not in {"figure", "table"}
+                for item in assigned_regions
+            ):
+                raise ContractValidationError(
+                    f"compound raster candidate {candidate_id} must remain "
+                    "a Figure/Table visual unless explicitly split"
+                )
+
+    hints = task.metadata.get("semantic_review_hints", ())
+    if not isinstance(hints, (list, tuple)):
+        raise ContractValidationError("semantic_review_hints must be a list")
+    for hint in hints:
+        if (
+            not isinstance(hint, dict)
+            or hint.get("kind") != "captioned_visual"
+            or hint.get("confidence") != "high"
+        ):
+            continue
+        caption_candidate_ids = tuple(
+            item
+            for item in hint.get("caption_candidate_ids", ())
+            if isinstance(item, str)
+        )
+        visual_candidate_ids = tuple(
+            item
+            for item in hint.get("visual_candidate_ids", ())
+            if isinstance(item, str)
+        )
+        caption_region_ids = {
+            region_id
+            for candidate_id in caption_candidate_ids
+            for region_id in assignments.get(candidate_id, ())
+        }
+        visual_region_ids = {
+            region_id
+            for candidate_id in visual_candidate_ids
+            for region_id in assignments.get(candidate_id, ())
+        }
+        label = hint.get("hint_id", "semantic hint")
+        if len(caption_region_ids) != 1:
+            raise ContractValidationError(
+                f"{label} requires one merged caption region"
+            )
+        if len(visual_region_ids) != 1:
+            raise ContractValidationError(
+                f"{label} requires one merged visual region"
+            )
+        caption_region_id = next(iter(caption_region_ids))
+        visual_region_id = next(iter(visual_region_ids))
+        caption_region = regions_by_id[caption_region_id]
+        visual_region = regions_by_id[visual_region_id]
+        if (
+            caption_region.role != "caption"
+            or visual_region.content_class != "visual"
+            or visual_region.role != hint.get("visual_role")
+        ):
+            raise ContractValidationError(
+                f"{label} Figure/Table and caption roles do not match "
+                "the task evidence"
+            )
+        if caption_region.parent_region_id != visual_region_id:
+            raise ContractValidationError(
+                f"caption region {caption_region_id} must reference visual "
+                f"parent {visual_region_id}"
+            )
+        if not any(
+            action.action == "attach-caption"
+            and action.target_region_id == visual_region_id
+            and (
+                caption_region_id in action.result_region_ids
+                or bool(
+                    set(action.source_candidate_ids)
+                    & set(caption_candidate_ids)
+                )
+            )
+            for action in layout.actions
+        ):
+            raise ContractValidationError(
+                f"caption region {caption_region_id} requires an "
+                "attach-caption action"
+            )
+
+
 def validate_layout_review(
     layout: FinalLayout,
     task: LayoutTask,
@@ -155,6 +287,9 @@ def validate_layout_review(
             raise ContractValidationError(
                 f"{candidate_id} 被多个区块引用但没有 split 动作"
             )
+
+
+    _semantic_evidence_validation(layout, task, assignments, discarded)
 
 
 def load_and_validate_layout_review(
