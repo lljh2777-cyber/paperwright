@@ -33,7 +33,7 @@ class LayoutStageCTests(unittest.TestCase):
         task = _task()
         prompt = build_layout_review_instructions(task)
         self.assertIn(task.deterministic_sha256(), prompt)
-        self.assertIn("不转录、改写或总结论文正文", prompt)
+        self.assertIn("Never transcribe, rewrite, summarize", prompt)
         self.assertIn(LAYOUT_REVIEW_PROMPT_VERSION, prompt)
 
     def test_review_rejects_unassigned_candidate(self):
@@ -217,6 +217,7 @@ class LayoutStageCTests(unittest.TestCase):
                 )
             )
             self.assertEqual(index["page_count"], 2)
+            self.assertEqual(index["review_mode"], "visual-direct")
             for page in index["pages"]:
                 page_root = outputs[0] / page["directory"]
                 self.assertEqual(
@@ -231,6 +232,22 @@ class LayoutStageCTests(unittest.TestCase):
                 )
                 with Image.open(page_root / "overlay.png") as image:
                     self.assertEqual(image.format, "PNG")
+                    with Image.open(page_root / "page.png") as preview:
+                        self.assertEqual(
+                            image.convert("RGB").tobytes(),
+                            preview.convert("RGB").tobytes(),
+                        )
+                task = json.loads(
+                    (page_root / "layout-task.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(
+                    task["metadata"]["review_mode"],
+                    "visual-direct",
+                )
+                self.assertEqual(task["candidates"], [])
+                self.assertEqual(task["separators"], [])
 
             def content(root_path: Path):
                 return {
@@ -259,6 +276,8 @@ class LayoutStageCTests(unittest.TestCase):
                         str(root),
                         "--extraction-profile",
                         "fast",
+                        "--review-mode",
+                        "candidate-assisted",
                     ]
                 )
 
@@ -269,6 +288,7 @@ class LayoutStageCTests(unittest.TestCase):
                 (destination / "review-index.json").read_text(encoding="utf-8")
             )
             self.assertEqual(index["extraction_profile"], "fast")
+            self.assertEqual(index["review_mode"], "candidate-assisted")
             self.assertEqual(
                 index["physical_extraction_profile"],
                 "text-only-fast",

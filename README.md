@@ -126,15 +126,19 @@ paper2md convert input.pdf output-dir --region-render-mode auto
 ```bash
 paper2md layout-prepare input.pdf roi-review --extraction-profile fast
 paper2md layout-prepare input.pdf layout-review \
-  --content-roi-json roi-review/content-roi.json
+  --content-roi-json roi-review/content-roi.json \
+  --review-mode visual-direct
 paper2md validate-final-layout layout-review/page-0001/final-layout.json \
   --task layout-review/page-0001/layout-task.json
 paper2md layout-apply input.pdf layout-review output-dir --evidence standard
 ```
 
-第一步生成 Content ROI 提案；确认 ROI 后，第二步生成逐页候选、预览和复核说明。
-人工或视觉 AI 只填写结构化 `final-layout.json`，不转录论文正文。Paper2MD 随后
-重新校验输入、缓存、栅格证据、候选完整性和最终区块关系，再确定性生成结果。
+第一步生成 Content ROI 提案；确认 ROI 后，第二步生成原页预览和复核说明。
+`visual-direct` 是默认审核模式：人工或视觉 AI 以干净的 `page.png` 为准，直接绘制
+最终正文、Figure/Table、caption 和页眉页脚区块；审核任务不包含规则候选坐标。
+旧的规则叠加流程可通过 `--review-mode candidate-assisted` 显式启用。审核者只填写
+结构化 `final-layout.json`，不转录论文正文。Paper2MD 随后
+重新校验输入、缓存、栅格证据、审核任务完整性和最终区块关系，再确定性生成结果。
 
 混合布局输出的正文包含 `p2md:block` / `p2md:slot` 隐藏锚点，
 `_paper2md/reader.json` 通过稳定 ID 连接正文块、视觉槽位、图片和图注。阅读器

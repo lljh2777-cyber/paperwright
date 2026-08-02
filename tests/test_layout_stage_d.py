@@ -18,6 +18,7 @@ from paper2md.layout_models import (
 )
 from paper2md.layout_writer import (
     CrossPageParagraphBlock,
+    materialize_layout_sources,
     _bind_caption_regions,
     _clean_user_markdown,
     _detect_native_matrix_equations,
@@ -574,6 +575,65 @@ class CaptionBindingTests(unittest.TestCase):
 
 
 class LayoutStageDTests(unittest.TestCase):
+    def test_visual_direct_regions_receive_native_elements_by_geometry(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        elements = (
+            Element(
+                "body-text", "text", 0, BBox(10, 10, 35, 8),
+                provenance, text="Body text",
+            ),
+            Element(
+                "figure-image", "image", 0, BBox(10, 40, 80, 45),
+                provenance,
+            ),
+            Element(
+                "figure-label", "text", 0, BBox(15, 45, 10, 6),
+                provenance, text="A",
+            ),
+        )
+        page = Page(0, 100, 100, 0, elements)
+        task = LayoutTask(
+            source_sha256="6" * 64,
+            page=LayoutPage.from_page(page),
+            candidate_generator_version="fixture",
+            feature_schema_version="fixture",
+            candidates=(),
+            metadata={"review_mode": "visual-direct"},
+        )
+        body_bbox = NormalizedBBox(0.05, 0.05, 0.45, 0.20)
+        figure_bbox = NormalizedBBox(0.05, 0.35, 0.90, 0.55)
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="visual-fixture",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(
+                LayoutRegion("body", body_bbox, "text", "body", 1),
+                LayoutRegion(
+                    "figure", figure_bbox, "visual", "figure", 2
+                ),
+            ),
+            actions=(
+                LayoutAction(
+                    "add-body", "add", result_region_ids=("body",),
+                    bbox=body_bbox,
+                ),
+                LayoutAction(
+                    "add-figure", "add", result_region_ids=("figure",),
+                    bbox=figure_bbox,
+                ),
+            ),
+        )
+
+        materialized = materialize_layout_sources(layout, task, page)
+        by_id = {item.region_id: item for item in materialized.regions}
+
+        self.assertEqual(by_id["body"].source_element_ids, ("body-text",))
+        self.assertEqual(
+            set(by_id["figure"].source_element_ids),
+            {"figure-image", "figure-label"},
+        )
+
     def test_materialized_body_cannot_contain_explicit_caption(self):
         element = Element(
             "caption-text",
@@ -716,6 +776,8 @@ class LayoutStageDTests(unittest.TestCase):
                     str(root),
                     "--extraction-profile",
                     extraction_profile,
+                    "--review-mode",
+                    "candidate-assisted",
                 ]
             )
         self.assertEqual(code, 0)
@@ -745,6 +807,8 @@ class LayoutStageDTests(unittest.TestCase):
                     str(root),
                     "--extraction-profile",
                     extraction_profile,
+                    "--review-mode",
+                    "candidate-assisted",
                 ]
             )
         self.assertEqual(code, 0)

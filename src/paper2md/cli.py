@@ -161,6 +161,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="forensic",
         help="fast uses TextPage plus raster evidence; forensic keeps the full object walk",
     )
+    prepare_layout.add_argument(
+        "--review-mode",
+        choices=("visual-direct", "candidate-assisted"),
+        default="visual-direct",
+        help=(
+            "visual-direct lets a visual reviewer draw final boxes from page.png; "
+            "candidate-assisted retains legacy rule overlays"
+        ),
+    )
 
     apply_layout = commands.add_parser(
         "layout-apply",
@@ -456,6 +465,7 @@ def _prepare_layout(args: argparse.Namespace) -> int:
         preview_scale=args.preview_scale,
         content_roi_json=args.content_roi_json,
         extraction_profile=args.extraction_profile,
+        review_mode=args.review_mode,
     )
     print(
         json.dumps(
@@ -466,6 +476,7 @@ def _prepare_layout(args: argparse.Namespace) -> int:
                 "source_sha256": result.index["source_sha256"],
                 "ocr_used": False,
                 "extraction_profile": args.extraction_profile,
+                "review_mode": args.review_mode,
             },
             ensure_ascii=False,
             sort_keys=True,

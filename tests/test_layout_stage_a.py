@@ -26,6 +26,7 @@ from paper2md.layout_models import (
 )
 from paper2md.layout_review import (
     LAYOUT_REVIEW_PROMPT_VERSION,
+    configure_layout_review_task,
     validate_layout_review,
 )
 from paper2md.models import BBox
@@ -210,6 +211,58 @@ class LayoutStageATests(unittest.TestCase):
         restored = FinalLayout.from_dict(json.loads(layout.canonical_json()))
         self.assertEqual(restored, layout)
 
+    def test_visual_direct_layout_can_ignore_candidates_and_add_region(self):
+        task = configure_layout_review_task(_task(), "visual-direct")
+        bbox = NormalizedBBox(0.05, 0.05, 0.90, 0.75)
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="visual-fixture",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(
+                LayoutRegion("R01", bbox, "visual", "figure", 1),
+            ),
+            actions=(
+                LayoutAction(
+                    "A01",
+                    "add",
+                    result_region_ids=("R01",),
+                    bbox=bbox,
+                ),
+            ),
+        )
+
+        validate_layout_review(layout, task)
+
+    def test_visual_direct_add_bbox_must_match_region(self):
+        task = configure_layout_review_task(_task(), "visual-direct")
+        region_bbox = NormalizedBBox(0.05, 0.05, 0.90, 0.75)
+        layout = FinalLayout(
+            source_sha256=task.source_sha256,
+            page=task.page,
+            reviewer="visual-fixture",
+            prompt_version=LAYOUT_REVIEW_PROMPT_VERSION,
+            regions=(
+                LayoutRegion(
+                    "R01", region_bbox, "visual", "figure", 1
+                ),
+            ),
+            actions=(
+                LayoutAction(
+                    "A01",
+                    "add",
+                    result_region_ids=("R01",),
+                    bbox=NormalizedBBox(0.05, 0.05, 0.80, 0.75),
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "add bbox must match region",
+        ):
+            validate_layout_review(layout, task)
+
     def test_high_confidence_caption_cannot_be_body(self):
         base = _task()
         caption = replace(
@@ -390,6 +443,20 @@ class LayoutStageATests(unittest.TestCase):
         self.assertEqual(preview.tobytes(), before)
         self.assertEqual(first.tobytes(), second.tobytes())
         self.assertNotEqual(first.tobytes(), before)
+
+    def test_visual_direct_overlay_is_the_clean_page(self):
+        task = configure_layout_review_task(_task(), "visual-direct")
+        preview = Image.new("RGB", (600, 800), "white")
+
+        overlay = render_layout_overlay(preview, task)
+
+        self.assertEqual(overlay.tobytes(), preview.tobytes())
+        self.assertEqual(task.candidates, ())
+        self.assertEqual(task.separators, ())
+        self.assertEqual(
+            task.metadata["candidate_policy"],
+            "omitted-from-review-task",
+        )
 
     def test_bundle_export_refuses_overwrite(self):
         task = _task()

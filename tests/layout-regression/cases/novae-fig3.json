@@ -1,0 +1,14 @@
+{
+  "case_id": "novae-fig3",
+  "source_file": "inputs/Novae_a_graph-based_foundation_model_for_spat.pdf",
+  "source_sha256": "cc11bacb1f798faef3fd2351e4b5b5f13cb119da5815255753d5673a936a6458",
+  "acceptance": {
+    "page": 5,
+    "review_mode": "visual-direct",
+    "expected_review_candidate_count": 0,
+    "expected_figure_count": 1,
+    "expected_table_count": 0,
+    "expected_caption_grouping": "one two-column caption attached to Figure 3",
+    "excluded_page_furniture": ["repeated Article/DOI header", "journal footer and page number"]
+  }
+}

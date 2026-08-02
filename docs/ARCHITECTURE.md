@@ -50,8 +50,9 @@ writer.write_outputs()                v
   候选水平范围明显窄于 caption 等情形直接拒绝。
 - `paper2md.writer`：把 PhysicalDocument 与内存资产确定性写入隔离临时
   目录，再原子提交。
-- `paper2md.layout_candidates`：提出 Content ROI，生成文字、原生图形和栅格
-  候选及分隔关系；不直接决定最终语义布局。
+- `paper2md.layout_candidates`：提出 Content ROI，生成内部使用的文字、原生图形和
+  栅格风险证据；不直接决定最终语义布局。默认 `visual-direct` 审核不会把这些
+  规则候选坐标交给视觉审核者。
 - `paper2md.layout_candidate_features`：只负责候选区块的几何、文字规律、字体、
   图形覆盖和少量模式特征，避免候选分割与特征计算互相耦合。
 - `paper2md.raster_layout`：生成 ink/text/residual mask 和高召回视觉候选。
@@ -137,7 +138,9 @@ Reader ID 由源 PDF 哈希和规范化源区域生成，不依赖 Markdown 行�
 白名单 opt-in，并保留原始 embedded/grouped 资产。表格继续只保留文字并
 明确标为 `degraded`。
 
-混合布局流程允许人工或视觉 AI 输出结构化区块计划，但 AI 不转录、改写正文，
+混合布局流程默认由人工或视觉 AI 直接依据原页图像输出结构化区块计划。审核者用
+`add` 和规范化 bbox 绘制最终区块；Paper2MD 再按几何覆盖把原生 PDF 元素归属到
+区块。`candidate-assisted` 仅作为显式兼容模式保留。AI 不转录、改写正文，
 也不读取 Figure/Table 内部文字。规则候选通过不代表最终语义布局正确；正式应用
 前必须验证 `final-layout.json`。项目不实现 OCR、语义表格或公式 LaTeX。
 PDFium 运行时不进入源码交付包；PDFBox 只是可替换接口。

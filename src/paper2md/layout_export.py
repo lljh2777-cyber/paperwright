@@ -86,6 +86,8 @@ def render_layout_overlay(
 ) -> Image.Image:
     """Return a labeled overlay without modifying the source preview."""
 
+    if task.metadata.get("review_mode") == "visual-direct":
+        return preview.convert("RGB")
     overlay = render_content_roi_overlay(preview, task)
     draw = ImageDraw.Draw(overlay)
     width = max(1, round(min(overlay.size) / 350))

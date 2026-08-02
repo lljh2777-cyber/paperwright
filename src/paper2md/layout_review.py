@@ -3,79 +3,118 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from .exceptions import ContractValidationError
 from .layout_models import FinalLayout, LayoutTask
 
-LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.2"
+LAYOUT_REVIEW_PROMPT_VERSION = "paper2md-layout-review-prompt-v0.3"
+LAYOUT_REVIEW_MODES = frozenset({"visual-direct", "candidate-assisted"})
+
+
+def configure_layout_review_task(
+    task: LayoutTask,
+    review_mode: str,
+) -> LayoutTask:
+    """Configure how a task is presented to the external reviewer."""
+
+    if review_mode not in LAYOUT_REVIEW_MODES:
+        raise ValueError(
+            "review_mode must be visual-direct or candidate-assisted"
+        )
+    metadata = dict(task.metadata)
+    metadata.update(
+        {
+            "review_mode": review_mode,
+            "visual_geometry_authority": (
+                "reviewer-page-image"
+                if review_mode == "visual-direct"
+                else "candidate-assisted"
+            ),
+            "candidate_policy": (
+                "omitted-from-review-task"
+                if review_mode == "visual-direct"
+                else "required-review-accounting"
+            ),
+        }
+    )
+    if review_mode == "visual-direct":
+        metadata = {
+            "ocr_used": bool(task.metadata.get("ocr_used", False)),
+            "review_mode": review_mode,
+            "visual_geometry_authority": "reviewer-page-image",
+            "candidate_policy": "omitted-from-review-task",
+        }
+        raster_evidence = task.metadata.get("raster_evidence")
+        if isinstance(raster_evidence, dict):
+            metadata["raster_evidence"] = raster_evidence
+    return replace(
+        task,
+        candidates=() if review_mode == "visual-direct" else task.candidates,
+        separators=() if review_mode == "visual-direct" else task.separators,
+        metadata=metadata,
+    )
 
 
 def build_layout_review_instructions(task: LayoutTask) -> str:
     """Build concise instructions for a visual AI layout reviewer."""
 
-    return f"""# Paper2MD 页面布局审查
+    review_mode = str(
+        task.metadata.get("review_mode", "candidate-assisted")
+    )
+    if review_mode == "visual-direct":
+        workflow = f"""## Visual-direct workflow
 
-任务契约：`{task.contract_version}`
-任务哈希：`{task.deterministic_sha256()}`
-页面索引：`{task.page.page_index}`
-候选区块：{len(task.candidates)}
-候选分隔带：{len(task.separators)}
-提示词版本：`{LAYOUT_REVIEW_PROMPT_VERSION}`
+- Treat `{task.preview_filename}` as the only authority for final geometry.
+- `{task.overlay_filename}` intentionally contains no rule-generated boxes.
+- The review task intentionally contains no rule-generated candidates or
+  separators. Decide every final boundary from the page image itself.
+- Draw every final logical block directly in normalized page coordinates.
+- For a directly drawn block, create an `add` action whose `bbox` exactly
+  matches the result region bbox; leave `source_candidate_ids` empty.
+- Put all panels, axes, legends, and labels of one Figure in one visual region.
+- Draw caption blocks separately, including all columns/fragments belonging to
+  one caption. Set `parent_region_id` and add `attach-caption`.
+- Explicitly draw headers, footers, and page numbers as `exclude` regions when
+  needed. Paper2MD assigns native PDF elements by geometry after review.
+"""
+    else:
+        workflow = """## Candidate-assisted workflow
 
-## 输入
-
-- `{task.preview_filename}`：原始页面预览。
-- `{task.overlay_filename}`：候选区块和分隔带编号叠加图。
-- `layout-task.json`：精确坐标、元素来源和数值特征。
-
-## 工作
-
-1. 检查页眉、页脚、边注和正文是否分开。
-2. 检查正文栏、跨栏标题、Figure/Table 和 caption 是否完整。
-3. 对候选区块执行 keep、merge、split、resize、discard 或 add。
-4. 标注 content_class、role、阅读顺序和父子关系。
-5. 使用 attach-caption 记录 caption 与 Figure/Table 的关系。
-
-## 禁止
-
-- 不转录、改写或总结论文正文。
-- 不识别图片内部文字。
-- 不直接生成 Markdown。
-- 不伪造候选区块、元素 ID 或 PDF 内容。
-
-## 输出
-
-将结果保存为 `final-layout.json`，内容只包含符合
-`paper2md-final-layout-v0.1` 的 JSON。复制任务中的
-`source_sha256` 和 `page`；`reviewer` 填实际模型名；`prompt_version`
-必须为 `{LAYOUT_REVIEW_PROMPT_VERSION}`。
-
-`source_element_ids` 必须输出空数组；Paper2MD 会根据候选来源和最终
-bbox 自动分配真实元素，AI 不得填写或猜测元素 ID。
-
-每个候选区块必须满足以下之一：
-
-- 被一个最终区块引用；
-- 通过 split 被多个最终区块引用；
-- 通过 discard 明确排除。
-
-非排除区块的 order 必须从 1 连续递增。无法判断时使用
-content_class=`unknown`、role=`unknown`，并保留在阅读顺序中。
-## Semantic grouping rules
-
-- A candidate is geometric evidence, not necessarily one final logical region.
-- Follow high-confidence `semantic_review_hints` unless the page image clearly
+- Use `overlay.png` and candidate features as review evidence.
+- Account for every candidate through assignment, split, or discard.
+- Candidate geometry is provisional; merge, split, resize, or add regions when
+  the page image contradicts it.
+- Follow high-confidence `semantic_review_hints` unless visual evidence clearly
   contradicts them.
-- Merge panels, axes, legends, and labels belonging to one multi-panel Figure
-  into one visual region. Do not emit their internal text as body text.
-- Merge all columns/fragments of one caption into one caption region, set its
-  `parent_region_id` to the Figure/Table region, and record `attach-caption`.
-- A candidate with `high_confidence_caption_kind` must not be body/other or
-  discarded.
-- A raster candidate with `raster_region_count >= 3` is a compound visual;
-  split it only when the page visibly contains multiple independent visuals.
+"""
+    return f"""# Paper2MD visual layout review
+
+Contract: `{task.contract_version}`
+Task SHA-256: `{task.deterministic_sha256()}`
+Page index: `{task.page.page_index}`
+Review mode: `{review_mode}`
+Prompt version: `{LAYOUT_REVIEW_PROMPT_VERSION}`
+
+## Inputs
+
+- `{task.preview_filename}`: original full-page preview.
+- `{task.overlay_filename}`: optional review overlay.
+- `layout-task.json`: page coordinates and review contract metadata.
+
+{workflow}
+## Output rules
+
+- Save only `paper2md-final-layout-v0.1` JSON as `final-layout.json`.
+- Copy `source_sha256` and `page`; record the real reviewer/model name; set
+  `prompt_version` to `{LAYOUT_REVIEW_PROMPT_VERSION}`.
+- Never transcribe, rewrite, summarize, or invent article text.
+- Never fill or guess `source_element_ids`; always output an empty array.
+- Do not generate Markdown or perform OCR/image-text transcription.
+- Set `content_class`, `role`, consecutive reading `order`, and parent links.
+- Use `unknown` and retain the region when visual semantics are uncertain.
 """
 
 
@@ -130,6 +169,8 @@ def _semantic_evidence_validation(
     assignments: Mapping[str, list[str]],
     discarded: set[str],
 ) -> None:
+    if task.metadata.get("review_mode") == "visual-direct":
+        return
     candidates_by_id = {
         item.candidate_id: item for item in task.candidates
     }
@@ -253,6 +294,11 @@ def validate_layout_review(
     if layout.prompt_version != LAYOUT_REVIEW_PROMPT_VERSION:
         raise ContractValidationError("AI 布局审查 prompt_version 不匹配")
     _semantic_role_validation(layout)
+    review_mode = str(
+        task.metadata.get("review_mode", "candidate-assisted")
+    )
+    if review_mode not in LAYOUT_REVIEW_MODES:
+        raise ContractValidationError("unsupported layout review mode")
 
     known_candidates = {item.candidate_id for item in task.candidates}
     assignments: dict[str, list[str]] = {
@@ -279,7 +325,11 @@ def validate_layout_review(
             raise ContractValidationError(
                 f"{candidate_id} 不能同时被分配和 discard"
             )
-        if not region_ids and candidate_id not in discarded:
+        if (
+            review_mode == "candidate-assisted"
+            and not region_ids
+            and candidate_id not in discarded
+        ):
             raise ContractValidationError(
                 f"{candidate_id} 未被最终区块引用或 discard"
             )
@@ -288,6 +338,27 @@ def validate_layout_review(
                 f"{candidate_id} 被多个区块引用但没有 split 动作"
             )
 
+    if review_mode == "visual-direct":
+        add_actions_by_region: dict[str, list[Any]] = {}
+        for action in layout.actions:
+            if action.action != "add":
+                continue
+            for region_id in action.result_region_ids:
+                add_actions_by_region.setdefault(region_id, []).append(action)
+        for region in layout.regions:
+            if region.source_candidate_ids:
+                continue
+            actions = add_actions_by_region.get(region.region_id, [])
+            if len(actions) != 1:
+                raise ContractValidationError(
+                    f"visual-direct region {region.region_id} requires "
+                    "exactly one add action"
+                )
+            if actions[0].bbox != region.bbox:
+                raise ContractValidationError(
+                    f"visual-direct add bbox must match region "
+                    f"{region.region_id} bbox"
+                )
 
     _semantic_evidence_validation(layout, task, assignments, discarded)
 

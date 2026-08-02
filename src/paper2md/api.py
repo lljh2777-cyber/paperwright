@@ -20,7 +20,11 @@ from .exceptions import BackendExecutionError
 from .layout_candidates import generate_layout_tasks, propose_content_rois
 from .layout_export import export_layout_task_bundle
 from .layout_models import FinalLayout, LayoutTask
-from .layout_review import validate_layout_review
+from .layout_review import (
+    LAYOUT_REVIEW_MODES,
+    configure_layout_review_task,
+    validate_layout_review,
+)
 from .layout_risk import assess_layout_risk
 from .layout_roi import (
     canonical_content_roi_json,
@@ -413,6 +417,7 @@ class Paper2MD:
         preview_scale: float = 1.5,
         content_roi_json: str | Path | None = None,
         extraction_profile: str = "forensic",
+        review_mode: str = "visual-direct",
     ) -> LayoutPreparationResult:
         """Export page review bundles without changing conversion output."""
 
@@ -426,6 +431,10 @@ class Paper2MD:
         if extraction_profile not in {"fast", "standard", "forensic"}:
             raise ValueError(
                 "extraction_profile must be fast, standard, or forensic"
+            )
+        if review_mode not in LAYOUT_REVIEW_MODES:
+            raise ValueError(
+                "review_mode must be visual-direct or candidate-assisted"
             )
         render_preview = getattr(backend, "render_page_preview", None)
         if not callable(render_preview):
@@ -551,6 +560,10 @@ class Paper2MD:
                     effective_extraction_profile = "hybrid-standard"
                 else:
                     effective_extraction_profile = "fast"
+            tasks = tuple(
+                configure_layout_review_task(task, review_mode)
+                for task in tasks
+            )
             pages: list[dict[str, Any]] = []
             for task in tasks:
                 preview = preview_by_page.get(task.page.page_index)
@@ -602,6 +615,7 @@ class Paper2MD:
                     3 if extraction_profile in {"fast", "standard"} else 9
                 ),
                 "extraction_profile": extraction_profile,
+                "review_mode": review_mode,
                 "effective_extraction_profile": effective_extraction_profile,
                 "layout_risk_assessment": (
                     risk_assessment.to_dict()
@@ -696,6 +710,12 @@ class Paper2MD:
             raise BackendExecutionError(
                 "layout apply extraction profile does not match layout prepare"
             )
+        review_mode = review_index.get(
+            "review_mode",
+            "candidate-assisted",
+        )
+        if review_mode not in LAYOUT_REVIEW_MODES:
+            raise BackendExecutionError("unsupported layout review mode")
         effective_profile = review_index.get(
             "effective_extraction_profile",
             recorded_profile,
@@ -850,6 +870,10 @@ class Paper2MD:
                 content_rois=content_rois,
                 content_roi_source=roi_source,
                 raster_analyses=raster_analyses,
+            )
+            regenerated = tuple(
+                configure_layout_review_task(task, review_mode)
+                for task in regenerated
             )
             reviews: list[FinalLayout] = []
             for expected_task in regenerated:

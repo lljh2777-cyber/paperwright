@@ -27,26 +27,26 @@ Edit root `content-roi.json` only as required:
 ```bash
 paper2md layout-prepare input.pdf layout-review \
   --content-roi-json roi-review/content-roi.json \
-  --extraction-profile standard
+  --extraction-profile standard \
+  --review-mode visual-direct
 ```
 
-Use the same selected profile unless a deliberate new preparation is being created. For each `page-XXXX/`, read `review-instructions.md`, inspect `page.png` and `overlay.png`, and use `layout-task.json` for exact geometry and candidate IDs.
+Use the same selected profile unless a deliberate new preparation is being created. For each `page-XXXX/`, read `review-instructions.md` and inspect the clean `page.png`. In `visual-direct` mode, `overlay.png` intentionally has no rule boxes, and `layout-task.json` omits rule-generated candidate coordinates.
 
 ## 3. Produce structured review
 
 Create `page-XXXX/final-layout.json` according to `paper2md-final-layout-v0.1` and the page instructions:
 
-- treat candidates as geometric evidence, not as one-to-one final regions;
-- follow high-confidence `semantic_review_hints` unless the page image clearly
-  contradicts them;
-- merge all panels, axes, legends, and labels of one multi-panel Figure into a
-  single visual region instead of emitting internal labels as body text;
-- merge multi-column caption fragments into one caption region and attach it to
-  the corresponding Figure/Table;
+- use `add` actions and normalized bboxes to draw all final regions directly
+  from `page.png`;
+- leave `source_candidate_ids` empty for directly drawn regions;
+- include all panels, axes, legends, and labels of one multi-panel Figure in a
+  single visual region;
+- draw multi-column caption fragments as one caption region and attach it to the
+  corresponding Figure/Table;
 - classify and order regions;
-- use keep, merge, split, resize, discard, or add actions as justified;
+- make each direct region bbox exactly match its `add` action bbox;
 - attach captions to Figure/Table regions;
-- account for every candidate through assignment, split, or discard;
 - keep non-excluded `order` values consecutive from 1;
 - use `unknown` and retain the region when uncertain;
 - copy `source_sha256` and `page` from the task;
@@ -54,6 +54,10 @@ Create `page-XXXX/final-layout.json` according to `paper2md-final-layout-v0.1` a
 - leave `source_element_ids` empty.
 
 Do not transcribe body text, read text inside Figure/Table images, or generate Markdown.
+
+Use `--review-mode candidate-assisted` only when deliberately reproducing the
+legacy rule-overlay workflow. In that mode, every candidate must still be
+assigned, split, or discarded.
 
 ## 4. Validate every page
 

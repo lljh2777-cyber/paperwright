@@ -418,6 +418,60 @@ def materialize_layout_sources(
             )
             region_elements[selected.region_id].add(element_id)
 
+    direct_region_ids = {
+        region_id
+        for action in layout.actions
+        if action.action == "add"
+        for region_id in action.result_region_ids
+    }
+    direct_regions = tuple(
+        region
+        for region in layout.regions
+        if region.region_id in direct_region_ids
+        and not region.source_candidate_ids
+    )
+    if direct_regions:
+        direct_boxes = {
+            region.region_id: region.bbox.to_pdf_bbox(
+                page_width=page.width,
+                page_height=page.height,
+            )
+            for region in direct_regions
+        }
+        already_assigned = {
+            element_id
+            for element_ids in region_elements.values()
+            for element_id in element_ids
+        }
+        for element in page.elements:
+            if element.element_id in already_assigned:
+                continue
+            element_area = element.bbox.width * element.bbox.height
+            if element_area <= 0:
+                continue
+            options: list[tuple[float, float, int, str]] = []
+            for region in direct_regions:
+                intersection = _intersection_area(
+                    element.bbox,
+                    direct_boxes[region.region_id],
+                )
+                coverage = intersection / element_area
+                if coverage < 0.50:
+                    continue
+                region_area = region.bbox.width * region.bbox.height
+                options.append(
+                    (
+                        coverage,
+                        -region_area,
+                        -(region.order or 0),
+                        region.region_id,
+                    )
+                )
+            if not options:
+                continue
+            selected_region_id = max(options)[3]
+            region_elements[selected_region_id].add(element.element_id)
+
     materialized = tuple(
         LayoutRegion(
             region_id=region.region_id,
