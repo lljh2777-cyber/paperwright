@@ -433,6 +433,63 @@ class LayoutStageBTests(unittest.TestCase):
             2,
         )
 
+    def test_wide_shallow_edge_rules_do_not_join_a_figure(self):
+        page = Page(0, 600, 800, 0, ())
+        document = PhysicalDocument(
+            source_sha256="7" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        regions = (
+            RasterVisualRegion(
+                "header-rule",
+                NormalizedBBox(0.05, 0.04, 0.90, 0.02),
+                0.018,
+                0.10,
+                0.06,
+                0.10,
+            ),
+            RasterVisualRegion(
+                "figure",
+                NormalizedBBox(0.05, 0.075, 0.90, 0.65),
+                0.585,
+                0.40,
+                0.35,
+                0.10,
+            ),
+            RasterVisualRegion(
+                "footer-rule",
+                NormalizedBBox(0.05, 0.945, 0.90, 0.02),
+                0.018,
+                0.08,
+                0.04,
+                0.08,
+            ),
+        )
+        raster = RasterPageAnalysis(
+            0, 600, 800, (255, 255, 255), 1,
+            0.3, 0.0, 0.3,
+            "1" * 64, "2" * 64, "3" * 64,
+            regions,
+        )
+
+        task = generate_layout_tasks(
+            document,
+            content_rois={0: NormalizedBBox(0.01, 0.01, 0.98, 0.98)},
+            raster_analyses={0: raster},
+        )[0]
+
+        raster_candidates = [
+            item for item in task.candidates if "raster" in item.element_kinds
+        ]
+        self.assertEqual(len(raster_candidates), 1)
+        self.assertAlmostEqual(raster_candidates[0].bbox.y, 0.075)
+        self.assertEqual(
+            task.metadata["raster_candidate_groups"][0]["component_ids"],
+            ["figure"],
+        )
+
     def test_narrow_low_occupancy_gutter_survives_sparse_crossing_line(self):
         elements = []
         for offset, y in enumerate(range(60, 180, 12)):

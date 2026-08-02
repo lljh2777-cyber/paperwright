@@ -31,7 +31,7 @@ from .references import is_reference_heading
 CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
 FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.2"
 RASTER_CANDIDATE_GENERATOR_VERSION = (
-    "paper2md-whitespace-raster-candidates-v0.2"
+    "paper2md-whitespace-raster-candidates-v0.3"
 )
 RASTER_FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.3"
 
@@ -52,6 +52,9 @@ class CandidateGenerationConfig:
     raster_group_horizontal_gap_ratio: float = 0.045
     raster_group_vertical_gap_ratio: float = 0.030
     raster_group_overlap_ratio: float = 0.05
+    raster_group_horizontal_padding_ratio: float = 0.010
+    raster_group_top_padding_ratio: float = 0.005
+    raster_group_bottom_padding_ratio: float = 0.012
     content_roi_padding_ratio: float = 0.005
     edge_band_limit_ratio: float = 0.12
     edge_band_max_height_ratio: float = 0.06
@@ -72,6 +75,9 @@ class CandidateGenerationConfig:
             self.raster_group_horizontal_gap_ratio,
             self.raster_group_vertical_gap_ratio,
             self.raster_group_overlap_ratio,
+            self.raster_group_horizontal_padding_ratio,
+            self.raster_group_top_padding_ratio,
+            self.raster_group_bottom_padding_ratio,
             self.content_roi_padding_ratio,
             self.edge_band_limit_ratio,
             self.edge_band_max_height_ratio,
@@ -459,7 +465,7 @@ def _raster_atoms(
             page_width=page.width,
             page_height=page.height,
         )
-        peripheral_hint = (
+        edge_badge = (
             (
                 item.bbox.y <= 0.025
                 or item.bbox.bottom >= 0.975
@@ -468,6 +474,14 @@ def _raster_atoms(
             and item.bbox.width <= 0.40
             and item.page_area_ratio <= 0.02
         )
+        edge_rule = (
+            (item.bbox.y <= 0.065 or item.bbox.bottom >= 0.935)
+            and item.bbox.height <= 0.035
+            and item.bbox.width >= 0.65
+            and item.page_area_ratio <= 0.03
+            and item.residual_coverage <= 0.12
+        )
+        peripheral_hint = edge_badge or edge_rule
         result.append(
             _Atom(
                 atom_id=f"raster-{item.region_id}",
@@ -495,6 +509,9 @@ def _compound_raster_atoms(
     horizontal_gap_ratio: float,
     vertical_gap_ratio: float,
     overlap_ratio: float,
+    horizontal_padding_ratio: float,
+    top_padding_ratio: float,
+    bottom_padding_ratio: float,
 ) -> list[_Atom]:
     """Group nearby raster fragments into reversible visual candidates.
 
@@ -552,6 +569,25 @@ def _compound_raster_atoms(
     result: list[_Atom] = []
     for index, group in enumerate(ordered_groups):
         ordered = sorted(group, key=lambda item: item.atom_id)
+        group_bbox = _union_bbox(item.bbox for item in ordered)
+        if len(ordered) >= 3:
+            left = max(
+                0.0,
+                group_bbox.x - page.width * horizontal_padding_ratio,
+            )
+            top = max(
+                0.0,
+                group_bbox.y - page.height * top_padding_ratio,
+            )
+            right = min(
+                page.width,
+                group_bbox.right + page.width * horizontal_padding_ratio,
+            )
+            bottom = min(
+                page.height,
+                group_bbox.bottom + page.height * bottom_padding_ratio,
+            )
+            group_bbox = BBox(left, top, right - left, bottom - top)
         component_ids = sorted(
             component_id
             for item in ordered
@@ -563,7 +599,7 @@ def _compound_raster_atoms(
         result.append(
             _Atom(
                 atom_id=f"raster-group-{index:05d}",
-                bbox=_union_bbox(item.bbox for item in ordered),
+                bbox=group_bbox,
                 element_ids=(),
                 kinds=("raster",),
                 features={
@@ -1369,6 +1405,11 @@ def generate_layout_tasks(
             horizontal_gap_ratio=settings.raster_group_horizontal_gap_ratio,
             vertical_gap_ratio=settings.raster_group_vertical_gap_ratio,
             overlap_ratio=settings.raster_group_overlap_ratio,
+            horizontal_padding_ratio=(
+                settings.raster_group_horizontal_padding_ratio
+            ),
+            top_padding_ratio=settings.raster_group_top_padding_ratio,
+            bottom_padding_ratio=settings.raster_group_bottom_padding_ratio,
         )
         raster_suppression_atoms = [
             atom
