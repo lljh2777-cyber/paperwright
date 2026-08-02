@@ -84,8 +84,8 @@ class PathAndApiTests(unittest.TestCase):
 
     def test_pdfium_runtime_identity_is_locked(self):
         backend = PDFiumBackend()
-        self.assertEqual(backend.identity.wrapper_version, "5.3.0")
-        self.assertEqual(backend.identity.engine_version, "145.0.7616.0")
+        self.assertEqual(backend.identity.wrapper_version, "5.11.0")
+        self.assertEqual(backend.identity.engine_version, "151.0.7920.0")
         self.assertEqual(len(backend.identity.binary_sha256 or ""), 64)
 
     def test_pdfbox_stub_fails_explicitly(self):

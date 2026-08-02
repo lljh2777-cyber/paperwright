@@ -54,7 +54,7 @@ def _pdfium_runtime() -> tuple[Any, BackendIdentity]:
         import pypdfium2_raw
     except ImportError as exc:
         raise BackendUnavailableError(
-            "PDFium 后端需要锁定依赖 pypdfium2==5.3.0"
+            "PDFium 后端需要锁定依赖 pypdfium2==5.11.0"
         ) from exc
     wrapper = importlib.metadata.version("pypdfium2")
     engine = str(pdfium.PDFIUM_INFO)

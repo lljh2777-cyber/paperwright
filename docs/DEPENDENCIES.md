@@ -5,12 +5,12 @@
 | 构件 | 精确版本 | 当前用途 | 来源/许可证线索 |
 |---|---:|---|---|
 | Python | 3.10+ | 产品运行时 | PSF |
-| pypdfium2 | 5.3.0 | PDFium Python 薄封装 | 官方 PyPI/GitHub；BSD-3-Clause、Apache-2.0 及依赖许可证 |
-| PDFium | 145.0.7616.0 | PDF解析、文本/图片解码 | pypdfium2 当前平台运行时；本地哈希见下 |
+| pypdfium2 | 5.11.0 | PDFium Python 薄封装 | 官方 PyPI/GitHub；BSD-3-Clause、Apache-2.0 及依赖许可证 |
+| PDFium | 151.0.7920.0 | PDF解析、文本/图片解码 | pypdfium2 当前平台运行时；本地哈希见下 |
 | Pillow | 12.2.0 | 将 PDFium bitmap 编码为 PNG | MIT-CMU |
 
-当前 Work Linux 环境 `libpdfium.so` 的 SHA-256：
-`504df0960b4fab9e7c3bce8e4cf944d072a5aba76a5a199609d7addc49656568`。
+当前 Windows x86-64 验证环境 `pdfium.dll` 的 SHA-256：
+`0aa3abb1aa20798094c1a5f2d8cdea45b24a6e12cdc6c774de261dd522dbdf81`。
 该动态库、wheel 与许可证文件不复制到源码包；本哈希只用于复现实验身份。
 
 ## 后端

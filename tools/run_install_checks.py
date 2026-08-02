@@ -191,8 +191,6 @@ def exercise_install(
         "install",
         "--no-deps",
     ]
-    if kind == "sdist":
-        install_argv.append("--no-build-isolation")
     install_argv.append(str(artifact))
     checks = []
     install = run(install_argv, cwd=runtime_root, env=environment)
@@ -255,8 +253,9 @@ def exercise_install(
         "kind": kind,
         "venv_system_site_packages": True,
         "dependency_access": (
-            "isolated venv and installed distribution; locked PDFium/Pillow "
-            "are read from the pre-verified Work runtime without download"
+            "isolated venv and installed distribution; sdist build requirements "
+            "use PEP 517 isolation, while locked PDFium/Pillow are read from "
+            "the pre-verified runtime"
         ),
         "checks": portable_checks,
         "pass_count": len(checks),

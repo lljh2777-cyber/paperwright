@@ -74,7 +74,7 @@ paper2md --help
 ```
 
 `pip install .` 会根据 `pyproject.toml` 自动安装
-`pypdfium2==5.3.0` 和 `Pillow==12.2.0`，无需提前手动安装。
+`pypdfium2==5.11.0` 和 `Pillow==12.2.0`，无需提前手动安装。
 
 ## 转换单篇 PDF
 

@@ -3,7 +3,7 @@
 ## 环境
 
 - Python 3.10–3.12；
-- `pypdfium2==5.3.0`；
+- `pypdfium2==5.11.0`；
 - `Pillow==12.2.0`；
 - 不需要 Java、OCR、LLM 或网络服务。
 
