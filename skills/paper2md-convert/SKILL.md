@@ -7,6 +7,29 @@ description: Use Paper2MD to reconstruct born-digital scientific PDFs as Markdow
 
 Choose the least complex workflow that meets the requested layout fidelity, then validate the produced artifacts.
 
+## Ask before running
+
+Before starting a conversion, ask the user about every unresolved choice that
+materially changes fidelity, output scope, storage, privacy, or failure handling.
+Do not silently turn CLI defaults into user decisions.
+
+- Do not re-ask for choices already stated by the user or safely discovered from
+  the current files and environment.
+- Ask no more than three short, grouped questions at a time. Put the recommended
+  option first and state its practical consequence.
+- Resolve the workflow and output destination first. Then ask only the options
+  that apply to direct, hybrid, or batch conversion.
+- If the user explicitly delegates the choices, use the recommended settings,
+  state them before execution, and continue without another confirmation round.
+- Pause for an answer when a choice can alter document fidelity, omit content,
+  copy the source PDF, call an external service, or change batch failure handling.
+
+At minimum, resolve the workflow, output destination, workflow-specific visual
+handling, and final package policy. Read
+[references/options-and-questions.md](references/options-and-questions.md) before
+planning or running a conversion; it maps the CLI options to staged user
+questions and recommended settings.
+
 ## Preflight
 
 1. Read repository-level `AGENTS.md` instructions when present.

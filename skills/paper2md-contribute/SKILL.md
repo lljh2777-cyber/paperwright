@@ -7,6 +7,16 @@ description: Understand, modify, test, review, and contribute to the Paper2MD so
 
 Make scoped, evidence-backed changes while preserving Paper2MD's deterministic and provenance-aware boundaries.
 
+## Confirm contribution scope
+
+Ask the user about unresolved choices that materially change the contribution:
+diagnosis/review versus implementation, the compatibility target when a public
+contract may change, and whether to prepare only a working-tree change or also
+commit/push when authorization is not already present. Do not ask about routine
+implementation details that can be derived from repository conventions. Ask no
+more than three grouped questions at a time, recommend the safest compatible
+choice, and do not repeat questions the user has already answered.
+
 ## Start with repository truth
 
 1. Read repository-level `AGENTS.md` and obey its execution, deletion, and Git rules.

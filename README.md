@@ -204,6 +204,11 @@ python -m paper2md convert input.pdf output-dir
 这些 skills 只指导 Agent 调用现有命令和遵守项目契约，不会替 Paper2MD 隐式增加
 联网、LLM、OCR 或外部 API 行为。
 
+调用 skill 后，Agent 会先询问尚未明确、且会影响质量、输出范围、存储、隐私或失败
+处理的关键选项，并给出推荐设置；已经由用户指定或可从环境安全判断的选项不会重复
+询问。用户也可以明确要求使用推荐设置。混合布局中的 Content ROI 和最终布局视觉复核
+仍是必须单独完成的确认步骤。
+
 ## 已知限制
 
 - 不支持扫描 PDF 的 OCR；

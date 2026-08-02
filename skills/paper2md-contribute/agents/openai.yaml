@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper2MD Contribute"
   short_description: "Develop, test, and contribute to Paper2MD"
-  default_prompt: "Use $paper2md-contribute to implement and validate a scoped contribution to the Paper2MD repository."
+  default_prompt: "Use $paper2md-contribute to confirm unresolved scope choices, then implement and validate a Paper2MD contribution."

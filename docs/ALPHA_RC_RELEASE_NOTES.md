@@ -47,7 +47,7 @@ Paper2MD 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
 2026-08-02 在 Windows / Python 3.11.2、`pypdfium2==5.11.0`、
 PDFium 151.0.7920.0 和 `Pillow==12.2.0` 的验证环境中：
 
-- 253/253 单元测试通过；
+- 254/254 单元测试通过；
 - 内容 smoke 13/13 通过，包含双轮逐文件确定性检查；
 - wheel/sdist 两种安装各 6 项命令检查通过，输出树一致；
 - fixture、字节码编译、仓库策略和 `git diff --check` 通过。

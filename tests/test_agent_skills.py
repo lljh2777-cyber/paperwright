@@ -46,6 +46,34 @@ class AgentSkillTests(unittest.TestCase):
         ):
             self.assertIn(required, combined)
 
+    def test_skills_require_staged_user_decisions(self):
+        convert_root = ROOT / "skills" / "paper2md-convert"
+        convert = (convert_root / "SKILL.md").read_text(encoding="utf-8")
+        option_guide = (
+            convert_root / "references" / "options-and-questions.md"
+        ).read_text(encoding="utf-8")
+        install = (
+            ROOT / "skills" / "paper2md-install" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        contribute = (
+            ROOT / "skills" / "paper2md-contribute" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Ask before running", convert)
+        self.assertIn("no more than three", convert)
+        self.assertIn("options-and-questions.md", convert)
+        for required in (
+            "Workflow",
+            "Output destination",
+            "Extraction profile",
+            "Final package policy",
+            "Failure handling",
+            "Content ROI confirmation is a separate mandatory checkpoint",
+        ):
+            self.assertIn(required, option_guide)
+        self.assertIn("Confirm installation choices", install)
+        self.assertIn("Confirm contribution scope", contribute)
+
 
 if __name__ == "__main__":
     unittest.main()

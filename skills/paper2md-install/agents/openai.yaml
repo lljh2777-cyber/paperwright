@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper2MD Install"
   short_description: "Download, install, and verify Paper2MD"
-  default_prompt: "Use $paper2md-install to download Paper2MD, create an isolated environment, install it, and verify the CLI."
+  default_prompt: "Use $paper2md-install to ask me about unresolved setup choices, install Paper2MD in an isolated environment, and verify the CLI."
