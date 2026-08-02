@@ -101,16 +101,26 @@ def render_layout_overlay(
         draw.rectangle(text_box, fill=(255, 255, 255))
         draw.text((label_x, label_y), candidate.candidate_id, fill=color)
 
+    separator_width = max(1, width // 2)
     for separator in sorted(task.separators, key=lambda item: item.separator_id):
         box = separator.bbox.to_pixel_box(
             image_width=overlay.width,
             image_height=overlay.height,
         )
-        draw.rectangle(box, outline=_SEPARATOR_COLOR, width=width)
-        label_x, label_y = box[0] + width, box[1] + width
-        text_box = draw.textbbox((label_x, label_y), separator.separator_id)
-        draw.rectangle(text_box, fill=(255, 255, 255))
-        draw.text((label_x, label_y), separator.separator_id, fill=_SEPARATOR_COLOR)
+        if separator.orientation == "horizontal":
+            center = (box[1] + box[3]) // 2
+            draw.line(
+                (box[0], center, box[2], center),
+                fill=_SEPARATOR_COLOR,
+                width=separator_width,
+            )
+        else:
+            center = (box[0] + box[2]) // 2
+            draw.line(
+                (center, box[1], center, box[3]),
+                fill=_SEPARATOR_COLOR,
+                width=separator_width,
+            )
     return overlay
 
 

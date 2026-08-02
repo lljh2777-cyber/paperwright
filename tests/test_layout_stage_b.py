@@ -8,6 +8,7 @@ from paper2md.config import Paper2MDConfig
 from paper2md.layout_candidates import generate_layout_tasks
 from paper2md.layout_models import NormalizedBBox
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paper2md.raster_layout import RasterPageAnalysis, RasterVisualRegion
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -302,6 +303,120 @@ class LayoutStageBTests(unittest.TestCase):
             self.assertTrue(
                 set(separator.adjacent_candidate_ids) <= candidate_ids
             )
+        self.assertLessEqual(len(task.separators), 2 * len(task.candidates))
+
+    def test_multi_panel_raster_fragments_form_one_auditable_candidate(self):
+        page = Page(
+            0,
+            600,
+            800,
+            0,
+            (
+                _text(
+                    "caption",
+                    0,
+                    BBox(40, 690, 520, 40),
+                    "Fig. 1 | Multi-panel benchmark.",
+                    1,
+                ),
+            ),
+        )
+        document = PhysicalDocument(
+            source_sha256="9" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        regions = tuple(
+            RasterVisualRegion(
+                region_id=f"R{index + 1:03d}",
+                bbox=NormalizedBBox(x, y, 0.25, 0.22),
+                page_area_ratio=0.055,
+                ink_coverage=0.5,
+                residual_coverage=0.4,
+                text_mask_coverage=0.1,
+            )
+            for index, (x, y) in enumerate(
+                (
+                    (0.08, 0.08),
+                    (0.375, 0.08),
+                    (0.67, 0.08),
+                    (0.08, 0.325),
+                    (0.375, 0.325),
+                    (0.67, 0.325),
+                )
+            )
+        )
+        raster = RasterPageAnalysis(
+            page_index=0,
+            preview_width=600,
+            preview_height=800,
+            background_rgb=(255, 255, 255),
+            text_padding_px=1,
+            ink_coverage=0.3,
+            text_mask_coverage=0.05,
+            residual_coverage=0.25,
+            ink_mask_sha256="a" * 64,
+            text_mask_sha256="b" * 64,
+            residual_mask_sha256="c" * 64,
+            regions=regions,
+        )
+
+        task = generate_layout_tasks(
+            document,
+            content_rois={0: NormalizedBBox(0.05, 0.05, 0.90, 0.90)},
+            raster_analyses={0: raster},
+        )[0]
+
+        raster_candidates = [
+            item for item in task.candidates if "raster" in item.element_kinds
+        ]
+        self.assertEqual(len(raster_candidates), 1)
+        self.assertEqual(
+            raster_candidates[0].features["raster_region_count"],
+            6,
+        )
+        self.assertEqual(
+            task.metadata["raster_candidate_groups"][0]["component_ids"],
+            [f"R{index:03d}" for index in range(1, 7)],
+        )
+
+    def test_separate_raster_figures_remain_separate(self):
+        page = Page(0, 600, 800, 0, ())
+        document = PhysicalDocument(
+            source_sha256="8" * 64,
+            backend="fixture",
+            backend_version="1",
+            pages=(page,),
+        )
+        regions = tuple(
+            RasterVisualRegion(
+                region_id=f"R{index + 1:03d}",
+                bbox=NormalizedBBox(0.1, y, 0.8, 0.18),
+                page_area_ratio=0.144,
+                ink_coverage=0.5,
+                residual_coverage=0.4,
+                text_mask_coverage=0.1,
+            )
+            for index, y in enumerate((0.10, 0.55))
+        )
+        raster = RasterPageAnalysis(
+            0, 600, 800, (255, 255, 255), 1,
+            0.3, 0.0, 0.3,
+            "d" * 64, "e" * 64, "f" * 64,
+            regions,
+        )
+
+        task = generate_layout_tasks(
+            document,
+            content_rois={0: NormalizedBBox(0.05, 0.05, 0.90, 0.90)},
+            raster_analyses={0: raster},
+        )[0]
+
+        self.assertEqual(
+            sum("raster" in item.element_kinds for item in task.candidates),
+            2,
+        )
 
     def test_narrow_low_occupancy_gutter_survives_sparse_crossing_line(self):
         elements = []

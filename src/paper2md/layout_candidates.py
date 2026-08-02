@@ -31,7 +31,7 @@ from .references import is_reference_heading
 CANDIDATE_GENERATOR_VERSION = "paper2md-whitespace-candidates-v0.4"
 FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.1"
 RASTER_CANDIDATE_GENERATOR_VERSION = (
-    "paper2md-whitespace-raster-candidates-v0.1"
+    "paper2md-whitespace-raster-candidates-v0.2"
 )
 RASTER_FEATURE_SCHEMA_VERSION = "paper2md-layout-features-v0.2"
 
@@ -49,6 +49,9 @@ class CandidateGenerationConfig:
     vertical_gap_line_ratio: float = 0.8
     vertical_gap_page_ratio: float = 0.012
     graphics_cluster_line_ratio: float = 0.6
+    raster_group_horizontal_gap_ratio: float = 0.045
+    raster_group_vertical_gap_ratio: float = 0.030
+    raster_group_overlap_ratio: float = 0.05
     content_roi_padding_ratio: float = 0.005
     edge_band_limit_ratio: float = 0.12
     edge_band_max_height_ratio: float = 0.06
@@ -66,6 +69,9 @@ class CandidateGenerationConfig:
             self.vertical_gap_line_ratio,
             self.vertical_gap_page_ratio,
             self.graphics_cluster_line_ratio,
+            self.raster_group_horizontal_gap_ratio,
+            self.raster_group_vertical_gap_ratio,
+            self.raster_group_overlap_ratio,
             self.content_roi_padding_ratio,
             self.edge_band_limit_ratio,
             self.edge_band_max_height_ratio,
@@ -469,11 +475,120 @@ def _raster_atoms(
                 element_ids=(),
                 kinds=("raster",),
                 features={
+                    "raster_component_ids": item.region_id,
+                    "raster_region_count": 1,
                     "raster_ink_coverage": item.ink_coverage,
                     "raster_residual_coverage": item.residual_coverage,
                     "raster_text_mask_coverage": item.text_mask_coverage,
                     "raster_page_area_ratio": item.page_area_ratio,
                     "raster_peripheral_hint": peripheral_hint,
+                },
+            )
+        )
+    return result
+
+
+def _compound_raster_atoms(
+    page: Page,
+    atoms: Sequence[_Atom],
+    *,
+    horizontal_gap_ratio: float,
+    vertical_gap_ratio: float,
+    overlap_ratio: float,
+) -> list[_Atom]:
+    """Group nearby raster fragments into reversible visual candidates.
+
+    Raster connected components are deliberately finer than logical figures.
+    This second grouping layer keeps the component identifiers as evidence but
+    prevents a multi-panel figure from becoming dozens of review candidates.
+    """
+
+    if len(atoms) < 2:
+        return list(atoms)
+    disjoint = _DisjointSet(len(atoms))
+    maximum_x_gap = page.width * horizontal_gap_ratio
+    maximum_y_gap = page.height * vertical_gap_ratio
+    for index, left in enumerate(atoms):
+        for other_index, right in enumerate(atoms[index + 1 :], index + 1):
+            x_overlap = _overlap_length(
+                left.bbox.x,
+                left.bbox.right,
+                right.bbox.x,
+                right.bbox.right,
+            )
+            y_overlap = _overlap_length(
+                left.bbox.y,
+                left.bbox.bottom,
+                right.bbox.y,
+                right.bbox.bottom,
+            )
+            x_gap, y_gap = _gap(left.bbox, right.bbox)
+            horizontal_neighbors = (
+                x_gap <= maximum_x_gap
+                and y_overlap
+                / max(min(left.bbox.height, right.bbox.height), 1e-9)
+                >= overlap_ratio
+            )
+            vertical_neighbors = (
+                y_gap <= maximum_y_gap
+                and x_overlap
+                / max(min(left.bbox.width, right.bbox.width), 1e-9)
+                >= overlap_ratio
+            )
+            if horizontal_neighbors or vertical_neighbors:
+                disjoint.union(index, other_index)
+
+    groups: dict[int, list[_Atom]] = defaultdict(list)
+    for index, atom in enumerate(atoms):
+        groups[disjoint.find(index)].append(atom)
+    ordered_groups = sorted(
+        groups.values(),
+        key=lambda group: (
+            min(item.bbox.y for item in group),
+            min(item.bbox.x for item in group),
+            min(item.atom_id for item in group),
+        ),
+    )
+    result: list[_Atom] = []
+    for index, group in enumerate(ordered_groups):
+        ordered = sorted(group, key=lambda item: item.atom_id)
+        component_ids = sorted(
+            component_id
+            for item in ordered
+            for component_id in str(
+                item.features.get("raster_component_ids", "")
+            ).split(",")
+            if component_id
+        )
+        result.append(
+            _Atom(
+                atom_id=f"raster-group-{index:05d}",
+                bbox=_union_bbox(item.bbox for item in ordered),
+                element_ids=(),
+                kinds=("raster",),
+                features={
+                    "raster_component_ids": ",".join(component_ids),
+                    "raster_region_count": len(component_ids),
+                    "raster_ink_coverage": max(
+                        float(item.features["raster_ink_coverage"])
+                        for item in ordered
+                    ),
+                    "raster_residual_coverage": max(
+                        float(item.features["raster_residual_coverage"])
+                        for item in ordered
+                    ),
+                    "raster_text_mask_coverage": max(
+                        float(item.features["raster_text_mask_coverage"])
+                        for item in ordered
+                    ),
+                    "raster_page_area_ratio": sum(
+                        float(item.features["raster_page_area_ratio"])
+                        for item in ordered
+                    ),
+                    "raster_peripheral_hint": all(
+                        bool(item.features.get("raster_peripheral_hint"))
+                        for item in ordered
+                    ),
                 },
             )
         )
@@ -845,7 +960,9 @@ def _candidate_from_raster_atom(
     features.update(
         {
             "raster_evidence": True,
-            "raster_region_count": 1,
+            "raster_region_count": int(
+                atom.features.get("raster_region_count", 1)
+            ),
             "raster_ink_coverage_max": atom.features[
                 "raster_ink_coverage"
             ],
@@ -879,58 +996,85 @@ def _candidate_separators(
         if not bool(item.features.get("peripheral_hint"))
     ]
     separators: list[tuple[str, str, str, NormalizedBBox, dict[str, object]]] = []
-    for index, left in enumerate(content):
-        for right in content[index + 1 :]:
+    seen: set[tuple[str, str, str]] = set()
+
+    def add_nearest(left: LayoutCandidate, *, orientation: str) -> None:
+        eligible: list[
+            tuple[float, str, LayoutCandidate, NormalizedBBox, float]
+        ] = []
+        for right in content:
+            if right.candidate_id == left.candidate_id:
+                continue
             a = left.bbox
             b = right.bbox
             x_overlap = _overlap_length(a.x, a.right, b.x, b.right)
             y_overlap = _overlap_length(a.y, a.bottom, b.y, b.bottom)
-            x_gap = max(a.x - b.right, b.x - a.right, 0.0)
-            y_gap = max(a.y - b.bottom, b.y - a.bottom, 0.0)
-            if y_gap > 0 and x_overlap / min(a.width, b.width) >= 0.25:
-                top = min(a.bottom, b.bottom)
-                bottom = max(a.y, b.y)
+            if (
+                orientation == "horizontal"
+                and b.y > a.bottom
+                and x_overlap / min(a.width, b.width) >= 0.25
+            ):
+                gap = b.y - a.bottom
                 bbox = NormalizedBBox(
                     max(a.x, b.x),
-                    top,
+                    a.bottom,
                     x_overlap,
-                    bottom - top,
+                    gap,
                 )
-                separators.append(
+                eligible.append(
                     (
-                        "horizontal",
-                        left.candidate_id,
+                        gap,
                         right.candidate_id,
+                        right,
                         bbox,
-                        {
-                            "gap_ratio": y_gap,
-                            "orthogonal_overlap_ratio": x_overlap
-                            / min(a.width, b.width),
-                        },
+                        x_overlap / min(a.width, b.width),
                     )
                 )
-            elif x_gap > 0 and y_overlap / min(a.height, b.height) >= 0.25:
-                left_edge = min(a.right, b.right)
-                right_edge = max(a.x, b.x)
+            elif (
+                orientation == "vertical"
+                and b.x > a.right
+                and y_overlap / min(a.height, b.height) >= 0.25
+            ):
+                gap = b.x - a.right
                 bbox = NormalizedBBox(
-                    left_edge,
+                    a.right,
                     max(a.y, b.y),
-                    right_edge - left_edge,
+                    gap,
                     y_overlap,
                 )
-                separators.append(
+                eligible.append(
                     (
-                        "vertical",
-                        left.candidate_id,
+                        gap,
                         right.candidate_id,
+                        right,
                         bbox,
-                        {
-                            "gap_ratio": x_gap,
-                            "orthogonal_overlap_ratio": y_overlap
-                            / min(a.height, b.height),
-                        },
+                        y_overlap / min(a.height, b.height),
                     )
                 )
+        if not eligible:
+            return
+        gap, _, right, bbox, overlap = min(eligible)
+        key = (orientation, left.candidate_id, right.candidate_id)
+        if key in seen:
+            return
+        seen.add(key)
+        separators.append(
+            (
+                orientation,
+                left.candidate_id,
+                right.candidate_id,
+                bbox,
+                {
+                    "gap_ratio": gap,
+                    "orthogonal_overlap_ratio": overlap,
+                    "neighbor_policy": "nearest-forward-v1",
+                },
+            )
+        )
+
+    for candidate in content:
+        add_nearest(candidate, orientation="horizontal")
+        add_nearest(candidate, orientation="vertical")
     ordered = sorted(
         separators,
         key=lambda item: (
@@ -1104,14 +1248,26 @@ def generate_layout_tasks(
         structural_content_atoms = [
             atom for atom in content_atoms if "raster" not in atom.kinds
         ]
-        raster_content_atoms = [
+        atomic_raster_content_atoms = [
             atom
             for atom in content_atoms
             if "raster" in atom.kinds
             and not bool(atom.features.get("raster_peripheral_hint"))
         ]
+        raster_content_atoms = _compound_raster_atoms(
+            page,
+            atomic_raster_content_atoms,
+            horizontal_gap_ratio=settings.raster_group_horizontal_gap_ratio,
+            vertical_gap_ratio=settings.raster_group_vertical_gap_ratio,
+            overlap_ratio=settings.raster_group_overlap_ratio,
+        )
+        raster_suppression_atoms = [
+            atom
+            for atom in raster_content_atoms
+            if int(atom.features.get("raster_region_count", 1)) >= 3
+        ] or atomic_raster_content_atoms
         raster_suppressed_element_ids: set[str] = set()
-        if raster_content_atoms:
+        if raster_suppression_atoms:
             retained_structural_atoms: list[_Atom] = []
             for atom in structural_content_atoms:
                 atom_area = atom.bbox.width * atom.bbox.height
@@ -1132,7 +1288,7 @@ def generate_layout_tasks(
                             )
                             / atom_area
                         )
-                        for raster_atom in raster_content_atoms
+                        for raster_atom in raster_suppression_atoms
                     )
                     if atom_area > 0
                     else 0.0
@@ -1142,7 +1298,6 @@ def generate_layout_tasks(
                     continue
                 retained_structural_atoms.append(atom)
             structural_content_atoms = retained_structural_atoms
-
         horizontal_gap = max(
             line_height * settings.horizontal_gap_line_ratio,
             page.height * settings.horizontal_gap_page_ratio,
@@ -1282,6 +1437,33 @@ def generate_layout_tasks(
                         "raster_suppressed_element_ids": sorted(
                             raster_suppressed_element_ids
                         ),
+                        "raster_candidate_groups": [
+                            {
+                                "candidate_id": candidate.candidate_id,
+                                "component_ids": str(
+                                    atom.features.get(
+                                        "raster_component_ids", ""
+                                    )
+                                ).split(","),
+                            }
+                            for candidate, atom in zip(
+                                (
+                                    item
+                                    for item in candidates
+                                    if "raster" in item.element_kinds
+                                ),
+                                sorted(
+                                    raster_content_atoms,
+                                    key=lambda item: (
+                                        item.bbox.y,
+                                        item.bbox.x,
+                                        item.bbox.height,
+                                        item.bbox.width,
+                                        item.atom_id,
+                                    ),
+                                ),
+                            )
+                        ],
                         "raster_evidence": {
                             "contract_version": raster_by_page[
                                 page.page_index

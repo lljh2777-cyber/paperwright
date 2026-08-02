@@ -178,7 +178,7 @@ class RasterLayoutTests(unittest.TestCase):
         self.assertEqual(task.contract_version, "paper2md-layout-task-v0.2")
         self.assertEqual(
             task.candidate_generator_version,
-            "paper2md-whitespace-raster-candidates-v0.1",
+            "paper2md-whitespace-raster-candidates-v0.2",
         )
         self.assertEqual(
             task.metadata["raster_evidence"]["ink_mask_sha256"],
