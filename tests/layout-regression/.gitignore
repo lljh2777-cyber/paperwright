@@ -1,0 +1,4 @@
+inputs/*
+runs/*
+!inputs/.gitkeep
+!runs/.gitkeep
