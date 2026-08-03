@@ -85,6 +85,8 @@ class AgentSkillTests(unittest.TestCase):
             "paper2md text-prepare",
             "paper2md validate-text-review",
             "paper2md text-apply",
+            "paper2md text-package",
+            "paper2md validate-text-package",
             "Text reviewer input: text task JSON only",
             "Do not merge, delete",
         ):

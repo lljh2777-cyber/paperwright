@@ -94,6 +94,7 @@ class PublicOnboardingTests(unittest.TestCase):
             self.assertIn("Apache License 2.0", document)
             self.assertNotIn("项目许可证仍为 `NOASSERTION`", document)
         self.assertIn("hybrid manifest | v0.9", architecture)
+        self.assertIn("text-reviewed manifest | v0.10", architecture)
         self.assertIn("继续接受旧 v0.6–v0.8", architecture)
         self.assertIn("reader index | v0.1", architecture)
 

@@ -8,6 +8,7 @@ from paper2md.manifest import (
     OutputFile,
     PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
     READER_HYBRID_LAYOUT_MANIFEST_VERSION,
+    TEXT_REVIEWED_MANIFEST_VERSION,
     build_manifest,
     canonical_manifest_json,
     validate_manifest,
@@ -76,6 +77,16 @@ class ManifestTests(unittest.TestCase):
         reader_versions = {
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
+        }
+        article_model_versions = {
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
+        }
+        text_hashes = {
+            "task": "1" * 64,
+            "review": "2" * 64,
+            "validation": "3" * 64,
         }
         return build_manifest(
             source_sha256="c" * 64,
@@ -101,7 +112,31 @@ class ManifestTests(unittest.TestCase):
                             article_model_hash,
                         )
                     ]
-                    if version == HYBRID_LAYOUT_MANIFEST_VERSION
+                    if version in article_model_versions
+                    else []
+                ),
+                *(
+                    [
+                        OutputFile(
+                            "_paper2md/06-text-review/text-task.json",
+                            "text_task",
+                            30,
+                            text_hashes["task"],
+                        ),
+                        OutputFile(
+                            "_paper2md/06-text-review/text-review.json",
+                            "text_review",
+                            30,
+                            text_hashes["review"],
+                        ),
+                        OutputFile(
+                            "_paper2md/06-text-review/validation-report.json",
+                            "text_validation_report",
+                            30,
+                            text_hashes["validation"],
+                        ),
+                    ]
+                    if version == TEXT_REVIEWED_MANIFEST_VERSION
                     else []
                 ),
             ],
@@ -135,7 +170,25 @@ class ManifestTests(unittest.TestCase):
                     "path": "_paper2md/article-model.json",
                     "sha256": article_model_hash,
                 }
-                if version == HYBRID_LAYOUT_MANIFEST_VERSION
+                if version in article_model_versions
+                else None
+            ),
+            text_review=(
+                {
+                    "task_contract_version": "paper2md-text-task-v0.1",
+                    "review_contract_version": "paper2md-text-review-v0.1",
+                    "task_path": "_paper2md/06-text-review/text-task.json",
+                    "task_sha256": text_hashes["task"],
+                    "review_path": "_paper2md/06-text-review/text-review.json",
+                    "review_sha256": text_hashes["review"],
+                    "source_article_model_sha256": article_model_hash,
+                    "parent_manifest_sha256": "4" * 64,
+                    "reviewer": "fixture-text-agent",
+                    "operation_count": 1,
+                    "validation_path": "_paper2md/06-text-review/validation-report.json",
+                    "validation_sha256": text_hashes["validation"],
+                }
+                if version == TEXT_REVIEWED_MANIFEST_VERSION
                 else None
             ),
         )
@@ -161,6 +214,20 @@ class ManifestTests(unittest.TestCase):
             version=READER_HYBRID_LAYOUT_MANIFEST_VERSION
         )
         validate_manifest(value)
+
+    def test_text_reviewed_v010_requires_hash_matched_provenance(self):
+        value = self.hybrid_manifest(version=TEXT_REVIEWED_MANIFEST_VERSION)
+        validate_manifest(value)
+
+        missing = dict(value)
+        missing.pop("text_review")
+        with self.assertRaisesRegex(ContractValidationError, "text_review"):
+            validate_manifest(missing)
+
+        changed = self.hybrid_manifest(version=TEXT_REVIEWED_MANIFEST_VERSION)
+        changed["text_review"]["review_sha256"] = "9" * 64
+        with self.assertRaisesRegex(ContractValidationError, "outputs"):
+            validate_manifest(changed)
 
     def test_hybrid_v07_remains_accepted_without_reader(self):
         value = self.hybrid_manifest(

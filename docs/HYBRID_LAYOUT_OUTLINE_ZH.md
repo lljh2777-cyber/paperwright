@@ -391,6 +391,19 @@ output-dir/
         └── validation-report.md
 ```
 
+通过文本复核生成的 manifest v0.10 派生包还包含：
+
+```text
+_paper2md/06-text-review/
+├── text-task.json
+├── text-review.json
+├── validation-report.json
+└── validation-report.md
+```
+
+派生包重新投影 Article Model、`article.md` 与 Reader，保留并校验父包证据，且不
+覆盖 manifest v0.9 父包。
+
 `--evidence minimal` 只保留 `article.md`、`images/`、
 `_paper2md/manifest.json`、`_paper2md/article-model.json` 和
 `_paper2md/reader.json`。Article Model 是 Markdown 与 Reader 的规范共同来源，
@@ -571,7 +584,7 @@ paper2md layout-export-dataset dataset-dir `
 | A | 完成 | 布局任务、最终布局模型、schema、叠加图 |
 | B | 完成 | 无 OCR 空白带、双栏、外围内容和特征生成 |
 | C | 完成 | AI 复核说明、严格动作和完整性校验 |
-| D | 完成 | 原生文字重建、视觉区块截图、Article Model v0.1、Reader v0.1、当前 manifest v0.9（兼容读取 v0.6–v0.8） |
+| D | 完成 | 原生文字重建、视觉区块截图、Article Model v0.1、Reader v0.1、布局 manifest v0.9（兼容读取 v0.6–v0.8）与文本派生 manifest v0.10 |
 | E | 完成 | 两篇真实论文共 29 页验证，双轮文件哈希一致 |
 | F | 部分完成 | 数据导出完成；轻量分类器等待足量真值 |
 

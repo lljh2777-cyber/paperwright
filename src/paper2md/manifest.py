@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
 PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.7"
 READER_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.8"
 HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.9"
+TEXT_REVIEWED_MANIFEST_VERSION = "paper2md-manifest-v0.10"
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def sha256_file(path: Path) -> str:
@@ -63,6 +66,7 @@ def build_manifest(
     layout_review: dict[str, Any] | None = None,
     reader: dict[str, Any] | None = None,
     article_model: dict[str, Any] | None = None,
+    text_review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -94,6 +98,8 @@ def build_manifest(
         manifest["reader"] = reader
     if article_model is not None:
         manifest["article_model"] = article_model
+    if text_review is not None:
+        manifest["text_review"] = text_review
     validate_manifest(manifest)
     return manifest
 
@@ -120,6 +126,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "layout_review",
         "reader",
         "article_model",
+        "text_review",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -130,6 +137,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
         READER_HYBRID_LAYOUT_MANIFEST_VERSION,
         HYBRID_LAYOUT_MANIFEST_VERSION,
+        TEXT_REVIEWED_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
     if value["manifest_version"] == MANIFEST_VERSION:
@@ -138,6 +146,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             or "layout_review" in value
             or "reader" in value
             or "article_model" in value
+            or "text_review" in value
         ):
             raise ContractValidationError(
                 "manifest v0.4 不允许扩展处理策略"
@@ -147,6 +156,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             "layout_review" in value
             or "reader" in value
             or "article_model" in value
+            or "text_review" in value
         ):
             raise ContractValidationError(
                 "manifest v0.5 不允许 layout_review/reader"
@@ -194,6 +204,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
         }:
             required_review.add("evidence_level")
         if not isinstance(review, dict) or set(review) != required_review:
@@ -204,6 +215,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
         }:
             if review["evidence_level"] not in {"minimal", "standard", "full"}:
                 raise ContractValidationError("manifest evidence_level 非法")
@@ -266,6 +278,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         if value["manifest_version"] in {
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
         }:
             reader = value.get("reader")
             if not isinstance(reader, dict) or set(reader) != {
@@ -299,14 +312,17 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError(
                 "旧版 manifest 不允许 reader 顶层字段"
             )
-        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+        if value["manifest_version"] in {
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+            TEXT_REVIEWED_MANIFEST_VERSION,
+        }:
             article_model = value.get("article_model")
             if not isinstance(article_model, dict) or set(article_model) != {
                 "contract_version",
                 "path",
                 "sha256",
             }:
-                raise ContractValidationError("manifest v0.9 缺少 article_model")
+                raise ContractValidationError("manifest v0.9+ 缺少 article_model")
             if (
                 article_model["contract_version"]
                 != "paper2md-article-model-v0.1"
@@ -318,6 +334,61 @@ def validate_manifest(value: dict[str, Any]) -> None:
         elif "article_model" in value:
             raise ContractValidationError(
                 "旧版 manifest 不允许 article_model 顶层字段"
+            )
+        if value["manifest_version"] == TEXT_REVIEWED_MANIFEST_VERSION:
+            text_review = value.get("text_review")
+            required_text_review = {
+                "task_contract_version",
+                "review_contract_version",
+                "task_path",
+                "task_sha256",
+                "review_path",
+                "review_sha256",
+                "source_article_model_sha256",
+                "parent_manifest_sha256",
+                "reviewer",
+                "operation_count",
+                "validation_path",
+                "validation_sha256",
+            }
+            if (
+                not isinstance(text_review, dict)
+                or set(text_review) != required_text_review
+            ):
+                raise ContractValidationError("manifest v0.10 缺少 text_review")
+            if (
+                text_review["task_contract_version"]
+                != "paper2md-text-task-v0.1"
+                or text_review["review_contract_version"]
+                != "paper2md-text-review-v0.1"
+                or text_review["task_path"]
+                != "_paper2md/06-text-review/text-task.json"
+                or text_review["review_path"]
+                != "_paper2md/06-text-review/text-review.json"
+                or text_review["validation_path"]
+                != "_paper2md/06-text-review/validation-report.json"
+                or any(
+                    not isinstance(text_review[field], str)
+                    or _SHA256_RE.fullmatch(text_review[field]) is None
+                    for field in (
+                        "task_sha256",
+                        "review_sha256",
+                        "source_article_model_sha256",
+                        "parent_manifest_sha256",
+                        "validation_sha256",
+                    )
+                )
+                or not isinstance(text_review["reviewer"], str)
+                or not text_review["reviewer"]
+                or len(text_review["reviewer"]) > 200
+                or isinstance(text_review["operation_count"], bool)
+                or not isinstance(text_review["operation_count"], int)
+                or text_review["operation_count"] < 0
+            ):
+                raise ContractValidationError("manifest text_review 契约非法")
+        elif "text_review" in value:
+            raise ContractValidationError(
+                "旧版 manifest 不允许 text_review 顶层字段"
             )
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
@@ -369,6 +440,27 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError(
                 "manifest article_model 与 outputs 清单不一致"
             )
+    if "text_review" in value:
+        by_path = {item["path"]: item for item in value["outputs"]}
+        text_review = value["text_review"]
+        for path_field, hash_field, role in (
+            ("task_path", "task_sha256", "text_task"),
+            ("review_path", "review_sha256", "text_review"),
+            (
+                "validation_path",
+                "validation_sha256",
+                "text_validation_report",
+            ),
+        ):
+            output = by_path.get(text_review[path_field])
+            if (
+                output is None
+                or output["role"] != role
+                or output["sha256"] != text_review[hash_field]
+            ):
+                raise ContractValidationError(
+                    "manifest text_review 与 outputs 清单不一致"
+                )
     for field_name in (
         "elements",
         "images",

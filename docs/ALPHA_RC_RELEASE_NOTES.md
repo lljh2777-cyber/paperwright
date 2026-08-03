@@ -6,7 +6,7 @@
 ## 已包含
 
 - `paper2md --version/--help/convert/batch/validate-model/validate-reader`；
-- `text-prepare/validate-text-task/validate-text-review/text-apply`；
+- `text-prepare/validate-text-task/validate-text-review/text-apply/text-package/validate-text-package`；
 - `layout-prepare/validate-layout-task/validate-final-layout/layout-apply`；
 - `benchmark-extract/layout-export-dataset`；
 - PDFium 主后端，PhysicalDocument v0.2；
@@ -15,7 +15,7 @@
 - 非递归且确定性排序的 batch、逐文档原子输出和机器可读摘要；
 - Content ROI、规则/栅格候选、结构化布局复核和严格应用；
 - `fast`、选择性升级的 `standard` 和完整对象 `forensic` 提取；
-- manifest v0.4/v0.5/v0.8、Reader v0.1、证据包、质量报告和训练数据导出；
+- manifest v0.4–v0.10、Reader v0.1、证据包、质量报告和训练数据导出；
 - 稳定 `p2md:block` / `p2md:slot` 锚点、Figure/图注关系与内容指纹；
 - Text Task v0.1 与 Text Review v0.1 的源保持文本整理边界；
 - Linux 云端复核，以及 Phase 5 留存的 Windows/Python 3.11.2 独立证据。
@@ -29,6 +29,8 @@
 - PhysicalDocument 契约保持 v0.2。
 - 当前混合布局输出使用 manifest v0.9 和 Article Model v0.1，继续接受旧
   manifest v0.6–v0.8；
+- 完整文本复核派生包使用 manifest v0.10，绑定父 manifest、源模型、task、review
+  和验证报告，不覆盖 v0.9 父包；
 - Reader v0.1 是所有混合布局证据级别的功能索引，不随 minimal/standard/full
   被裁剪；
 - 包版本和各数据契约独立演进，不要求数字相同。
@@ -50,7 +52,7 @@ Paper2MD 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
 2026-08-03 在 Windows / Python 3.11.2、`pypdfium2==5.11.0`、
 PDFium 151.0.7920.0 和 `Pillow==12.2.0` 的验证环境中：
 
-- 264/264 单元测试通过；
+- 268/268 单元测试通过；
 - 内容 smoke 13/13 通过，包含双轮逐文件确定性检查；
 - wheel/sdist 两种安装各 6 项命令检查通过，输出树一致；
 - fixture、字节码编译、仓库策略和 `git diff --check` 通过。

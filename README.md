@@ -173,7 +173,13 @@ paper2md text-prepare output-dir/_paper2md/article-model.json text-task.json
 paper2md validate-text-review text-review.json --task text-task.json
 paper2md text-apply output-dir/_paper2md/article-model.json text-task.json \
   text-review.json article-model.reviewed.json
+paper2md text-package output-dir text-task.json text-review.json reviewed-output-dir
+paper2md validate-text-package reviewed-output-dir
 ```
+
+`text-apply` 适合只检查新 Article Model；`text-package` 会保留源 v0.9 包不变，
+原子写出一个完整的 manifest v0.10 派生包，并重新生成 `article.md`、
+`reader.json`、Article Model、验证报告及 task/review 哈希链。
 
 文本任务和复核分别使用 v0.1 契约并绑定源 PDF、Article Model 与任务哈希。
 当前只允许不改变规范化可见文字的 Markdown 格式整理，以及严格的断行去连字符；
@@ -217,6 +223,7 @@ python -m paper2md convert input.pdf output-dir
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
 - [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)
+- [manifest v0.10 文本复核派生包迁移说明](docs/MANIFEST_MIGRATION_V0.10.md)
 - [manifest v0.9 与 Article Model 迁移说明](docs/MANIFEST_MIGRATION_V0.9.md)
 - [manifest v0.8 与 Reader 迁移说明](docs/MANIFEST_MIGRATION_V0.8.md)
 

@@ -74,6 +74,8 @@ Markdown + images + manifest     article model
   视觉资产和关系；严格验证后确定性投影为 `article.md` 与 `reader.json`。
 - `paper2md.text_review`：从 Article Model 投影不含页面图像和几何来源的文本任务，
   校验带任务/模型哈希的受约束 Markdown 操作，并在保持身份图不变时生成新模型。
+- `paper2md.text_package`：验证完整 v0.9 源包，应用文本复核，并原子写出带父包、
+  task、review 与验证报告哈希链的 manifest v0.10 派生包。
 - `paper2md.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
   交叉检查锚点、关系、路径、文件大小与哈希。
 - `paper2md.quality` 与 `paper2md.evidence`：区分启发式 warning 和确定性结构
@@ -119,6 +121,7 @@ Markdown + images + manifest     article model
 | direct/off manifest | v0.4 | 保持旧默认输出 |
 | direct region-render manifest | v0.5 | 增加 `region_render_policy` |
 | hybrid manifest | v0.9 | 当前写出；继续接受旧 v0.6–v0.8 |
+| text-reviewed manifest | v0.10 | 从完整 v0.9 包确定性派生，不覆盖父包 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
 | text task | v0.1 | 只读文本块、编辑策略及源 Article Model 哈希 |
 | text review | v0.1 | 绑定任务的格式保持/断行去连字符操作 |
@@ -146,6 +149,10 @@ Article Model 复用同一稳定身份，按连续 `order` 保存每个公开块
 复核只能替换可编辑块的 Markdown：`format-only` 必须保持规范化可见文本相同，
 `dehyphenation` 只能删除词内断行连字符及其后空白。应用阶段再次绑定源模型与任务
 哈希，并拒绝视觉槽位、身份、顺序或图关系变化。
+
+`text-package` 将通过复核的新模型重新投影为 Markdown 与 Reader，同时复制并校验
+父包的视觉资产和证据文件。新 manifest 绑定父 manifest、源模型、task、review、
+验证报告及完整输出清单；临时目录通过全包校验后才会原子成为目标目录。
 
 ## 产品边界
 

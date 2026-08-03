@@ -16,10 +16,14 @@ paper2md text-prepare ARTICLE_MODEL_JSON TEXT_TASK_JSON
 paper2md validate-text-task TEXT_TASK_JSON --article-model ARTICLE_MODEL_JSON
 paper2md validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
 paper2md text-apply ARTICLE_MODEL_JSON TEXT_TASK_JSON TEXT_REVIEW_JSON REVIEWED_MODEL_JSON
+paper2md text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE
+paper2md validate-text-package OUTPUT_PACKAGE
 ```
 
-所有输出文件都拒绝覆盖。`text-apply` 当前只生成新的 Article Model，不会静默替换
-原包内的 `article.md`、`reader.json`、manifest 或验证报告。
+所有输出文件都拒绝覆盖。`text-apply` 只生成新的 Article Model；`text-package`
+则保留源包不变，原子写出完整的 manifest v0.10 派生包，重新投影 `article.md`、
+`reader.json` 并加入 task、review 与验证报告。首版只接受完整的 manifest v0.9
+源包，避免脱离已验证的视觉布局来源。
 
 ## 允许的操作
 
@@ -39,6 +43,10 @@ Text Task 记录源 PDF SHA-256、Article Model 契约和规范 JSON SHA-256；�
 另记录原 Markdown 与规范化可见文本哈希。Text Review 必须回传 task、source、model
 哈希，并为每次替换回传目标 block 的原 Markdown 哈希。任何过期或串线任务都会
 明确失败，不会尝试模糊匹配。
+
+派生包的 manifest v0.10 还记录父 manifest、源 Article Model、task、review 和
+JSON 验证报告的 SHA-256。输出清单逐文件绑定全部交付文件，因此修改正文、Reader、
+图片、复核记录或报告中的任意一个文件都会使完整包校验失败。
 
 ## 多 Agent 分工
 

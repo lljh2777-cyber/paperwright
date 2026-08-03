@@ -85,11 +85,13 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 - manifest v0.8：增加 Reader 摘要及其与输出清单的哈希绑定；
 - 当前 `layout-apply`：manifest v0.9，增加 Article Model 摘要，并将 Markdown
   与 Reader 绑定到同一规范模型。
+- `text-package`：manifest v0.10，从完整 v0.9 包派生，加入父 manifest、源模型、
+  task、review 与验证报告哈希；使用 `validate-text-package` 做全包复核。
 
 这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.8.0a0`。
 
-详见 `docs/MANIFEST_MIGRATION_V0.5.md` 和
-`docs/MANIFEST_MIGRATION_V0.8.md`。
+详见 `docs/MANIFEST_MIGRATION_V0.5.md`、`docs/MANIFEST_MIGRATION_V0.8.md`、
+`docs/MANIFEST_MIGRATION_V0.9.md` 和 `docs/MANIFEST_MIGRATION_V0.10.md`。
 
 ### Reader 为什么报告 article 或 asset 哈希不匹配？
 

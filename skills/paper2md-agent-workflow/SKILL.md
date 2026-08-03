@@ -61,17 +61,28 @@ the rendered Figure/Table assets and the final article at least once.
    paper2md validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
    ```
 
-5. Apply it to a new model path; never overwrite the source model:
+5. Optionally inspect a model-only result; never overwrite the source model:
 
    ```bash
    paper2md text-apply ARTICLE_MODEL_JSON TEXT_TASK_JSON TEXT_REVIEW_JSON REVIEWED_MODEL_JSON
    ```
 
+6. For a deliverable package, derive and validate a new complete package:
+
+   ```bash
+   paper2md text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE
+   paper2md validate-text-package OUTPUT_PACKAGE
+   ```
+
+   Keep the manifest v0.9 source package until the manifest v0.10 derivative
+   passes validation. The output path must not already exist.
+
 The v0.1 text protocol permits visible-text-preserving Markdown formatting and
 strict dehyphenation only. It rejects visual-slot edits, semantic rewrites,
 stale hashes, duplicate block edits, block merging, deletion, and reordering.
-The reviewed model is a separate artifact; do not silently replace the original
-package projections.
+`text-apply` produces a separate model-only artifact. `text-package` rebuilds
+the Markdown, Reader, model, manifest, and validation records together without
+silently replacing the original package projections.
 
 ## Keep agents isolated
 

@@ -41,6 +41,10 @@ from .text_review import (
     validate_text_review,
     validate_text_task,
 )
+from .text_package import (
+    build_text_reviewed_package,
+    validate_text_reviewed_package,
+)
 
 
 def _add_runtime_options(
@@ -166,6 +170,21 @@ def build_parser() -> argparse.ArgumentParser:
     text_apply.add_argument("task_json", type=Path)
     text_apply.add_argument("review_json", type=Path)
     text_apply.add_argument("output_article_model_json", type=Path)
+
+    text_package = commands.add_parser(
+        "text-package",
+        help="从 manifest v0.9 包原子生成文本审校后的完整派生包",
+    )
+    text_package.add_argument("source_package", type=Path)
+    text_package.add_argument("task_json", type=Path)
+    text_package.add_argument("review_json", type=Path)
+    text_package.add_argument("output_dir", type=Path)
+
+    validate_text_package_parser = commands.add_parser(
+        "validate-text-package",
+        help="验证 manifest v0.10 文本派生包及完整哈希链",
+    )
+    validate_text_package_parser.add_argument("package_root", type=Path)
 
     benchmark_extract = commands.add_parser(
         "benchmark-extract",
@@ -613,6 +632,58 @@ def _text_apply(
     return 0
 
 
+def _text_package(
+    source_package: Path,
+    task_path: Path,
+    review_path: Path,
+    output_dir: Path,
+) -> int:
+    task = _read_json_object(task_path, "text task")
+    review = _read_json_object(review_path, "text review")
+    result = build_text_reviewed_package(
+        source_package,
+        task,
+        review,
+        output_dir,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "success",
+                "output_dir": str(result.output_dir),
+                "manifest_version": result.manifest["manifest_version"],
+                "source_sha256": result.manifest["source_sha256"],
+                "operation_count": result.operation_count,
+                "article_sha256": result.manifest["reader"][
+                    "article_sha256"
+                ],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _validate_text_package(package_root: Path) -> int:
+    manifest = validate_text_reviewed_package(package_root)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "manifest_version": manifest["manifest_version"],
+                "source_sha256": manifest["source_sha256"],
+                "reviewer": manifest["text_review"]["reviewer"],
+                "operation_count": manifest["text_review"]["operation_count"],
+                "output_count": len(manifest["outputs"]),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _configuration(args: argparse.Namespace, *, batch: bool):
     base = load_config(args.config)
     pages = getattr(args, "region_render_page", None)
@@ -871,6 +942,15 @@ def main(argv: list[str] | None = None) -> int:
                 args.review_json,
                 args.output_article_model_json,
             )
+        if args.command == "text-package":
+            return _text_package(
+                args.source_package,
+                args.task_json,
+                args.review_json,
+                args.output_dir,
+            )
+        if args.command == "validate-text-package":
+            return _validate_text_package(args.package_root)
         if args.command == "benchmark-extract":
             return _benchmark_extract(args)
         if args.command == "layout-prepare":
