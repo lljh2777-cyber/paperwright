@@ -12,6 +12,11 @@ from .api import Paper2MD
 from .backends.pdfbox import PDFBoxBackend
 from .backends.pdfium import PDFiumBackend
 from .batch import classify_error, collect_batch_inputs, run_batch
+from .article_model import (
+    article_model_to_reader,
+    render_article_markdown,
+    validate_article_model,
+)
 from .config import load_config, with_cli_overrides
 from .exceptions import (
     BackendUnavailableError,
@@ -22,7 +27,7 @@ from .layout_models import FinalLayout, LayoutTask
 from .layout_dataset import export_layout_dataset
 from .layout_review import validate_layout_review
 from .models import PhysicalDocument
-from .reader import validate_reader_index
+from .reader import canonical_reader_json, validate_reader_index
 
 
 def _add_runtime_options(
@@ -106,6 +111,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--package-root",
         type=Path,
         help="默认从 _paper2md/reader.json 推断文档包根目录",
+    )
+
+    validate_article_model_parser = commands.add_parser(
+        "validate-article-model",
+        help="验证 article-model.json 及其 Markdown、Reader 和图片投影",
+    )
+    validate_article_model_parser.add_argument("article_model_json", type=Path)
+    validate_article_model_parser.add_argument(
+        "--package-root",
+        type=Path,
+        help="默认从 _paper2md/article-model.json 推断文档包根目录",
     )
 
     benchmark_extract = commands.add_parser(
@@ -369,6 +385,53 @@ def _validate_reader(path: Path, package_root: Path | None) -> int:
     return 0
 
 
+def _validate_article_model(path: Path, package_root: Path | None) -> int:
+    source = path.expanduser().resolve()
+    value = json.loads(source.read_text(encoding="utf-8"))
+    root = (
+        package_root.expanduser().resolve()
+        if package_root is not None
+        else source.parent.parent
+        if source.parent.name == "_paper2md"
+        else source.parent
+    )
+    try:
+        source.relative_to(root)
+    except ValueError as exc:
+        raise ConfigurationError(
+            "article-model.json 必须位于 package root 内"
+        ) from exc
+
+    validate_article_model(value, root=root)
+    article_text = render_article_markdown(value)
+    article_path = root / "article.md"
+    if article_path.read_text(encoding="utf-8") != article_text:
+        raise ConfigurationError("article.md 与 article-model.json 投影不一致")
+
+    expected_reader = article_model_to_reader(value, root=root)
+    reader_path = root / "_paper2md" / "reader.json"
+    actual_reader = json.loads(reader_path.read_text(encoding="utf-8"))
+    if canonical_reader_json(actual_reader) != canonical_reader_json(expected_reader):
+        raise ConfigurationError("reader.json 与 article-model.json 投影不一致")
+
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": value["contract_version"],
+                "source_sha256": value["source_sha256"],
+                "block_count": len(value["blocks"]),
+                "asset_count": len(value["assets"]),
+                "relation_count": len(value["relations"]),
+                "article_sha256": expected_reader["article"]["sha256"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _configuration(args: argparse.Namespace, *, batch: bool):
     base = load_config(args.config)
     pages = getattr(args, "region_render_page", None)
@@ -606,6 +669,11 @@ def main(argv: list[str] | None = None) -> int:
             return _validate_final_layout(args.layout_json, args.task)
         if args.command == "validate-reader":
             return _validate_reader(args.reader_json, args.package_root)
+        if args.command == "validate-article-model":
+            return _validate_article_model(
+                args.article_model_json,
+                args.package_root,
+            )
         if args.command == "benchmark-extract":
             return _benchmark_extract(args)
         if args.command == "layout-prepare":

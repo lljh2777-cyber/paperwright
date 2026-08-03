@@ -7,6 +7,7 @@ from paper2md.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     OutputFile,
     PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+    READER_HYBRID_LAYOUT_MANIFEST_VERSION,
     build_manifest,
     canonical_manifest_json,
     validate_manifest,
@@ -31,6 +32,7 @@ class ManifestTests(unittest.TestCase):
         for name in (
             "manifest.schema.json",
             "physical_document.schema.json",
+            "article_model.schema.json",
             "reader.schema.json",
         ):
             value = json.loads((root / name).read_text(encoding="utf-8"))
@@ -68,6 +70,11 @@ class ManifestTests(unittest.TestCase):
     def hybrid_manifest(self, *, version=HYBRID_LAYOUT_MANIFEST_VERSION):
         article_hash = "a" * 64
         reader_hash = "b" * 64
+        article_model_hash = "e" * 64
+        reader_versions = {
+            READER_HYBRID_LAYOUT_MANIFEST_VERSION,
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+        }
         return build_manifest(
             source_sha256="c" * 64,
             backend="fixture",
@@ -82,6 +89,18 @@ class ManifestTests(unittest.TestCase):
                     "reader_index",
                     24,
                     reader_hash,
+                ),
+                *(
+                    [
+                        OutputFile(
+                            "_paper2md/article-model.json",
+                            "article_model",
+                            48,
+                            article_model_hash,
+                        )
+                    ]
+                    if version == HYBRID_LAYOUT_MANIFEST_VERSION
+                    else []
                 ),
             ],
             manifest_version=version,
@@ -105,12 +124,21 @@ class ManifestTests(unittest.TestCase):
                     "article_sha256": article_hash,
                     "anchor_contract": "paper2md-markdown-anchor-v0.1",
                 }
+                if version in reader_versions
+                else None
+            ),
+            article_model=(
+                {
+                    "contract_version": "paper2md-article-model-v0.1",
+                    "path": "_paper2md/article-model.json",
+                    "sha256": article_model_hash,
+                }
                 if version == HYBRID_LAYOUT_MANIFEST_VERSION
                 else None
             ),
         )
 
-    def test_hybrid_v08_requires_reader_matching_outputs(self):
+    def test_hybrid_v09_requires_reader_and_article_model_matching_outputs(self):
         value = self.hybrid_manifest()
         validate_manifest(value)
         missing = dict(value)
@@ -120,6 +148,17 @@ class ManifestTests(unittest.TestCase):
         value["reader"]["article_sha256"] = "d" * 64
         with self.assertRaisesRegex(ContractValidationError, "outputs"):
             validate_manifest(value)
+
+        value = self.hybrid_manifest()
+        value["article_model"]["sha256"] = "f" * 64
+        with self.assertRaisesRegex(ContractValidationError, "outputs"):
+            validate_manifest(value)
+
+    def test_hybrid_v08_remains_accepted_with_reader_without_article_model(self):
+        value = self.hybrid_manifest(
+            version=READER_HYBRID_LAYOUT_MANIFEST_VERSION
+        )
+        validate_manifest(value)
 
     def test_hybrid_v07_remains_accepted_without_reader(self):
         value = self.hybrid_manifest(

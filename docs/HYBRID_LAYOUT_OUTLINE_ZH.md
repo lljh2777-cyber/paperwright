@@ -377,6 +377,7 @@ output-dir/
     ├── run.json
     ├── source.json
     ├── manifest.json
+    ├── article-model.json
     ├── reader.json
     ├── 02-roi/
     │   └── content-roi.json
@@ -391,7 +392,9 @@ output-dir/
 ```
 
 `--evidence minimal` 只保留 `article.md`、`images/`、
-`_paper2md/manifest.json` 和 `_paper2md/reader.json`。Reader 是阅读功能索引，
+`_paper2md/manifest.json`、`_paper2md/article-model.json` 和
+`_paper2md/reader.json`。Article Model 是 Markdown 与 Reader 的规范共同来源，
+Reader 是阅读功能索引，
 不是审计证据，因此不会随证据级别裁剪。`--evidence full` 还会增加
 `01-physical/physical-document.json`、每页 `page.png`、Content ROI
 预览和全部 `layout-task.json`，适合审计与训练数据积累。
@@ -568,7 +571,7 @@ paper2md layout-export-dataset dataset-dir `
 | A | 完成 | 布局任务、最终布局模型、schema、叠加图 |
 | B | 完成 | 无 OCR 空白带、双栏、外围内容和特征生成 |
 | C | 完成 | AI 复核说明、严格动作和完整性校验 |
-| D | 完成 | 原生文字重建、视觉区块截图、Reader v0.1、当前 manifest v0.8（兼容读取 v0.6/v0.7） |
+| D | 完成 | 原生文字重建、视觉区块截图、Article Model v0.1、Reader v0.1、当前 manifest v0.9（兼容读取 v0.6–v0.8） |
 | E | 完成 | 两篇真实论文共 29 页验证，双轮文件哈希一致 |
 | F | 部分完成 | 数据导出完成；轻量分类器等待足量真值 |
 

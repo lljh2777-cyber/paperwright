@@ -14,7 +14,8 @@ MANIFEST_VERSION = "paper2md-manifest-v0.4"
 AUTO_REGION_MANIFEST_VERSION = "paper2md-manifest-v0.5"
 LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.6"
 PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.7"
-HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.8"
+READER_HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.8"
+HYBRID_LAYOUT_MANIFEST_VERSION = "paper2md-manifest-v0.9"
 
 
 def sha256_file(path: Path) -> str:
@@ -61,6 +62,7 @@ def build_manifest(
     region_render_policy: dict[str, Any] | None = None,
     layout_review: dict[str, Any] | None = None,
     reader: dict[str, Any] | None = None,
+    article_model: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -90,6 +92,8 @@ def build_manifest(
         manifest["layout_review"] = layout_review
     if reader is not None:
         manifest["reader"] = reader
+    if article_model is not None:
+        manifest["article_model"] = article_model
     validate_manifest(manifest)
     return manifest
 
@@ -115,6 +119,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "region_render_policy",
         "layout_review",
         "reader",
+        "article_model",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -123,6 +128,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         AUTO_REGION_MANIFEST_VERSION,
         LEGACY_HYBRID_LAYOUT_MANIFEST_VERSION,
         PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+        READER_HYBRID_LAYOUT_MANIFEST_VERSION,
         HYBRID_LAYOUT_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
@@ -131,12 +137,17 @@ def validate_manifest(value: dict[str, Any]) -> None:
             "region_render_policy" in value
             or "layout_review" in value
             or "reader" in value
+            or "article_model" in value
         ):
             raise ContractValidationError(
                 "manifest v0.4 不允许扩展处理策略"
             )
     elif value["manifest_version"] == AUTO_REGION_MANIFEST_VERSION:
-        if "layout_review" in value or "reader" in value:
+        if (
+            "layout_review" in value
+            or "reader" in value
+            or "article_model" in value
+        ):
             raise ContractValidationError(
                 "manifest v0.5 不允许 layout_review/reader"
             )
@@ -181,6 +192,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         }
         if value["manifest_version"] in {
             PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+            READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
         }:
             required_review.add("evidence_level")
@@ -190,6 +202,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError("manifest layout_review 模式非法")
         if value["manifest_version"] in {
             PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
+            READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
         }:
             if review["evidence_level"] not in {"minimal", "standard", "full"}:
@@ -250,7 +263,10 @@ def validate_manifest(value: dict[str, Any]) -> None:
                     "manifest layout_review page 内容非法"
                 )
             page_indices.add(page["page_index"])
-        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+        if value["manifest_version"] in {
+            READER_HYBRID_LAYOUT_MANIFEST_VERSION,
+            HYBRID_LAYOUT_MANIFEST_VERSION,
+        }:
             reader = value.get("reader")
             if not isinstance(reader, dict) or set(reader) != {
                 "contract_version",
@@ -260,7 +276,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
                 "article_sha256",
                 "anchor_contract",
             }:
-                raise ContractValidationError("manifest v0.8 缺少 reader")
+                raise ContractValidationError("manifest hybrid 缺少 reader")
             if (
                 reader["contract_version"] != "paper2md-reader-v0.1"
                 or reader["anchor_contract"]
@@ -282,6 +298,26 @@ def validate_manifest(value: dict[str, Any]) -> None:
         elif "reader" in value:
             raise ContractValidationError(
                 "旧版 manifest 不允许 reader 顶层字段"
+            )
+        if value["manifest_version"] == HYBRID_LAYOUT_MANIFEST_VERSION:
+            article_model = value.get("article_model")
+            if not isinstance(article_model, dict) or set(article_model) != {
+                "contract_version",
+                "path",
+                "sha256",
+            }:
+                raise ContractValidationError("manifest v0.9 缺少 article_model")
+            if (
+                article_model["contract_version"]
+                != "paper2md-article-model-v0.1"
+                or article_model["path"] != "_paper2md/article-model.json"
+                or not isinstance(article_model["sha256"], str)
+                or len(article_model["sha256"]) != 64
+            ):
+                raise ContractValidationError("manifest article_model 契约非法")
+        elif "article_model" in value:
+            raise ContractValidationError(
+                "旧版 manifest 不允许 article_model 顶层字段"
             )
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
@@ -320,6 +356,18 @@ def validate_manifest(value: dict[str, Any]) -> None:
         ):
             raise ContractValidationError(
                 "manifest reader 与 outputs 清单不一致"
+            )
+    if "article_model" in value:
+        by_path = {item["path"]: item for item in value["outputs"]}
+        article_model = value["article_model"]
+        model_output = by_path.get(article_model["path"])
+        if (
+            model_output is None
+            or model_output["role"] != "article_model"
+            or model_output["sha256"] != article_model["sha256"]
+        ):
+            raise ContractValidationError(
+                "manifest article_model 与 outputs 清单不一致"
             )
     for field_name in (
         "elements",

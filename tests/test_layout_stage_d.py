@@ -6,6 +6,12 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from paper2md.article_model import (
+    ARTICLE_MODEL_CONTRACT_VERSION,
+    article_model_to_reader,
+    render_article_markdown,
+    validate_article_model,
+)
 from paper2md.cli import main
 from paper2md.exceptions import ContractValidationError
 from paper2md.layout_models import (
@@ -1271,6 +1277,21 @@ class LayoutStageDTests(unittest.TestCase):
                 reader["article"]["sha256"],
                 manifest["reader"]["article_sha256"],
             )
+            article_model_path = output / manifest["article_model"]["path"]
+            article_model = json.loads(
+                article_model_path.read_text(encoding="utf-8")
+            )
+            validate_article_model(article_model, root=output)
+            self.assertEqual(
+                article_model["contract_version"],
+                ARTICLE_MODEL_CONTRACT_VERSION,
+            )
+            self.assertEqual(render_article_markdown(article_model), article)
+            self.assertEqual(article_model_to_reader(article_model), reader)
+            self.assertEqual(
+                sha256_file(article_model_path),
+                manifest["article_model"]["sha256"],
+            )
             self.assertFalse(
                 (
                     output
@@ -1316,6 +1337,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "native_object_diagnostics",
                     "text_reconstruction",
                     "reader_index",
+                    "article_model",
                 },
             )
             self.assertEqual(
@@ -1390,6 +1412,7 @@ class LayoutStageDTests(unittest.TestCase):
                     if item.is_file()
                 },
                 {
+                    "_paper2md/article-model.json",
                     "_paper2md/manifest.json",
                     "_paper2md/reader.json",
                 },

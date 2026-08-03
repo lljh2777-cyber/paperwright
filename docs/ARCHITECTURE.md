@@ -27,9 +27,11 @@ Figure/Caption rules            Content ROI -> candidates
 writer.write_outputs()                v
                               layout_writer.write_layout_outputs()
        |                              |
-       +---------------+--------------+
-                       v
-       Markdown + images + manifest + reader + provenance/evidence
+       v                              v
+Markdown + images + manifest     article model
+                                      |
+                                      v
+                         Markdown + reader + manifest + images/evidence
 ```
 
 ## 模块边界
@@ -68,6 +70,8 @@ writer.write_outputs()                v
   的保守续接条件及 provenance 事件。
 - `paper2md.reader`：把混合布局写出器的内部 trace 编译为公开 Markdown 锚点，
   生成正文块、视觉资产和图注关系索引。
+- `paper2md.article_model`：保存复核后的规范文章块、内联 Markdown、source span、
+  视觉资产和关系；严格验证后确定性投影为 `article.md` 与 `reader.json`。
 - `paper2md.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
   交叉检查锚点、关系、路径、文件大小与哈希。
 - `paper2md.quality` 与 `paper2md.evidence`：区分启发式 warning 和确定性结构
@@ -112,21 +116,26 @@ writer.write_outputs()                v
 | PhysicalDocument | v0.2 | 后端无关物理模型 |
 | direct/off manifest | v0.4 | 保持旧默认输出 |
 | direct region-render manifest | v0.5 | 增加 `region_render_policy` |
-| hybrid manifest | v0.8 | 当前写出；继续接受旧 v0.6/v0.7 |
+| hybrid manifest | v0.9 | 当前写出；继续接受旧 v0.6–v0.8 |
+| article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |
 | Markdown anchor | v0.1 | `p2md:block` / `p2md:slot` 公共隐藏锚点 |
 | layout task | v0.1/v0.2 | v0.2 增加栅格证据 |
 | final layout | v0.1 | 严格结构化复核结果 |
 | layout provenance | v0.5 | 增加 reader block/asset 反向引用 |
 
-`layout-apply` 默认生成自包含包，正文和图片位于顶层，Reader 索引、运行信息、
-ROI、最终布局、provenance 与验证报告位于 `_paper2md/`。Reader 索引在所有
-证据级别都保留；`minimal`、`standard`、`full` 只控制审计证据范围，不改变
-论文正文的布局计划。
+`layout-apply` 默认生成自包含包，正文和图片位于顶层，Article Model、Reader
+索引、运行信息、ROI、最终布局、provenance 与验证报告位于 `_paper2md/`。
+Article Model 与 Reader 在所有证据级别都保留；`minimal`、`standard`、`full`
+只控制审计证据范围，不改变论文正文的布局计划。
 
 Reader ID 由源 PDF 哈希和规范化源区域生成，不依赖 Markdown 行号、数组下标、
 标题 slug、图片文件名或图注全文。正文块另带可见文本指纹，供用户编辑后做
 显式重定位；指纹是修复线索，不会覆盖 ID 或静默接受错误绑定。
+
+Article Model 复用同一稳定身份，按连续 `order` 保存每个公开块的单行 Markdown
+和 source spans。公开 Markdown 锚点、可见文字指纹、article 哈希和 Reader 图均
+从该模型重新计算；验证器拒绝模型、Markdown、Reader 或图片资产之间的漂移。
 
 ## 产品边界
 

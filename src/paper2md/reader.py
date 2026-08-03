@@ -7,6 +7,10 @@ import hashlib
 import re
 from typing import Any, Mapping, MutableMapping, Sequence
 
+from .article_model import (
+    article_model_to_reader,
+    build_article_model,
+)
 from .exceptions import ContractValidationError
 from .models import BBox, PhysicalDocument
 from .reader_contract import (
@@ -62,32 +66,24 @@ class ReaderCompilation:
     blocks: tuple[dict[str, Any], ...]
     assets: tuple[dict[str, Any], ...]
     relations: tuple[dict[str, Any], ...]
+    markdown_by_id: tuple[tuple[str, str], ...]
 
     def markdown_text(self) -> str:
         return "\n".join(self.markdown_lines).rstrip() + "\n"
 
     def reader_index(self, *, source_sha256: str) -> dict[str, Any]:
-        article_text = self.markdown_text()
-        value = {
-            "contract_version": READER_CONTRACT_VERSION,
-            "source_sha256": source_sha256,
-            "article": {
-                "path": "article.md",
-                "sha256": _sha256_text(article_text),
-                "anchor_contract": MARKDOWN_ANCHOR_CONTRACT_VERSION,
-                "block_fingerprint_version": BLOCK_FINGERPRINT_VERSION,
-            },
-            "capabilities": {
-                "layout_semantics": "reviewed",
-                "caption_binding": "reviewed-layout-geometry",
-                "body_references": "unavailable",
-            },
-            "blocks": list(self.blocks),
-            "assets": list(self.assets),
-            "relations": list(self.relations),
-        }
-        validate_reader_index(value, article_text=article_text)
-        return value
+        return article_model_to_reader(
+            self.article_model(source_sha256=source_sha256)
+        )
+
+    def article_model(self, *, source_sha256: str) -> dict[str, Any]:
+        return build_article_model(
+            source_sha256=source_sha256,
+            blocks=self.blocks,
+            markdown_by_id=dict(self.markdown_by_id),
+            assets=self.assets,
+            relations=self.relations,
+        )
 
 
 def _sha256_text(value: str) -> str:
@@ -498,4 +494,8 @@ def compile_reviewed_article(
         blocks=tuple(blocks),
         assets=tuple(sorted(assets, key=lambda item: str(item["id"]))),
         relations=tuple(sorted(relations, key=lambda item: str(item["id"]))),
+        markdown_by_id=tuple(
+            (str(block["id"]), block_text[str(block["id"])])
+            for block in blocks
+        ),
     )

@@ -25,7 +25,8 @@
 - PDFBox 只是接口边界，选择后明确返回 unavailable；
 - region-render off 继续生成 manifest v0.4；explicit/auto 使用 v0.5；
 - PhysicalDocument 契约保持 v0.2。
-- 当前混合布局输出使用 manifest v0.8，继续接受旧 v0.6/v0.7；
+- 当前混合布局输出使用 manifest v0.9 和 Article Model v0.1，继续接受旧
+  manifest v0.6–v0.8；
 - Reader v0.1 是所有混合布局证据级别的功能索引，不随 minimal/standard/full
   被裁剪；
 - 包版本和各数据契约独立演进，不要求数字相同。

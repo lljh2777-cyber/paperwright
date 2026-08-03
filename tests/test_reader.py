@@ -9,6 +9,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from paper2md.article_model import (
+    ARTICLE_MODEL_CONTRACT_VERSION,
+    article_model_to_reader,
+    canonical_article_model_json,
+    render_article_markdown,
+    validate_article_model,
+)
 from paper2md.cli import main
 from paper2md.exceptions import ContractValidationError
 from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
@@ -209,6 +216,51 @@ class ReaderContractTests(unittest.TestCase):
         self.assertNotIn("<!-- layout-region:", article)
         self.assertNotIn("<!-- page:", article)
 
+    def test_article_model_is_canonical_source_for_markdown_and_reader(self):
+        compilation, reader, _, _, _ = self._compile()
+        model = compilation.article_model(source_sha256=reader["source_sha256"])
+        self.assertEqual(
+            model["contract_version"],
+            ARTICLE_MODEL_CONTRACT_VERSION,
+        )
+        self.assertEqual(
+            render_article_markdown(model),
+            compilation.markdown_text(),
+        )
+        self.assertEqual(article_model_to_reader(model), reader)
+        self.assertEqual(
+            canonical_article_model_json(model),
+            canonical_article_model_json(
+                compilation.article_model(
+                    source_sha256=reader["source_sha256"]
+                )
+            ),
+        )
+
+    def test_article_model_rejects_multiline_blocks_and_order_gaps(self):
+        compilation, reader, _, _, _ = self._compile()
+        model = compilation.article_model(source_sha256=reader["source_sha256"])
+        multiline = deepcopy(model)
+        multiline["blocks"][1]["markdown"] += "\nunauthorized"
+        with self.assertRaisesRegex(ContractValidationError, "单行"):
+            validate_article_model(multiline)
+        order_gap = deepcopy(model)
+        order_gap["blocks"][1]["order"] = 9
+        with self.assertRaisesRegex(ContractValidationError, "order"):
+            validate_article_model(order_gap)
+        broken_title = deepcopy(model)
+        broken_title["blocks"][0]["markdown"] = "Reader Fixture"
+        with self.assertRaisesRegex(ContractValidationError, "H1"):
+            validate_article_model(broken_title)
+        wrong_image = deepcopy(model)
+        slot = next(
+            item for item in wrong_image["blocks"]
+            if item["kind"] == "visual_slot"
+        )
+        slot["markdown"] = "![Figure 1](images/wrong.png)"
+        with self.assertRaisesRegex(ContractValidationError, "asset path"):
+            validate_article_model(wrong_image)
+
     def test_source_backed_title_id_does_not_depend_on_rendered_text(self):
         document, lines, provenance, images, _ = self._fixture()
         first = compile_reviewed_article(
@@ -333,6 +385,49 @@ class ReaderContractTests(unittest.TestCase):
             self.assertEqual(summary["status"], "valid")
             self.assertEqual(summary["block_count"], 4)
             self.assertEqual(summary["asset_count"], 1)
+
+    def test_validate_article_model_cli_checks_both_projections(self):
+        compilation, reader, _, _, image_data = self._compile()
+        model = compilation.article_model(source_sha256=reader["source_sha256"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "images").mkdir()
+            (root / "_paper2md").mkdir()
+            (root / "article.md").write_text(
+                render_article_markdown(model),
+                encoding="utf-8",
+                newline="\n",
+            )
+            (root / "images/figure-0001.png").write_bytes(image_data)
+            (root / "_paper2md/reader.json").write_text(
+                canonical_reader_json(article_model_to_reader(model)),
+                encoding="utf-8",
+                newline="\n",
+            )
+            model_path = root / "_paper2md/article-model.json"
+            model_path.write_text(
+                canonical_article_model_json(model),
+                encoding="utf-8",
+                newline="\n",
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = main(["validate-article-model", str(model_path)])
+            summary = json.loads(output.getvalue())
+            self.assertEqual(result, 0)
+            self.assertEqual(summary["status"], "valid")
+            self.assertEqual(summary["block_count"], 4)
+            self.assertEqual(summary["asset_count"], 1)
+
+            (root / "article.md").write_text(
+                render_article_markdown(model) + "changed\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            self.assertNotEqual(
+                main(["validate-article-model", str(model_path)]),
+                0,
+            )
 
 
 if __name__ == "__main__":

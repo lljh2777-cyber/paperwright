@@ -12,6 +12,12 @@ import shutil
 from typing import Any, Sequence
 import unicodedata
 
+from .article_model import (
+    article_model_to_reader,
+    canonical_article_model_json,
+    render_article_markdown,
+    validate_article_model,
+)
 from .backends.base import ExtractedAsset
 from .evidence import (
     build_run_record,
@@ -1305,13 +1311,23 @@ def write_layout_outputs(
         provenance_pages=provenance_pages,
         image_records=image_records,
     )
-    lines = list(reader_compilation.markdown_lines)
+    article_model_value = reader_compilation.article_model(
+        source_sha256=document.source_sha256
+    )
+    article_model_path = evidence_dir / "article-model.json"
+    article_model_path.write_text(
+        canonical_article_model_json(article_model_value),
+        encoding="utf-8",
+        newline="\n",
+    )
+    validate_article_model(article_model_value, root=root)
     reference_lines = _clean_user_markdown(reference_lines)
     article_path = root / "article.md"
-    article_text = reader_compilation.markdown_text()
+    article_text = render_article_markdown(article_model_value)
     article_path.write_text(article_text, encoding="utf-8", newline="\n")
-    reader_value = reader_compilation.reader_index(
-        source_sha256=document.source_sha256
+    reader_value = article_model_to_reader(
+        article_model_value,
+        root=root,
     )
     reader_path = evidence_dir / "reader.json"
     reader_path.write_text(
@@ -1369,6 +1385,13 @@ def write_layout_outputs(
             "relation_count": len(reader_value["relations"]),
             "article_anchor_count": len(reader_value["blocks"]),
         },
+        "article_model": {
+            "status": "pass",
+            "contract_version": article_model_value["contract_version"],
+            "block_count": len(article_model_value["blocks"]),
+            "asset_count": len(article_model_value["assets"]),
+            "relation_count": len(article_model_value["relations"]),
+        },
     }
     quality_warning_codes = {
         "markdown_text": "quality_markdown_text_suspicions",
@@ -1384,6 +1407,7 @@ def write_layout_outputs(
         "native_object_diagnostics": "quality_unplaced_native_objects",
         "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
         "reader_index": "reader_index_invalid",
+        "article_model": "article_model_invalid",
     }
     for name, result in quality_checks.items():
         if result["status"] != "pass":
@@ -1580,7 +1604,12 @@ def write_layout_outputs(
         )
         evidence_paths.extend((validation_json, validation_md))
 
-    output_paths = [article_path, reader_path, *visual_paths]
+    output_paths = [
+        article_path,
+        article_model_path,
+        reader_path,
+        *visual_paths,
+    ]
     if references_path is not None:
         output_paths.append(references_path)
     if physical_path is not None:
@@ -1621,6 +1650,8 @@ def write_layout_outputs(
             return "markdown"
         if path == reader_path:
             return "reader_index"
+        if path == article_model_path:
+            return "article_model"
         if path == references_path:
             return "references_markdown"
         if path == physical_path:
@@ -1731,6 +1762,11 @@ def write_layout_outputs(
             "article_path": reader_value["article"]["path"],
             "article_sha256": reader_value["article"]["sha256"],
             "anchor_contract": reader_value["article"]["anchor_contract"],
+        },
+        article_model={
+            "contract_version": article_model_value["contract_version"],
+            "path": "_paper2md/article-model.json",
+            "sha256": sha256_file(article_model_path),
         },
     )
     manifest_path = evidence_dir / "manifest.json"

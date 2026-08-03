@@ -81,8 +81,10 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 
 - region render `off`：manifest v0.4，保持旧默认输出兼容；
 - `explicit/auto`：manifest v0.5，增加 `region_render_policy` 和区域证据。
-- 旧混合布局结果：manifest v0.6/v0.7，仍可读取；
-- 当前 `layout-apply`：manifest v0.8，增加 Reader 摘要及其与输出清单的哈希绑定。
+- 旧混合布局结果：manifest v0.6–v0.8，仍可读取；
+- manifest v0.8：增加 Reader 摘要及其与输出清单的哈希绑定；
+- 当前 `layout-apply`：manifest v0.9，增加 Article Model 摘要，并将 Markdown
+  与 Reader 绑定到同一规范模型。
 
 这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.8.0a0`。
 
@@ -95,6 +97,10 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 复制不完整时，运行 `paper2md validate-reader <包>/_paper2md/reader.json` 会明确
 失败。若只是人工修改正文，应由 Reader 使用 block ID 和可见文本指纹执行显式
 重定位；不要手工改写 `reader.json` 中的哈希来绕过检查。
+
+v0.9 文档包还可以运行
+`paper2md validate-article-model <包>/_paper2md/article-model.json`，同时检查规范
+模型、`article.md`、`reader.json` 和图片资产是否仍是同一组确定性投影。
 
 ## 明确不支持
 
