@@ -34,6 +34,8 @@ class ManifestTests(unittest.TestCase):
             "physical_document.schema.json",
             "article_model.schema.json",
             "reader.schema.json",
+            "text_task.schema.json",
+            "text_review.schema.json",
         ):
             value = json.loads((root / name).read_text(encoding="utf-8"))
             self.assertEqual(value["$schema"], "https://json-schema.org/draft/2020-12/schema")

@@ -55,8 +55,12 @@ Read [references/direct-and-batch.md](references/direct-and-batch.md) for direct
    `_paper2md/05-validation/validation-report.md` when retained. Run
    `paper2md validate-article-model <article-model-json-path>` before handing
    the package off to a reader.
-4. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
-5. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
+4. When the user requests separate visual and text reviewers, load
+   `paper2md-agent-workflow` after hybrid output validation. Give its text
+   reviewer only the generated `text-task.json`, never page images or an
+   unrestricted Article Model.
+5. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
+6. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
 
 ## Safety and provenance
 

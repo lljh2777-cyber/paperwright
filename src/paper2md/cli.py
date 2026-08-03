@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import sys
 from pathlib import Path
+import tempfile
 
 from . import __version__
 from .api import Paper2MD
@@ -14,6 +17,7 @@ from .backends.pdfium import PDFiumBackend
 from .batch import classify_error, collect_batch_inputs, run_batch
 from .article_model import (
     article_model_to_reader,
+    canonical_article_model_json,
     render_article_markdown,
     validate_article_model,
 )
@@ -21,6 +25,7 @@ from .config import load_config, with_cli_overrides
 from .exceptions import (
     BackendUnavailableError,
     ConfigurationError,
+    OutputConflictError,
     Paper2MDError,
 )
 from .layout_models import FinalLayout, LayoutTask
@@ -28,6 +33,14 @@ from .layout_dataset import export_layout_dataset
 from .layout_review import validate_layout_review
 from .models import PhysicalDocument
 from .reader import canonical_reader_json, validate_reader_index
+from .text_review import (
+    apply_text_review,
+    build_text_task,
+    canonical_text_task_json,
+    text_task_sha256,
+    validate_text_review,
+    validate_text_task,
+)
 
 
 def _add_runtime_options(
@@ -123,6 +136,36 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="默认从 _paper2md/article-model.json 推断文档包根目录",
     )
+
+    text_prepare = commands.add_parser(
+        "text-prepare",
+        help="从 article model 生成仅含文本的结构化审校任务",
+    )
+    text_prepare.add_argument("article_model_json", type=Path)
+    text_prepare.add_argument("task_json", type=Path)
+
+    validate_text_task_parser = commands.add_parser(
+        "validate-text-task",
+        help="验证文本审校任务及其可选 article model 绑定",
+    )
+    validate_text_task_parser.add_argument("task_json", type=Path)
+    validate_text_task_parser.add_argument("--article-model", type=Path)
+
+    validate_text_review_parser = commands.add_parser(
+        "validate-text-review",
+        help="验证纯文本审校器输出的结构化修改",
+    )
+    validate_text_review_parser.add_argument("review_json", type=Path)
+    validate_text_review_parser.add_argument("--task", type=Path, required=True)
+
+    text_apply = commands.add_parser(
+        "text-apply",
+        help="把已验证文本修改应用到新的 article model 文件",
+    )
+    text_apply.add_argument("article_model_json", type=Path)
+    text_apply.add_argument("task_json", type=Path)
+    text_apply.add_argument("review_json", type=Path)
+    text_apply.add_argument("output_article_model_json", type=Path)
 
     benchmark_extract = commands.add_parser(
         "benchmark-extract",
@@ -432,6 +475,144 @@ def _validate_article_model(path: Path, package_root: Path | None) -> int:
     return 0
 
 
+def _read_json_object(path: Path, label: str) -> dict[str, object]:
+    value = json.loads(path.expanduser().resolve().read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{label} 必须是 JSON object")
+    return value
+
+
+def _write_new_text(path: Path, value: str) -> Path:
+    destination = path.expanduser().resolve()
+    if not destination.parent.is_dir():
+        raise ConfigurationError(f"输出文件父目录不存在: {destination.parent}")
+    if destination.exists():
+        raise OutputConflictError(f"输出文件已存在，拒绝覆盖: {destination}")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.paper2md-",
+        dir=destination.parent,
+        text=True,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(value)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, destination)
+        except FileExistsError as exc:
+            raise OutputConflictError(
+                f"输出文件已存在，拒绝覆盖: {destination}"
+            ) from exc
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return destination
+
+
+def _text_prepare(article_model_path: Path, task_path: Path) -> int:
+    article_model = _read_json_object(article_model_path, "article model")
+    task = build_text_task(article_model)
+    destination = _write_new_text(task_path, canonical_text_task_json(task))
+    print(
+        json.dumps(
+            {
+                "status": "prepared",
+                "contract_version": task["contract_version"],
+                "task_path": str(destination),
+                "task_sha256": text_task_sha256(task),
+                "block_count": len(task["blocks"]),
+                "editable_block_count": sum(
+                    item["editable"] is True for item in task["blocks"]
+                ),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _validate_text_task_cli(
+    task_path: Path,
+    article_model_path: Path | None,
+) -> int:
+    task = _read_json_object(task_path, "text task")
+    article_model = (
+        _read_json_object(article_model_path, "article model")
+        if article_model_path is not None
+        else None
+    )
+    validate_text_task(task, article_model=article_model)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": task["contract_version"],
+                "task_sha256": text_task_sha256(task),
+                "validated_against_article_model": article_model is not None,
+                "block_count": len(task["blocks"]),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _validate_text_review_cli(review_path: Path, task_path: Path) -> int:
+    task = _read_json_object(task_path, "text task")
+    review = _read_json_object(review_path, "text review")
+    validate_text_review(review, task=task)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "contract_version": review["contract_version"],
+                "task_sha256": review["task_sha256"],
+                "reviewer": review["reviewer"],
+                "operation_count": len(review["operations"]),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _text_apply(
+    article_model_path: Path,
+    task_path: Path,
+    review_path: Path,
+    output_path: Path,
+) -> int:
+    article_model = _read_json_object(article_model_path, "article model")
+    task = _read_json_object(task_path, "text task")
+    review = _read_json_object(review_path, "text review")
+    result = apply_text_review(article_model, task=task, review=review)
+    destination = _write_new_text(
+        output_path,
+        canonical_article_model_json(result),
+    )
+    print(
+        json.dumps(
+            {
+                "status": "applied",
+                "output_path": str(destination),
+                "source_sha256": result["source_sha256"],
+                "operation_count": len(review["operations"]),
+                "article_model_sha256": hashlib.sha256(
+                    canonical_article_model_json(result).encode("utf-8")
+                ).hexdigest(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _configuration(args: argparse.Namespace, *, batch: bool):
     base = load_config(args.config)
     pages = getattr(args, "region_render_page", None)
@@ -673,6 +854,22 @@ def main(argv: list[str] | None = None) -> int:
             return _validate_article_model(
                 args.article_model_json,
                 args.package_root,
+            )
+        if args.command == "text-prepare":
+            return _text_prepare(args.article_model_json, args.task_json)
+        if args.command == "validate-text-task":
+            return _validate_text_task_cli(
+                args.task_json,
+                args.article_model,
+            )
+        if args.command == "validate-text-review":
+            return _validate_text_review_cli(args.review_json, args.task)
+        if args.command == "text-apply":
+            return _text_apply(
+                args.article_model_json,
+                args.task_json,
+                args.review_json,
+                args.output_article_model_json,
             )
         if args.command == "benchmark-extract":
             return _benchmark_extract(args)

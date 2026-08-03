@@ -103,9 +103,15 @@ def audit_wheel(path: Path) -> dict[str, object]:
         if forbidden:
             raise RuntimeError(f"wheel contains forbidden payload: {forbidden}")
         required = {
+            "paper2md/schemas/article_model.schema.json",
+            "paper2md/schemas/batch_summary.schema.json",
+            "paper2md/schemas/final_layout.schema.json",
+            "paper2md/schemas/layout_task.schema.json",
             "paper2md/schemas/manifest.schema.json",
             "paper2md/schemas/physical_document.schema.json",
-            "paper2md/schemas/batch_summary.schema.json",
+            "paper2md/schemas/reader.schema.json",
+            "paper2md/schemas/text_review.schema.json",
+            "paper2md/schemas/text_task.schema.json",
         }
         if not required.issubset(names):
             raise RuntimeError("wheel is missing package schemas")

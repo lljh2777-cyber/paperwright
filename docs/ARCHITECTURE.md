@@ -72,6 +72,8 @@ Markdown + images + manifest     article model
   生成正文块、视觉资产和图注关系索引。
 - `paper2md.article_model`：保存复核后的规范文章块、内联 Markdown、source span、
   视觉资产和关系；严格验证后确定性投影为 `article.md` 与 `reader.json`。
+- `paper2md.text_review`：从 Article Model 投影不含页面图像和几何来源的文本任务，
+  校验带任务/模型哈希的受约束 Markdown 操作，并在保持身份图不变时生成新模型。
 - `paper2md.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
   交叉检查锚点、关系、路径、文件大小与哈希。
 - `paper2md.quality` 与 `paper2md.evidence`：区分启发式 warning 和确定性结构
@@ -118,6 +120,8 @@ Markdown + images + manifest     article model
 | direct region-render manifest | v0.5 | 增加 `region_render_policy` |
 | hybrid manifest | v0.9 | 当前写出；继续接受旧 v0.6–v0.8 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
+| text task | v0.1 | 只读文本块、编辑策略及源 Article Model 哈希 |
+| text review | v0.1 | 绑定任务的格式保持/断行去连字符操作 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |
 | Markdown anchor | v0.1 | `p2md:block` / `p2md:slot` 公共隐藏锚点 |
 | layout task | v0.1/v0.2 | v0.2 增加栅格证据 |
@@ -136,6 +140,12 @@ Reader ID 由源 PDF 哈希和规范化源区域生成，不依赖 Markdown 行�
 Article Model 复用同一稳定身份，按连续 `order` 保存每个公开块的单行 Markdown
 和 source spans。公开 Markdown 锚点、可见文字指纹、article 哈希和 Reader 图均
 从该模型重新计算；验证器拒绝模型、Markdown、Reader 或图片资产之间的漂移。
+
+文本复核不会把 Article Model 交给模型任意改写。`text-task.json` 只包含块 ID、类型、
+顺序、单行 Markdown 及内容哈希，不含页面图像、source span、资产或关系。v0.1
+复核只能替换可编辑块的 Markdown：`format-only` 必须保持规范化可见文本相同，
+`dehyphenation` 只能删除词内断行连字符及其后空白。应用阶段再次绑定源模型与任务
+哈希，并拒绝视觉槽位、身份、顺序或图关系变化。
 
 ## 产品边界
 

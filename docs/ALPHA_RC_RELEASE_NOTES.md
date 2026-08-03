@@ -6,6 +6,7 @@
 ## 已包含
 
 - `paper2md --version/--help/convert/batch/validate-model/validate-reader`；
+- `text-prepare/validate-text-task/validate-text-review/text-apply`；
 - `layout-prepare/validate-layout-task/validate-final-layout/layout-apply`；
 - `benchmark-extract/layout-export-dataset`；
 - PDFium 主后端，PhysicalDocument v0.2；
@@ -16,6 +17,7 @@
 - `fast`、选择性升级的 `standard` 和完整对象 `forensic` 提取；
 - manifest v0.4/v0.5/v0.8、Reader v0.1、证据包、质量报告和训练数据导出；
 - 稳定 `p2md:block` / `p2md:slot` 锚点、Figure/图注关系与内容指纹；
+- Text Task v0.1 与 Text Review v0.1 的源保持文本整理边界；
 - Linux 云端复核，以及 Phase 5 留存的 Windows/Python 3.11.2 独立证据。
 
 ## 默认与兼容性
@@ -45,10 +47,10 @@ Paper2MD 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
 
 ## 当前验证记录
 
-2026-08-02 在 Windows / Python 3.11.2、`pypdfium2==5.11.0`、
+2026-08-03 在 Windows / Python 3.11.2、`pypdfium2==5.11.0`、
 PDFium 151.0.7920.0 和 `Pillow==12.2.0` 的验证环境中：
 
-- 254/254 单元测试通过；
+- 264/264 单元测试通过；
 - 内容 smoke 13/13 通过，包含双轮逐文件确定性检查；
 - wheel/sdist 两种安装各 6 项命令检查通过，输出树一致；
 - fixture、字节码编译、仓库策略和 `git diff --check` 通过。

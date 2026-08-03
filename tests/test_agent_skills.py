@@ -8,6 +8,7 @@ SKILLS = (
     "paper2md-install",
     "paper2md-convert",
     "paper2md-contribute",
+    "paper2md-agent-workflow",
 )
 
 
@@ -73,6 +74,21 @@ class AgentSkillTests(unittest.TestCase):
             self.assertIn(required, option_guide)
         self.assertIn("Confirm installation choices", install)
         self.assertIn("Confirm contribution scope", contribute)
+
+    def test_agent_workflow_separates_visual_and_text_reviewers(self):
+        root = ROOT / "skills" / "paper2md-agent-workflow"
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(root.rglob("*.md"))
+        )
+        for required in (
+            "paper2md text-prepare",
+            "paper2md validate-text-review",
+            "paper2md text-apply",
+            "Text reviewer input: text task JSON only",
+            "Do not merge, delete",
+        ):
+            self.assertIn(required, combined)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper2MD Agent Workflow"
+  short_description: "Coordinate visual layout and source-safe text review"
+  default_prompt: "Use $paper2md-agent-workflow to coordinate visual and text sub-agents for this paper."

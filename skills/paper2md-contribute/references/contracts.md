@@ -20,6 +20,8 @@ Read `docs/ARCHITECTURE.md`, the relevant model, and the corresponding schema be
 - manifest writers/readers: `manifest.py`, `writer.py`, and `layout_writer.py`
 - reader interoperability: `reader.py`, `reader_contract.py`, and
   `schemas/reader.schema.json`
+- source-preserving text review: `text_review.py`,
+  `schemas/text_task.schema.json`, and `schemas/text_review.schema.json`
 - compatibility statements: `docs/ARCHITECTURE.md`, `docs/SUPPORT_MATRIX.md`, and migration documents
 
 Never copy version values from this skill into code. Read them from the checkout being modified.

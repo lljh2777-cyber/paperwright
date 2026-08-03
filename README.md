@@ -165,6 +165,22 @@ source span、块顺序、Markdown 内容、视觉资产和关系。`article.md`
 paper2md validate-article-model output-dir/_paper2md/article-model.json
 ```
 
+如需把规范文章交给纯文本模型做受约束整理，先生成不含页面图像、资产清单和
+source span 的文本任务，再校验结构化修改并输出一个新的 Article Model：
+
+```bash
+paper2md text-prepare output-dir/_paper2md/article-model.json text-task.json
+paper2md validate-text-review text-review.json --task text-task.json
+paper2md text-apply output-dir/_paper2md/article-model.json text-task.json \
+  text-review.json article-model.reviewed.json
+```
+
+文本任务和复核分别使用 v0.1 契约并绑定源 PDF、Article Model 与任务哈希。
+当前只允许不改变规范化可见文字的 Markdown 格式整理，以及严格的断行去连字符；
+视觉槽位、稳定 ID、块类型/顺序、source span、资产和关系不可修改，也不允许语义
+改写、合并或删除块。`text-apply` 不覆盖原文件，首版只写出新的规范模型；完整说明见
+[文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)。
+
 `fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 仅把高风险页面升级为
 完整对象分析；`forensic` 对全文执行完整对象遍历。
 
@@ -200,20 +216,23 @@ python -m paper2md convert input.pdf output-dir
 - [支持矩阵](docs/SUPPORT_MATRIX.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
+- [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)
 - [manifest v0.9 与 Article Model 迁移说明](docs/MANIFEST_MIGRATION_V0.9.md)
 - [manifest v0.8 与 Reader 迁移说明](docs/MANIFEST_MIGRATION_V0.8.md)
 
 ## AI Agent skills
 
-仓库的 `skills/` 目录提供三个可分发的 Agent skill：
+仓库的 `skills/` 目录提供四个可分发的 Agent skill：
 
 - [`paper2md-install`](skills/paper2md-install/SKILL.md)：下载、安装与 CLI 验证；
 - [`paper2md-convert`](skills/paper2md-convert/SKILL.md)：直接转换、批量转换与人工/视觉 AI 混合复核；
 - [`paper2md-contribute`](skills/paper2md-contribute/SKILL.md)：理解架构、修改代码、测试和参与贡献。
+- [`paper2md-agent-workflow`](skills/paper2md-agent-workflow/SKILL.md)：由主 Agent 隔离协调视觉布局与纯文本复核子 Agent。
 
 支持仓库内 skill 发现的 Agent 可以直接加载 `skills/`。其他工具可把对应 skill
 目录复制到自身的 skills 目录，或在提示中明确要求参照对应 `SKILL.md`。安装后可使用
-`$paper2md-install`、`$paper2md-convert` 或 `$paper2md-contribute` 显式调用。
+`$paper2md-install`、`$paper2md-convert`、`$paper2md-contribute` 或
+`$paper2md-agent-workflow` 显式调用。
 
 这些 skills 只指导 Agent 调用现有命令和遵守项目契约，不会替 Paper2MD 隐式增加
 联网、LLM、OCR 或外部 API 行为。
@@ -236,7 +255,8 @@ python -m paper2md convert input.pdf output-dir
 包版本与数据契约独立演进。当前包版本为 `0.8.0a0`，PhysicalDocument 使用
 v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.9，Article
 Model 和 Reader 均使用 v0.1。直接转换的兼容模式仍可能输出 manifest v0.4 或
-v0.5；读取旧结果时继续接受混合布局 manifest v0.6–v0.8。升级包版本不代表已有
+v0.5；Text Task 与 Text Review 均使用 v0.1；读取旧结果时继续接受混合布局
+manifest v0.6–v0.8。升级包版本不代表已有
 数据契约会被隐式改写。
 
 ## 许可证与分发
