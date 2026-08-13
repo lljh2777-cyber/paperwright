@@ -15,6 +15,7 @@ PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
 
 - PDFium 主后端；
 - 标题、段落与基础双栏阅读顺序；
+- 跨页重复页眉/页脚/页码自动剔除（`--furniture`，默认 auto）；
 - 原生图片、Figure/Caption 分组与保守 region-render；
 - 表格无法可靠结构化时明确标记 `degraded`；
 - 单文件与确定性批量转换；
@@ -29,11 +30,38 @@ PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
 报告不可用，不会伪造转换结果。
 
+## 快速安装（推荐）
+
+Linux / macOS：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/Paper2MD/main/install.sh | bash
+```
+
+引导安装器会自动：检测当前 agent harness（Claude Code / Codex / Cursor / Gemini
+CLI）→ 选择 3.10–3.13 Python（必要时用 uv 自动安装）→ 克隆源码到 `~/.paper2md`
+→ 创建隔离虚拟环境 → 安装 CLI 并加入 PATH → 复制 4 个 Agent skills 到 harness
+的 skills 目录 → 验证。
+
+子命令与选项：
+
+```bash
+bash install.sh update          # 更新源码与依赖
+bash install.sh verify          # 校验 CLI 与 skills
+bash install.sh uninstall       # 卸载 skills/venv/符号链接
+bash install.sh install --harness codex --no-skills   # 指定 harness / 只装 CLI
+bash install.sh install --local /path/to/checkout     # 使用本地源码
+```
+
+Windows 用户请使用下方 PowerShell 手动安装流程。
+
+## 手动安装（Windows PowerShell / 无网络一键安装）
+
 ## 开始之前
 
 需要：
 
-- 64 位 Python 3.10、3.11 或 3.12；
+- 64 位 Python 3.10–3.13；
 - Git，或者从 GitHub 下载并解压源码 ZIP；
 - 首次安装时能够访问 Python Package Index，以取得锁定依赖；
 - born-digital（本身含文字层）的 PDF。
@@ -103,6 +131,21 @@ output-dir/
 ```
 
 输出目录必须尚不存在，Paper2MD 不会覆盖已有数据。
+
+## 页眉页脚剔除（--furniture）
+
+默认 `auto`：自动检测并剔除跨页重复的页眉、页脚和页码（出现在 ≥45% 页面、
+坐标一致的内容，或页面极边缘的全数字短行）。剔除只影响 Markdown 输出，
+`physical_document.json` 中保留完整溯源（`markdown_excluded_reason`）。
+
+```bash
+paper2md convert input.pdf output-dir                      # 默认 auto
+paper2md convert input.pdf output-dir --furniture keep     # 保留全部页眉页脚
+paper2md convert input.pdf output-dir --furniture strip    # 追加剔除边缘短行（更激进）
+```
+
+`auto` 是保守策略：只剔除高置信的重复家具，正文不会受影响。无法通过重复
+检测判定的单页横幅（如期刊分类标签）会保留。
 
 ## 批量转换
 

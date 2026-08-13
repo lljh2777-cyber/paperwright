@@ -47,13 +47,13 @@ class PublicOnboardingTests(unittest.TestCase):
         project = tomllib.loads(
             (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )["project"]
-        self.assertEqual(project["requires-python"], ">=3.10,<3.13")
+        self.assertEqual(project["requires-python"], ">=3.10,<3.14")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         quickstart = (ROOT / "docs/QUICKSTART_ALPHA.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("Python 3.10、3.11 或 3.12", readme)
-        self.assertIn("Python 3.10–3.12", quickstart)
+        self.assertIn("Python 3.10–3.13", readme)
+        self.assertIn("Python 3.10–3.13", quickstart)
 
     def test_unverified_platforms_and_license_are_not_overclaimed(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

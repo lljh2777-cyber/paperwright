@@ -65,6 +65,12 @@ def _add_runtime_options(
     )
     parser.add_argument("--workspace-root", type=Path)
     parser.add_argument(
+        "--furniture",
+        choices=("keep", "strip", "auto"),
+        default=None,
+        help="跨页重复页眉/页脚/页码剔除策略；auto=保守剔除重复家具，strip=追加剔除边缘短行，keep=保留全部",
+    )
+    parser.add_argument(
         "--region-render-mode",
         choices=("off", "explicit", "auto") if allow_explicit else ("off", "auto"),
         default=None,
@@ -694,6 +700,7 @@ def _configuration(args: argparse.Namespace, *, batch: bool):
         region_mode=args.region_render_mode,
         region_pages=tuple(pages) if pages is not None else None,
         region_max_candidates=args.region_render_max_candidates,
+        furniture=args.furniture,
     )
     if batch and config.region_render.effective_mode == "explicit":
         raise ConfigurationError("batch 只允许 region_render off 或 auto")

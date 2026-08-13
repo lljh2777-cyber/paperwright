@@ -20,6 +20,7 @@ ALLOWED_SUFFIXES = {
     ".csv",
     ".yml",
     ".yaml",
+    ".sh",
 }
 DENIED_SUFFIXES = {
     ".pdf",

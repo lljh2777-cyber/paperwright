@@ -21,7 +21,7 @@
 
 ### 找不到 `python` 或 `py`
 
-安装 64 位 Python 3.10、3.11 或 3.12。Windows 官方安装器需要启用
+安装 64 位 Python 3.10–3.13。Windows 官方安装器需要启用
 Python Launcher；Linux 可能还需要发行版提供的 `python3-venv` 和
 `python3-pip`。
 
@@ -55,8 +55,7 @@ python -m paper2md --help
 
 ### 提示 Python 版本不兼容
 
-当前声明范围是 Python 3.10–3.12。Python 3.13、macOS 和 ARM 平台尚未完成
-项目验证。
+当前声明范围是 Python 3.10–3.13。macOS 和 ARM 平台尚未完成项目验证。
 
 ### PDFBox 为什么失败？
 

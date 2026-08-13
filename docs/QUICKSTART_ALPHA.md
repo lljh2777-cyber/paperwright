@@ -2,7 +2,9 @@
 
 ## 支持范围
 
-- 64 位 Python 3.10–3.12；
+- 默认剔除跨页重复页眉/页脚/页码（`convert --furniture`，`keep`/`strip`/`auto`）；
+
+- 64 位 Python 3.10–3.13；
 - Windows 11 x64 与 Linux x64；
 - born-digital 科研 PDF；
 - 默认 PDFium，region-render 默认关闭；
