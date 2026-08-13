@@ -11,6 +11,7 @@
 #   --prefix DIR         安装根目录（默认 ~/.paper2md）
 #   --no-skills          只装 CLI，不复制 skills
 #   --local CHECKOUT     使用本地源码目录（跳过 clone）
+#   --editable           可编辑安装（pip install -e）：源码改动即时生效，适合贡献者
 #   --yes                非交互，全部用默认值
 #
 # 安装内容:
@@ -47,6 +48,7 @@ PYTHON_BIN=""
 ASSUME_YES=0
 COPY_SKILLS=1
 LOCAL_CHECKOUT=""
+EDITABLE=0
 
 usage() {
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -62,6 +64,7 @@ parse_args() {
       --prefix)  PREFIX="$2"; CHECKOUT_DIR="$PREFIX/src"; VENV_DIR="$PREFIX/venv"; shift ;;
       --no-skills) COPY_SKILLS=0 ;;
       --local)   LOCAL_CHECKOUT="$2"; shift ;;
+      --editable) EDITABLE=1 ;;
       --yes)     ASSUME_YES=1 ;;
       -h|--help) usage ;;
       *) die "未知参数: $1（--help 查看用法）" ;;
@@ -166,9 +169,13 @@ install_cli() {
     log "创建虚拟环境: $VENV_DIR"
     "$python_bin" -m venv "$VENV_DIR" || die "venv 创建失败"
   fi
-  log "pip install .（锁定依赖 pypdfium2/Pillow）"
-  "$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
-  "$VENV_DIR/bin/python" -m pip install --quiet "$CHECKOUT_DIR" || die "pip install 失败"
+  if [[ "$EDITABLE" == 1 ]]; then
+    log "可编辑安装（--editable）：源码改动即时生效"
+    "$VENV_DIR/bin/python" -m pip install --quiet --editable "$CHECKOUT_DIR" || die "pip install -e 失败"
+  else
+    log "pip install .（锁定依赖 pypdfium2/Pillow）"
+    "$VENV_DIR/bin/python" -m pip install --quiet "$CHECKOUT_DIR" || die "pip install 失败"
+  fi
   mkdir -p "$(dirname "$BIN_LINK")"
   ln -sf "$VENV_DIR/bin/paper2md" "$BIN_LINK"
   ok "CLI 已安装: $BIN_LINK"

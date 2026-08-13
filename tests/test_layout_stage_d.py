@@ -205,6 +205,7 @@ class CrossPageParagraphTests(unittest.TestCase):
         region_id: str | None = None,
         indent_state: str = "unknown",
         caption_binding_key: tuple[int, str] | None = None,
+        bbox: tuple[float, float, float, float] | None = None,
     ) -> CrossPageParagraphBlock:
         return CrossPageParagraphBlock(
             page_index=page_index,
@@ -220,6 +221,7 @@ class CrossPageParagraphTests(unittest.TestCase):
             first_line_indented=indent_state == "indented",
             first_line_indent_state=indent_state,
             caption_binding_key=caption_binding_key,
+            bbox=bbox,
         )
 
     def test_direct_body_continuation_is_merged_across_page_marker(self):
@@ -244,7 +246,8 @@ class CrossPageParagraphTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["code"], "joined_cross_page_paragraph")
         self.assertIn("The result continues across the next page.", lines)
-        self.assertNotIn("<!-- page: 2 -->", lines)
+        # The page marker is provenance and survives the join.
+        self.assertIn("<!-- page: 2 -->", lines)
 
     def test_pdf_soft_break_joins_without_space_across_page(self):
         lines = ["t1", "inter", "", "p2", "", "t2", "action", ""]
@@ -276,6 +279,7 @@ class CrossPageParagraphTests(unittest.TestCase):
                     1,
                     "These results are of",
                     region_id="body-a",
+                    bbox=(0.05, 0.85, 0.45, 0.90),
                 ),
                 self._block(
                     0,
@@ -284,6 +288,7 @@ class CrossPageParagraphTests(unittest.TestCase):
                     "high quality.",
                     region_id="body-b",
                     indent_state="aligned",
+                    bbox=(0.55, 0.10, 0.95, 0.15),
                 ),
             ),
             {0: 0},
@@ -294,6 +299,46 @@ class CrossPageParagraphTests(unittest.TestCase):
             ["joined_same_page_body_continuation"],
         )
         self.assertIn("These results are of high quality.", lines)
+
+    def test_trace_adjacent_same_column_fragments_are_joined(self):
+        # A reviewer-drawn region boundary within one column, with nothing
+        # between the fragments in the trace, is a continuation split.
+        lines = [
+            "trace-a",
+            "Body continues",
+            "",
+            "trace-b",
+            "after the split.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "Body continues",
+                    region_id="body-a",
+                    bbox=(0.05, 0.40, 0.45, 0.48),
+                ),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "after the split.",
+                    region_id="body-b",
+                    indent_state="unknown",
+                    bbox=(0.05, 0.60, 0.45, 0.68),
+                ),
+            ),
+            {0: 0},
+        )
+        self.assertEqual(
+            [item["code"] for item in events],
+            ["joined_same_page_body_continuation"],
+        )
+        self.assertIn("Body continues after the split.", lines)
 
     def test_caption_is_a_hard_barrier_for_body_continuation(self):
         lines = [
@@ -310,7 +355,14 @@ class CrossPageParagraphTests(unittest.TestCase):
         events = _merge_cross_page_paragraph_blocks(
             lines,
             (
-                self._block(0, 0, 1, "Body continues", region_id="body-a"),
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "Body continues",
+                    region_id="body-a",
+                    bbox=(0.05, 0.40, 0.45, 0.48),
+                ),
                 self._block(
                     0,
                     3,
@@ -326,12 +378,210 @@ class CrossPageParagraphTests(unittest.TestCase):
                     "after the figure.",
                     region_id="body-b",
                     indent_state="aligned",
+                    bbox=(0.05, 0.60, 0.45, 0.68),
                 ),
             ),
             {0: 0},
         )
 
         self.assertEqual(events, [])
+
+    def test_figure_between_columns_does_not_block_body_continuation(self):
+        lines = [
+            "trace-a",
+            "Along with tumor-promoting inflammation",
+            "",
+            "trace-caption",
+            "**Figure 1.** Landscape.",
+            "",
+            "trace-b",
+            "and immune evasion, become appreciated.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "Along with tumor-promoting inflammation",
+                    region_id="left",
+                    bbox=(0.05, 0.88, 0.45, 0.93),
+                ),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "**Figure 1.** Landscape.",
+                    role="caption",
+                    region_id="caption",
+                    caption_binding_key=(0, "figure-1"),
+                ),
+                self._block(
+                    0,
+                    6,
+                    7,
+                    "and immune evasion, become appreciated.",
+                    region_id="right",
+                    indent_state="unknown",
+                    bbox=(0.55, 0.05, 0.95, 0.10),
+                ),
+            ),
+            {0: 0},
+        )
+        self.assertEqual(
+            [item["code"] for item in events],
+            ["joined_same_page_body_continuation"],
+        )
+        self.assertIn(
+            "Along with tumor-promoting inflammation and immune evasion, "
+            "become appreciated.",
+            lines,
+        )
+        # The figure caption between the fragments survives the join.
+        self.assertIn("**Figure 1.** Landscape.", lines)
+
+    def test_heading_is_a_barrier_for_body_continuation(self):
+        lines = [
+            "trace-a",
+            "Body continues",
+            "",
+            "trace-heading",
+            "## Methods",
+            "",
+            "trace-b",
+            "using standard protocols.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "Body continues", region_id="body-a"),
+                self._block(
+                    0, 3, 4, "## Methods", role="heading", region_id="head"
+                ),
+                self._block(
+                    0,
+                    6,
+                    7,
+                    "using standard protocols.",
+                    region_id="body-b",
+                    indent_state="unknown",
+                ),
+            ),
+            {0: 0},
+        )
+        self.assertEqual(events, [])
+
+    def test_page_edge_strip_is_transparent_for_continuation(self):
+        # A short footer line between a page-end fragment and the next
+        # page's first fragment (one-page footer variant) must not block
+        # the cross-page join.
+        lines = [
+            "trace-a",
+            "We will also",
+            "",
+            "trace-footer",
+            "Cell, April 13, 2023",
+            "",
+            "<!-- page: 2 -->",
+            "",
+            "trace-b",
+            "discuss where the field is going.",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "We will also", region_id="body-a"),
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "Cell, April 13, 2023",
+                    region_id="footer",
+                    bbox=(0.30, 0.955, 0.70, 0.975),
+                ),
+                self._block(
+                    1,
+                    7,
+                    8,
+                    "discuss where the field is going.",
+                    region_id="body-b",
+                    indent_state="unknown",
+                ),
+            ),
+            {0: 6},
+        )
+        self.assertEqual(
+            [item["code"] for item in events],
+            ["joined_cross_page_paragraph"],
+        )
+        self.assertIn(
+            "We will also discuss where the field is going.", lines
+        )
+        # The footer strip itself survives in the markdown.
+        self.assertIn("Cell, April 13, 2023", lines)
+
+    def test_chain_index_shift_does_not_delete_neighbor_block(self):
+        # A cross-page body chain and a caption chain are independent. The
+        # caption head (higher trace) is processed first; its head replacement
+        # shifts the raw indices the cross-page chain's member still uses.
+        # The rebuild must not delete the member's neighbor block.
+        lines = [
+            "trace-a",
+            "aa text",
+            "",
+            "<!-- page: 2 -->",
+            "",
+            "trace-cap0",
+            "**Figure.** C",
+            "",
+            "trace-cap1",
+            "D panel",
+            "",
+            "trace-x",
+            "xx text",
+            "",
+        ]
+        binding = (1, "figure-1")
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(0, 0, 1, "aa text", region_id="h0"),
+                self._block(
+                    1,
+                    5,
+                    6,
+                    "**Figure.** C",
+                    role="caption",
+                    region_id="cap",
+                    caption_binding_key=binding,
+                ),
+                self._block(
+                    1,
+                    8,
+                    9,
+                    "D panel",
+                    role="caption",
+                    region_id="cap",
+                    caption_binding_key=binding,
+                ),
+                self._block(1, 11, 12, "xx text", region_id="x1"),
+            ),
+            {0: 0},
+        )
+        codes = [item["code"] for item in events]
+        self.assertIn("joined_cross_page_paragraph", codes)
+        self.assertIn("joined_caption_fragment", codes)
+        joined = "\n".join(lines)
+        self.assertIn("aa text xx text", joined)
+        self.assertIn("**Figure.** C D panel", joined)
+        # xx text appears exactly once (merged into the head, not duplicated
+        # nor replaced by the deleted neighbor).
+        self.assertEqual(joined.count("xx text"), 1)
+        self.assertEqual(joined.count("D panel"), 1)
 
     def test_fragments_of_same_bound_caption_are_joined(self):
         lines = [
@@ -437,38 +687,39 @@ class CrossPageParagraphTests(unittest.TestCase):
             )
             self.assertEqual(events, [])
 
-    def test_indented_or_unknown_body_region_is_not_joined(self):
-        for indent_state in ("indented", "unknown"):
-            lines = [
-                "trace-a",
-                "Body continues",
-                "",
-                "trace-b",
-                "next text",
-                "",
-            ]
-            events = _merge_cross_page_paragraph_blocks(
-                lines,
-                (
-                    self._block(
-                        0,
-                        0,
-                        1,
-                        "Body continues",
-                        region_id="body-a",
-                    ),
-                    self._block(
-                        0,
-                        3,
-                        4,
-                        "next text",
-                        region_id="body-b",
-                        indent_state=indent_state,
-                    ),
+    def test_indented_body_region_is_not_joined(self):
+        lines = [
+            "trace-a",
+            "Body continues",
+            "",
+            "trace-b",
+            "next text",
+            "",
+        ]
+        events = _merge_cross_page_paragraph_blocks(
+            lines,
+            (
+                self._block(
+                    0,
+                    0,
+                    1,
+                    "Body continues",
+                    region_id="body-a",
                 ),
-                {0: 0},
-            )
-            self.assertEqual(events, [])
+                self._block(
+                    0,
+                    3,
+                    4,
+                    "next text",
+                    region_id="body-b",
+                    indent_state="indented",
+                ),
+            ),
+            {0: 0},
+        )
+        # An indented first line marks a new paragraph and blocks the join;
+        # an unknown indent state no longer blocks trace-adjacent joins.
+        self.assertEqual(events, [])
 
     def test_user_markdown_removes_only_internal_trace_comments(self):
         lines = _clean_user_markdown(

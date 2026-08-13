@@ -53,9 +53,14 @@ the rendered Figure/Table assets and the final article at least once.
    ```
 
 3. Give the text sub-agent only `text-task.json` and the protocol in
-   [references/text-review-protocol.md](references/text-review-protocol.md).
+   [references/text-review-protocol.md](references/text-review-protocol.md),
+   plus the model-agnostic `join-blocks` splice protocol in
+   [references/join-blocks-protocol.md](references/join-blocks-protocol.md).
    Do not give it page images or permission to rewrite the paper.
-4. Require one `text-review.json`. Validate it against the exact task:
+4. Require one `text-review.json`. The reviewer may include `replace-markdown`
+   cleanup and `join-blocks` operations for split paragraphs; joins are pure
+   concatenation that the validator recomputes and enforces. Validate against
+   the exact task:
 
    ```bash
    paper2md validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
@@ -77,12 +82,13 @@ the rendered Figure/Table assets and the final article at least once.
    Keep the manifest v0.9 source package until the manifest v0.10 derivative
    passes validation. The output path must not already exist.
 
-The v0.1 text protocol permits visible-text-preserving Markdown formatting and
-strict dehyphenation only. It rejects visual-slot edits, semantic rewrites,
-stale hashes, duplicate block edits, block merging, deletion, and reordering.
-`text-apply` produces a separate model-only artifact. `text-package` rebuilds
-the Markdown, Reader, model, manifest, and validation records together without
-silently replacing the original package projections.
+The v0.2 text protocol permits visible-text-preserving Markdown formatting,
+strict dehyphenation, and `join-blocks` same-paragraph splices (pure
+concatenation, enforced by the validator). It rejects visual-slot edits,
+semantic rewrites, stale hashes, duplicate block edits, arbitrary merging,
+deletion, and reordering. `text-apply` produces a separate model-only artifact.
+`text-package` rebuilds the Markdown, Reader, model, manifest, and validation
+records together without silently replacing the original package projections.
 
 ## Keep agents isolated
 

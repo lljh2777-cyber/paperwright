@@ -59,7 +59,17 @@ Read [references/direct-and-batch.md](references/direct-and-batch.md) for direct
    `paper2md-agent-workflow` after hybrid output validation. Give its text
    reviewer only the generated `text-task.json`, never page images or an
    unrestricted Article Model.
-5. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
+5. **Check cross-block paragraph joins.** Deterministic merging covers common
+   layouts but cannot generalize to every column arrangement. Inspect the
+   Article Model for split-paragraph signals — a body block starting lowercase,
+   or a block ending without sentence punctuation followed by a lowercase-start
+   block on the same page — and repair them with the model-agnostic `join-blocks`
+   protocol. Read [references/join-blocks-protocol.md](references/join-blocks-protocol.md)
+   before running a text review; it defines when to join, the exact operation
+   schema, what the validator rejects, and when a conservative one-off script
+   is acceptable instead. Never rewrite text inside a join: the protocol is
+   pure concatenation enforced by the validator.
+6. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
 6. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
 
 ## Safety and provenance

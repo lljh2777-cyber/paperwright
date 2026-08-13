@@ -358,9 +358,9 @@ def validate_manifest(value: dict[str, Any]) -> None:
                 raise ContractValidationError("manifest v0.10 缺少 text_review")
             if (
                 text_review["task_contract_version"]
-                != "paper2md-text-task-v0.1"
+                not in ("paper2md-text-task-v0.1", "paper2md-text-task-v0.2")
                 or text_review["review_contract_version"]
-                != "paper2md-text-review-v0.1"
+                not in ("paper2md-text-review-v0.1", "paper2md-text-review-v0.2")
                 or text_review["task_path"]
                 != "_paper2md/06-text-review/text-task.json"
                 or text_review["review_path"]

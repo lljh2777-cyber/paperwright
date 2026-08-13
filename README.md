@@ -51,6 +51,7 @@ bash install.sh verify          # 校验 CLI 与 skills
 bash install.sh uninstall       # 卸载 skills/venv/符号链接
 bash install.sh install --harness codex --no-skills   # 指定 harness / 只装 CLI
 bash install.sh install --local /path/to/checkout     # 使用本地源码
+bash install.sh install --local /path/to/checkout --editable  # 可编辑安装：源码改动即时生效（贡献者推荐）
 ```
 
 Windows 用户请使用下方 PowerShell 手动安装流程。
@@ -224,10 +225,13 @@ paper2md validate-text-package reviewed-output-dir
 原子写出一个完整的 manifest v0.10 派生包，并重新生成 `article.md`、
 `reader.json`、Article Model、验证报告及 task/review 哈希链。
 
-文本任务和复核分别使用 v0.1 契约并绑定源 PDF、Article Model 与任务哈希。
-当前只允许不改变规范化可见文字的 Markdown 格式整理，以及严格的断行去连字符；
-视觉槽位、稳定 ID、块类型/顺序、source span、资产和关系不可修改，也不允许语义
-改写、合并或删除块。`text-apply` 不覆盖原文件，首版只写出新的规范模型；完整说明见
+文本任务和复核分别使用 v0.2 契约并绑定源 PDF、Article Model 与任务哈希。
+允许不改变规范化可见文字的 Markdown 格式整理、严格的断行去连字符，以及
+`join-blocks` 跨块段落拼接（纯拼接，由校验器重算并强制：同页、阅读顺序相邻、
+同 body 类型、前块不以句末标点结尾、后块以小写开头；重叠块、视觉槽位、参与
+Figure/Caption 关系的块会被拒绝）。模型只负责识别与声明"同一段"，不改写文本。
+视觉槽位、稳定 ID、source span、资产和关系在拼接中保持；尾部块被移除（物理层
+仍可溯源）。`text-apply` 不覆盖原文件，只写出新的规范模型；完整说明见
 [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)。
 
 `fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 仅把高风险页面升级为
@@ -305,7 +309,7 @@ python -m paper2md convert input.pdf output-dir
 包版本与数据契约独立演进。当前包版本为 `0.8.0a0`，PhysicalDocument 使用
 v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.9，Article
 Model 和 Reader 均使用 v0.1。直接转换的兼容模式仍可能输出 manifest v0.4 或
-v0.5；Text Task 与 Text Review 均使用 v0.1；读取旧结果时继续接受混合布局
+v0.5；Text Task 与 Text Review 均使用 v0.2（读取旧结果时继续接受 v0.1）；读取旧结果时继续接受混合布局
 manifest v0.6–v0.8。升级包版本不代表已有
 数据契约会被隐式改写。
 
