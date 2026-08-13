@@ -86,6 +86,7 @@ class Paper2MDConfig:
     limits: Limits = field(default_factory=Limits)
     output: OutputPolicy = field(default_factory=OutputPolicy)
     region_render: RegionRenderPolicy = field(default_factory=RegionRenderPolicy)
+    furniture: str = "auto"
     workspace_root: Path | None = None
 
     def validate(self) -> None:
@@ -93,6 +94,10 @@ class Paper2MDConfig:
             raise ConfigurationError(f"未知后端: {self.backend}")
         if self.contract_version != "paper2md-physical-document-v0.2":
             raise ConfigurationError("不支持的 PhysicalDocument 契约版本")
+        if self.furniture not in {"keep", "strip", "auto"}:
+            raise ConfigurationError(
+                f"furniture 只能是 keep/strip/auto，收到: {self.furniture!r}"
+            )
         self.limits.validate()
         self.region_render.validate()
 
@@ -111,6 +116,7 @@ class Paper2MDConfig:
             "limits",
             "output",
             "region_render",
+            "furniture",
             "workspace_root",
         }
         unknown = sorted(set(value) - allowed)
@@ -166,6 +172,7 @@ class Paper2MDConfig:
                     "max_candidates_per_document", 12
                 ),
             ),
+            furniture=value.get("furniture", "auto"),
             workspace_root=Path(workspace) if workspace is not None else None,
         )
         config.validate()
@@ -201,6 +208,7 @@ def with_cli_overrides(
     region_mode: str | None = None,
     region_pages: tuple[int, ...] | None = None,
     region_max_candidates: int | None = None,
+    furniture: str | None = None,
 ) -> Paper2MDConfig:
     """Apply only explicitly supplied CLI values over a loaded config."""
 
@@ -232,6 +240,7 @@ def with_cli_overrides(
             if workspace_root is not None
             else base.workspace_root
         ),
+        furniture=furniture if furniture is not None else base.furniture,
     )
     result.validate()
     return result

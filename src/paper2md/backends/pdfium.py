@@ -13,6 +13,7 @@ import importlib.metadata
 import io
 import math
 from pathlib import Path
+import re
 import statistics
 import time
 from typing import Any
@@ -171,6 +172,121 @@ def _decorative_line_end_symbol_reason(
     if not predecessor.text.rstrip().endswith((".", "!", "?", ":", ";")):
         return None
     return "decorative_line_end_private_use_dingbat"
+
+
+# ── 跨页重复页眉/页脚（furniture）检测 ─────────────────────────────
+_FURNITURE_TOP_RATIO = 0.12       # 顶部条带：元素底边高于页面 12%
+_FURNITURE_BOTTOM_RATIO = 0.92    # 底部条带：元素顶边低于页面 92%
+_FURNITURE_PAGENO_TOP_RATIO = 0.045   # 页码/短行规则用的极端顶部条带
+_FURNITURE_PAGENO_BOTTOM_RATIO = 0.955  # 页码/短行规则用的极端底部条带
+_FURNITURE_REPEAT_RATIO = 0.45    # auto：出现在 >=45% 页面视为家具
+_FURNITURE_MAX_KEY = 60           # 归一化键长度上限（防长正文误判）
+_FURNITURE_EXCLUDE_REASON = "furniture:repeated_page_strip"
+
+
+def _furniture_key(text: str) -> str:
+    """字母数字小写归一化键；去掉首尾数字段，使页码/年份变体不影响匹配。"""
+    normalized = re.sub(r"[^a-z0-9一-鿿]", "", text.casefold())
+    return re.sub(r"^\d+|\d+$", "", normalized)
+
+
+def _mark_furniture(pages: list[Page], mode: str) -> list[Page]:
+    """把跨页重复的边缘条带（页眉/页脚/页码）标记为 markdown 排除。
+
+    - auto：重复键出现在 >=45% 页面，或全数字短行（页码）；
+    - strip：auto 之外再剔除任意页边缘的短行（<=6 字符）；
+    - keep：不标记。
+    返回新 pages 列表（frozen dataclass 重建）；排除原因保留在
+    markdown_excluded_reason，physical_document.json 中可溯源。
+    """
+    if mode == "keep" or len(pages) < 3:
+        return pages
+    n_pages = len(pages)
+    repeat_threshold = max(3, round(_FURNITURE_REPEAT_RATIO * n_pages))
+
+    occurrences: dict[tuple[str, int, str], dict[int, list[Element]]] = {}
+    digit_only: dict[int, list[Element]] = {}
+    short_lines: dict[int, list[Element]] = {}
+    for page in pages:
+        height = page.height
+        for element in page.elements:
+            if element.kind != "text" or not element.text:
+                continue
+            y0 = element.bbox.y
+            y1 = element.bbox.y + element.bbox.height
+            if y1 < _FURNITURE_TOP_RATIO * height:
+                band = "top"
+            elif y0 > _FURNITURE_BOTTOM_RATIO * height:
+                band = "bottom"
+            else:
+                continue
+            normalized = re.sub(
+                r"[^a-z0-9一-鿿]", "", element.text.casefold()
+            )
+            # 页码/短行规则只用极端条带，避免参考文献页码区间等正文片段误伤
+            extreme = (
+                y1 < _FURNITURE_PAGENO_TOP_RATIO * height
+                or y0 > _FURNITURE_PAGENO_BOTTOM_RATIO * height
+            )
+            if extreme and normalized.isdigit() and len(normalized) <= 6:
+                # 全数字短行 = 页码（逐页变化，无法靠重复检测）
+                digit_only.setdefault(page.page_index, []).append(element)
+                continue
+            key = re.sub(r"^\d+|\d+$", "", normalized)
+            if not key or len(key) > _FURNITURE_MAX_KEY:
+                continue
+            x_bucket = round(element.bbox.x / 50.0)
+            occurrences.setdefault((band, x_bucket, key), {}).setdefault(
+                page.page_index, []
+            ).append(element)
+            if mode == "strip" and extreme and len(key) <= 6:
+                short_lines.setdefault(page.page_index, []).append(element)
+
+    excluded: set[tuple[int, str]] = set()
+    for group in occurrences.values():
+        if len(group) >= repeat_threshold:
+            for elements in group.values():
+                for element in elements:
+                    excluded.add((element.page_index, element.element_id))
+    for page_index, elements in digit_only.items():
+        for element in elements:
+            excluded.add((page_index, element.element_id))
+    if mode == "strip":
+        for page_index, elements in short_lines.items():
+            for element in elements:
+                excluded.add((page_index, element.element_id))
+    if not excluded:
+        return pages
+
+    marked_pages: list[Page] = []
+    for page in pages:
+        rebuilt = []
+        for element in page.elements:
+            if (page.page_index, element.element_id) in excluded:
+                element = Element(
+                    element_id=element.element_id,
+                    kind=element.kind,
+                    page_index=element.page_index,
+                    bbox=element.bbox,
+                    provenance=element.provenance,
+                    text=element.text,
+                    source_object_id=element.source_object_id,
+                    metadata={
+                        **element.metadata,
+                        "markdown_excluded_reason": _FURNITURE_EXCLUDE_REASON,
+                    },
+                )
+            rebuilt.append(element)
+        marked_pages.append(
+            Page(
+                page_index=page.page_index,
+                width=page.width,
+                height=page.height,
+                rotation=page.rotation,
+                elements=tuple(rebuilt),
+            )
+        )
+    return marked_pages
 
 
 def _restore_missing_spaces_from_charboxes(
@@ -697,6 +813,8 @@ class PDFiumBackend:
             raise BackendExecutionError(f"PDFium 提取失败: {exc}") from exc
         finally:
             document.close()
+
+        pages = _mark_furniture(pages, config.furniture)
 
         physical = PhysicalDocument(
             source_sha256=source_hash,
