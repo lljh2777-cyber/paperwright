@@ -3,6 +3,10 @@
 Paper2MD 是一个本地、可追溯、非生成式 AI 的科研 PDF 重建工具。当前版本为
 `0.8.0a0` 源码 Alpha。
 
+> **包名与命令**：发布到 PyPI 的发行包名为 **`paperwright`**（`pip install
+> paperwright`），但 CLI 命令与 Python 导入仍为 **`paper2md`**。两者均指向
+> 同一个官方项目，安装 `paperwright` 后即可使用 `paper2md` 命令。
+
 ```text
 PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
                        └→ reviewed layout → article-model.json
@@ -32,14 +36,20 @@ region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口�
 
 ## 快速安装（推荐）
 
-不想克隆源码的用户可以直接从 PyPI 安装（CLI 命令与包名不同，均为官方发布）：
+两种官方安装路径，按场景选择：
+
+**① 只想要 CLI（无需 skills / 无需改代码）** —— 直接从 PyPI 安装：
 
 ```bash
 pip install paperwright
 paper2md --version
 ```
 
-Linux / macOS 引导安装器（自动检测 agent harness、安装 Python、复制 skills）：
+适合把 `paper2md` 当作转换工具使用、不需要 Agent skills 或源码开发的环境。
+如果下载依赖缓慢，可加 `-i` 指定 PyPI 镜像。
+
+**② 想要完整体验（Agent skills + 自动环境）** —— Linux / macOS 引导安装器
+（自动检测 agent harness、安装 Python、复制 4 个 skills）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/Paper2MD/main/install.sh | bash
@@ -79,6 +89,19 @@ ARM 和 Linux ARM 尚未验证。
 
 ## Windows PowerShell 安装
 
+最快路径（不克隆源码）：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install paperwright
+
+paper2md --version
+paper2md --help
+```
+
+需要源码或 skills 时再克隆安装：
+
 ```powershell
 git clone https://github.com/lljh2777-cyber/Paper2MD.git
 cd Paper2MD
@@ -100,6 +123,19 @@ paper2md --help
 某些 Linux 发行版需要先通过系统包管理器安装 `python3-venv` 和
 `python3-pip`。
 
+不克隆源码时直接安装发行包：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install paperwright
+
+paper2md --version
+paper2md --help
+```
+
+克隆源码手动安装：
+
 ```bash
 git clone https://github.com/lljh2777-cyber/Paper2MD.git
 cd Paper2MD
@@ -113,7 +149,7 @@ paper2md --version
 paper2md --help
 ```
 
-`pip install .` 会根据 `pyproject.toml` 自动安装
+两种方式都会根据 `pyproject.toml` 自动安装
 `pypdfium2==5.11.0` 和 `Pillow==12.2.0`，无需提前手动安装。
 
 ## 转换单篇 PDF
