@@ -32,7 +32,14 @@ region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口�
 
 ## 快速安装（推荐）
 
-Linux / macOS：
+不想克隆源码的用户可以直接从 PyPI 安装（CLI 命令与包名不同，均为官方发布）：
+
+```bash
+pip install paperwright
+paper2md --version
+```
+
+Linux / macOS 引导安装器（自动检测 agent harness、安装 Python、复制 skills）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/Paper2MD/main/install.sh | bash
