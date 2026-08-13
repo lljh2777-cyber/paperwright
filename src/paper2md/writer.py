@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .backends.base import ExtractedAsset
 from .figures import CaptionCandidate, FigureGroup, analyze_figures, compose_group_png
+from .layout_continuation import (
+    CrossPageParagraphBlock,
+    dominant_font_name,
+    merge_paragraph_continuations,
+)
 from .manifest import (
     AUTO_REGION_MANIFEST_VERSION,
     OutputFile,
@@ -17,7 +23,7 @@ from .manifest import (
     canonical_manifest_json,
     sha256_file,
 )
-from .models import Element, PhysicalDocument
+from .models import Element, Page, PhysicalDocument
 from .region_render import plan_region_renders
 from .text_reconstruction import (
     ReconstructedText,
@@ -255,6 +261,21 @@ def _markdown_text_groups(
         (list(item.element_ids), item.text)
         for item in _markdown_text_groups_detailed(elements)
     ]
+
+
+def _normalized_paragraph_bbox(
+    elements: Sequence[Element], page: Page
+) -> tuple[float, float, float, float] | None:
+    """Union bbox of `elements`, normalized to the page (0..1), used as
+    column-crossing continuation evidence."""
+    if not elements:
+        return None
+    return (
+        min(item.bbox.x for item in elements) / page.width,
+        min(item.bbox.y for item in elements) / page.height,
+        max(item.bbox.right for item in elements) / page.width,
+        max(item.bbox.bottom for item in elements) / page.height,
+    )
 
 
 def _table_degradation(page_elements: tuple[Element, ...]) -> bool:
@@ -650,7 +671,10 @@ def write_outputs(
         )
         emitted_figures.add(group.figure_id)
 
+    page_marker_indexes: dict[int, int] = {}
+    cross_page_blocks: list[CrossPageParagraphBlock] = []
     for page in document.pages:
+        page_marker_indexes[page.page_index] = len(lines)
         lines.extend([f"<!-- page: {page.page_index + 1} -->", ""])
         page_degraded = _table_degradation(page.elements)
         if page_degraded:
@@ -693,10 +717,62 @@ def write_outputs(
                         "",
                     ]
                 )
+                paragraph_elements = tuple(
+                    elements_by_id[element_id]
+                    for element_id in element_ids
+                    if element_id in elements_by_id
+                )
+                last_text = (
+                    paragraph_elements[-1].text or ""
+                    if paragraph_elements
+                    else ""
+                )
+                is_caption = bool(matched_ids)
+                cross_page_blocks.append(
+                    CrossPageParagraphBlock(
+                        page_index=page.page_index,
+                        region_id=f"direct-p{page.page_index}-"
+                        f"{len(lines) - 3}",
+                        trace_index=len(lines) - 3,
+                        text_index=len(lines) - 2,
+                        text=markdown_text,
+                        role="caption" if is_caption else "body",
+                        is_bold=markdown_text.removeprefix(
+                            "&emsp;"
+                        ).startswith("**"),
+                        dominant_font=dominant_font_name(paragraph_elements),
+                        ends_with_pdf_soft_break=bool(last_text)
+                        and unicodedata.category(last_text[-1]) == "Cc",
+                        element_ids=tuple(element_ids),
+                        first_line_indented=paragraph.first_line_indented,
+                        first_line_indent_state=(
+                            paragraph.first_line_indent_state
+                        ),
+                        first_line_indent_offset=(
+                            paragraph.first_line_indent_offset
+                        ),
+                        caption_binding_key=(
+                            (
+                                page.page_index,
+                                f"figure-{sorted(matched_ids)[0]}",
+                            )
+                            if is_caption
+                            else None
+                        ),
+                        bbox=_normalized_paragraph_bbox(
+                            paragraph_elements, page
+                        ),
+                    )
+                )
         for group in analysis.groups:
             if group.page_index == page.page_index and group.figure_id not in emitted_figures:
                 emit_figure(group, "page-end-degraded")
 
+    merge_paragraph_continuations(
+        lines,
+        cross_page_blocks,
+        page_marker_indexes,
+    )
     article_path = root / "article.md"
     article_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 

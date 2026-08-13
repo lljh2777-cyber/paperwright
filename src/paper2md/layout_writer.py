@@ -110,6 +110,22 @@ def _union_bbox(elements: Sequence[Element], page: Page, padding: float) -> BBox
     return BBox(left, top, right - left, bottom - top)
 
 
+def _normalized_union_bbox(
+    elements: Sequence[Element], page: Page
+) -> tuple[float, float, float, float] | None:
+    """Union bbox of `elements`, normalized to the page (0..1), used as
+    column-crossing continuation evidence."""
+    if not elements:
+        return None
+    box = _union_bbox(elements, page, 0.0)
+    return (
+        box.x / page.width,
+        box.y / page.height,
+        box.right / page.width,
+        box.bottom / page.height,
+    )
+
+
 def _detect_native_matrix_equations(
     page: Page,
     elements: Sequence[Element],
@@ -1265,6 +1281,9 @@ def write_layout_outputs(
                                     )
                                     if caption_binding is not None
                                     else None
+                                ),
+                                bbox=_normalized_union_bbox(
+                                    paragraph_elements, page
                                 ),
                             )
                         )
