@@ -69,6 +69,8 @@ bash install.sh uninstall       # 卸载 skills/venv/符号链接
 bash install.sh install --harness codex --no-skills   # 指定 harness / 只装 CLI
 bash install.sh install --local /path/to/checkout     # 使用本地源码
 bash install.sh install --local /path/to/checkout --editable  # 可编辑安装：源码改动即时生效（贡献者推荐）
+bash install.sh install --with-vision    # 额外配置 qwen-mm-plugins 视觉 MCP（vision_chat/ocr 等，供 paperwright-vision-qwen 使用）
+bash install.sh install --with-vision --yes --local /path/to/checkout --editable   # 可编辑 + 视觉 MCP 一键（贡献者推荐）
 ```
 
 Windows 用户请使用下方 PowerShell 手动安装流程。

@@ -12,13 +12,16 @@
 #   --no-skills          只装 CLI，不复制 skills
 #   --local CHECKOUT     使用本地源码目录（跳过 clone）
 #   --editable           可编辑安装（pip install -e）：源码改动即时生效，适合贡献者
+#   --with-vision        额外配置 qwen-mm-plugins 视觉 MCP（vision_chat/ocr 等，
+#                        供 paperwright-vision-qwen skill 使用）
 #   --yes                非交互，全部用默认值
 #
 # 安装内容:
 #   ~/.paperwright/src      源码 checkout
 #   ~/.paperwright/venv     隔离虚拟环境（pip install .）
 #   ~/.local/bin/paperwright CLI 符号链接
-#   <harness>/skills/paperwright-*  4 个 Agent skills
+#   <harness>/skills/paperwright-*  5 个 Agent skills
+#   --with-vision 时：把 qwen-mm-plugins api/core MCP 写入 Claude Code 配置
 
 set -euo pipefail
 
@@ -49,6 +52,7 @@ ASSUME_YES=0
 COPY_SKILLS=1
 LOCAL_CHECKOUT=""
 EDITABLE=0
+WITH_VISION=0
 
 usage() {
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -65,6 +69,7 @@ parse_args() {
       --no-skills) COPY_SKILLS=0 ;;
       --local)   LOCAL_CHECKOUT="$2"; shift ;;
       --editable) EDITABLE=1 ;;
+      --with-vision) WITH_VISION=1 ;;
       --yes)     ASSUME_YES=1 ;;
       -h|--help) usage ;;
       *) die "未知参数: $1（--help 查看用法）" ;;
@@ -224,7 +229,13 @@ verify() {
     for skill in "${SKILL_DIRS[@]}"; do
       [[ -f "$target/$skill/SKILL.md" ]] && n=$((n + 1))
     done
-    [[ "$n" -gt 0 ]] && ok "skills 发现: $n/4（$target）" || warn "未发现 skills（$target）"
+    [[ "$n" -gt 0 ]] && ok "skills 发现: $n/${#SKILL_DIRS[@]}（$target）" || warn "未发现 skills（$target）"
+  fi
+  local claude_json="${CLAUDE_CONFIG_DIR:-$HOME/.claude}.json"
+  if [[ -f "$claude_json" ]] && grep -q "qwen-mm-plugins-api" "$claude_json" 2>/dev/null; then
+    ok "视觉 MCP（qwen-mm-plugins）已配置"
+  elif [[ "$WITH_VISION" == 1 ]]; then
+    warn "视觉 MCP 未配置（重跑 install --with-vision）"
   fi
 }
 
@@ -246,12 +257,61 @@ uninstall() {
   fi
 }
 
+# ── 8. 可选视觉 MCP（--with-vision）──────────────────────────────────
+setup_vision() {
+  if ! command -v uvx >/dev/null 2>&1; then
+    if command -v uv >/dev/null 2>&1; then
+      log "未找到 uvx，用 uv 安装..."
+      uv tool install uvx >/dev/null 2>&1 || die "安装 uvx 失败"
+    else
+      die "需要 uvx（先安装 uv：curl -LsSf https://astral.sh/uv/install.sh | sh）"
+    fi
+  fi
+  local claude_json="${CLAUDE_CONFIG_DIR:-$HOME/.claude}.json"
+  if [[ ! -f "$claude_json" ]]; then
+    warn "未找到 Claude Code 配置 $claude_json，跳过 MCP 写入（可手动用 claude mcp add 配置）"
+    return
+  fi
+  CLAUDE_JSON="$claude_json" python3 <<'EOF'
+import json, os
+
+path = os.environ["CLAUDE_JSON"]
+with open(path, encoding="utf-8") as stream:
+    data = json.load(stream)
+servers = data.setdefault("mcpServers", {})
+servers["qwen-mm-plugins-api"] = {
+    "command": "uvx",
+    "args": [
+        "--from",
+        "qwen-mm-plugins[api] @ git+https://github.com/QwenLM/Qwen-MM-Plugins.git@qwen-mm-plugins-api-v1.0.1",
+        "qwen-mm-plugins-api",
+    ],
+}
+servers["qwen-mm-plugins-core"] = {
+    "command": "uvx",
+    "args": [
+        "--from",
+        "qwen-mm-plugins[core] @ git+https://github.com/QwenLM/Qwen-MM-Plugins.git@qwen-mm-plugins-core-v1.0.1",
+        "qwen-mm-plugins-core",
+    ],
+}
+with open(path, "w", encoding="utf-8") as stream:
+    json.dump(data, stream, ensure_ascii=False, indent=2)
+    stream.write("\n")
+EOF
+  ok "qwen-mm-plugins api/core MCP 已写入 $claude_json"
+  log "重启 Claude Code 会话后，vision_chat / ocr / grounding 等工具可用"
+  warn "还需设置环境变量 DASHSCOPE_API_KEY（api server 走 DashScope 云端）"
+  warn "视觉复核 skill: \$paperwright-vision-qwen"
+}
+
 parse_args "$@"
 case "$COMMAND" in
   install|update)
     acquire_source
     install_cli
     install_skills
+    [[ "$WITH_VISION" == 1 ]] && setup_vision
     verify
     log "完成。重启 agent 会话后即可使用。"
     ;;
