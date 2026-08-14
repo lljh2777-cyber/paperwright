@@ -29,7 +29,9 @@ PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
 - 自包含证据包、输出质量报告和无正文训练数据导出；
 - 面向阅读器的稳定 Markdown 锚点、Figure/图注关系和 `reader.json`；
 - 作为 Markdown、Reader 和后续文本复核统一来源的 `article-model.json`；
-- 完全本地运行，不调用 LLM、外部 API 或云 OCR。
+- 完全本地运行，不调用 LLM、外部 API 或云 OCR；可选的人工/视觉混合复核
+  （`layout-review`）按需接入视觉模型，**只做版面判断、不转写正文**（产品定位见
+  [VISION](docs/VISION.md)）。
 
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
 报告不可用，不会伪造转换结果。
@@ -308,6 +310,7 @@ python -m paperwright convert input.pdf output-dir
 启发式文本问题标为 `warning`，不会阻断输出；确定性结构检查单独给出
 `PASS/FAIL`。
 
+- [产品愿景与架构](docs/VISION.md)
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)
