@@ -332,9 +332,10 @@ _SENTENCE_TERMINAL = re.compile(r"[.!?:;]\s*$")
 
 def _join_joiner(previous_markdown: str) -> str:
     """A continuation joins with a space, unless the fragment ends mid-word
-    (trailing hyphen) where the split was inside the token."""
+    (trailing hyphen) where the split was inside the token, or ends at a
+    slash (URL / path boundary) where a space would corrupt the token."""
     previous = previous_markdown.rstrip()
-    return "" if previous.endswith(("-", "‐", "‑")) else " "
+    return "" if previous.endswith(("-", "‐", "‑", "/")) else " "
 
 
 def _validate_join_blocks(

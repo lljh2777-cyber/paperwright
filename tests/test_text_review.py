@@ -15,6 +15,7 @@ from paperwright.exceptions import ContractValidationError
 from paperwright.text_review import (
     TEXT_REVIEW_CONTRACT_VERSION,
     TEXT_TASK_CONTRACT_VERSION,
+    _join_joiner,
     apply_text_review,
     build_text_task,
     canonical_text_review_json,
@@ -321,6 +322,12 @@ class JoinBlocksContractTests(unittest.TestCase):
             [item["order"] for item in result["blocks"]],
             [1, 2, 3],
         )
+
+    def test_join_joiner_handles_slash_boundary(self):
+        self.assertEqual(_join_joiner("https://github.com/"), "")
+        self.assertEqual(_join_joiner("dehyphen-"), "")
+        self.assertEqual(_join_joiner("non-breaking hyphen\u2011"), "")
+        self.assertEqual(_join_joiner("a normal end"), " ")
 
     def test_join_blocks_rejects_violations(self):
         model = self._model()
