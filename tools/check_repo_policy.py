@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject files outside the Paper2MD source-only repository policy."""
+"""Reject files outside the PaperWright source-only repository policy."""
 
 from __future__ import annotations
 

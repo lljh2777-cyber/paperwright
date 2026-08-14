@@ -5,11 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError
-from paper2md.layout_dataset import export_layout_dataset
-from paper2md.layout_models import FinalLayout, LayoutAction, LayoutRegion
-from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError
+from paperwright.layout_dataset import export_layout_dataset
+from paperwright.layout_models import FinalLayout, LayoutAction, LayoutRegion
+from paperwright.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
 
 from tests.test_layout_stage_a import _final_layout, _task
 

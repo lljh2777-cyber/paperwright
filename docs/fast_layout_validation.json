@@ -1,5 +1,5 @@
 {
-  "schema_version": "paper2md-fast-layout-validation-v0.1",
+  "schema_version": "paperwright-fast-layout-validation-v0.1",
   "test_result": {
     "pytest_passed": 219,
     "subtests_passed": 8
@@ -13,7 +13,7 @@
       "prepare_elapsed_seconds": 3.268,
       "cache_bytes": 1031381,
       "review_package_bytes": 8980280,
-      "task_contract_versions": ["paper2md-layout-task-v0.2"],
+      "task_contract_versions": ["paperwright-layout-task-v0.2"],
       "task_determinism": {
         "runs_compared": 2,
         "all_page_task_hashes_equal": true
@@ -37,7 +37,7 @@
       "prepare_elapsed_seconds": 13.311,
       "cache_bytes": 4468700,
       "review_package_bytes": 46513264,
-      "task_contract_versions": ["paper2md-layout-task-v0.2"],
+      "task_contract_versions": ["paperwright-layout-task-v0.2"],
       "standard_escalation_page_indices": [],
       "visual_review_page_indices": [1, 2, 4],
       "visual_review": "Representative double-column, figure-plus-caption, and full-page figure layouts have usable high-recall candidates and conservative page furniture exclusion."

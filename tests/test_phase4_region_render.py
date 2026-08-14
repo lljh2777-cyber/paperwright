@@ -6,15 +6,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.api import Paper2MD
-from paper2md.backends import BackendRegistry
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig, RegionRenderPolicy
-from paper2md.exceptions import BackendExecutionError
-from paper2md.figures import analyze_figures
-from paper2md.manifest import validate_manifest
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.region_render import RegionRenderRequest, plan_region_renders
+from paperwright.api import PaperWright
+from paperwright.backends import BackendRegistry
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig, RegionRenderPolicy
+from paperwright.exceptions import BackendExecutionError
+from paperwright.figures import analyze_figures
+from paperwright.manifest import validate_manifest
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.region_render import RegionRenderRequest, plan_region_renders
 
 from pdf_fixture_factory import create_region_render_fixture
 
@@ -167,10 +167,10 @@ class Phase4RegionRenderTests(unittest.TestCase):
             source = root / "fixture.pdf"
             create_region_render_fixture(source)
             output = root / "output"
-            config = Paper2MDConfig(
+            config = PaperWrightConfig(
                 region_render=RegionRenderPolicy(enabled=True, page_indices=(0,))
             )
-            app = Paper2MD(config=config, registry=self._registry())
+            app = PaperWright(config=config, registry=self._registry())
             result = app.convert(source, output)
             validate_manifest(result.manifest)
             rendered = [
@@ -200,7 +200,7 @@ class Phase4RegionRenderTests(unittest.TestCase):
             source = root / "fixture.pdf"
             create_region_render_fixture(source)
             output = root / "output"
-            app = Paper2MD(registry=self._registry())
+            app = PaperWright(registry=self._registry())
             result = app.convert(source, output)
             self.assertNotIn(
                 "region-rendered",

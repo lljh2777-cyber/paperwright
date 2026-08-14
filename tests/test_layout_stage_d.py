@@ -6,15 +6,15 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
-from paper2md.article_model import (
+from paperwright.article_model import (
     ARTICLE_MODEL_CONTRACT_VERSION,
     article_model_to_reader,
     render_article_markdown,
     validate_article_model,
 )
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError
-from paper2md.layout_models import (
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError
+from paperwright.layout_models import (
     FinalLayout,
     LayoutAction,
     LayoutPage,
@@ -22,7 +22,7 @@ from paper2md.layout_models import (
     LayoutTask,
     NormalizedBBox,
 )
-from paper2md.layout_writer import (
+from paperwright.layout_writer import (
     CrossPageParagraphBlock,
     materialize_layout_sources,
     _bind_caption_regions,
@@ -34,16 +34,16 @@ from paper2md.layout_writer import (
     _text_region_non_text_diagnostics,
     _validate_materialized_semantics,
 )
-from paper2md.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
-from paper2md.layout_risk import LayoutRiskAssessment, PageLayoutRisk
-from paper2md.manifest import (
+from paperwright.layout_review import LAYOUT_REVIEW_PROMPT_VERSION
+from paperwright.layout_risk import LayoutRiskAssessment, PageLayoutRisk
+from paperwright.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     sha256_file,
     validate_manifest,
 )
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.reader import READER_CONTRACT_VERSION, validate_reader_index
-from paper2md.text_reconstruction import ReconstructedText
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.reader import READER_CONTRACT_VERSION, validate_reader_index
+from paperwright.text_reconstruction import ReconstructedText
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -1243,7 +1243,7 @@ class LayoutStageDTests(unittest.TestCase):
                 )
             )
             with mock.patch(
-                "paper2md.api.assess_layout_risk",
+                "paperwright.api.assess_layout_risk",
                 return_value=forced_risk,
             ):
                 source, review = self._prepare(
@@ -1264,8 +1264,8 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertEqual(
                 index["layout_task_versions"],
                 [
-                    "paper2md-layout-task-v0.1",
-                    "paper2md-layout-task-v0.2",
+                    "paperwright-layout-task-v0.1",
+                    "paperwright-layout-task-v0.2",
                 ],
             )
 
@@ -1418,7 +1418,7 @@ class LayoutStageDTests(unittest.TestCase):
             provenance = json.loads(
                 (
                     separated
-                    / "_paper2md"
+                    / "_paperwright"
                     / "04-provenance"
                     / "layout-provenance.json"
                 ).read_text(encoding="utf-8")
@@ -1470,7 +1470,7 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertTrue((output / "images" / "figure-0001.png").is_file())
             manifest = json.loads(
                 (
-                    output / "_paper2md" / "manifest.json"
+                    output / "_paperwright" / "manifest.json"
                 ).read_text(encoding="utf-8")
             )
             validate_manifest(manifest)
@@ -1485,8 +1485,8 @@ class LayoutStageDTests(unittest.TestCase):
                 manifest["layout_review"]["provenance_sha256"],
             )
             article = (output / "article.md").read_text(encoding="utf-8")
-            self.assertIn("<!-- p2md:block", article)
-            self.assertIn("<!-- p2md:slot", article)
+            self.assertIn("<!-- pwwd:block", article)
+            self.assertIn("<!-- pwwd:slot", article)
             self.assertNotIn("<!-- page:", article)
             self.assertNotIn("<!-- layout-region:", article)
             self.assertNotIn("<!-- caption-for:", article)
@@ -1495,7 +1495,7 @@ class LayoutStageDTests(unittest.TestCase):
             provenance_value = json.loads(provenance.read_text(encoding="utf-8"))
             self.assertEqual(
                 provenance_value["contract_version"],
-                "paper2md-layout-provenance-v0.5",
+                "paperwright-layout-provenance-v0.5",
             )
             self.assertIn("body_continuation_repairs", provenance_value)
             self.assertIn("caption_continuation_repairs", provenance_value)
@@ -1546,18 +1546,18 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertFalse(
                 (
                     output
-                    / "_paper2md"
+                    / "_paperwright"
                     / "01-physical"
                     / "physical-document.json"
                 ).exists()
             )
             self.assertTrue(
-                (output / "_paper2md" / "02-roi" / "content-roi.json").is_file()
+                (output / "_paperwright" / "02-roi" / "content-roi.json").is_file()
             )
             self.assertTrue(
                 (
                     output
-                    / "_paper2md"
+                    / "_paperwright"
                     / "03-layout"
                     / "page-0001-overlay.png"
                 ).is_file()
@@ -1565,7 +1565,7 @@ class LayoutStageDTests(unittest.TestCase):
             validation = json.loads(
                 (
                     output
-                    / "_paper2md"
+                    / "_paperwright"
                     / "05-validation"
                     / "validation-report.json"
                 ).read_text(encoding="utf-8")
@@ -1610,24 +1610,24 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertTrue(
                 (
                     output
-                    / "_paper2md"
+                    / "_paperwright"
                     / "03-layout"
                     / "page-0001-final-layout.json"
                 ).is_file()
             )
             self.assertFalse(
                 any(
-                    (output / "_paper2md" / "03-layout").glob(
+                    (output / "_paperwright" / "03-layout").glob(
                         "*-layout-task.json"
                     )
                 )
             )
-            self.assertTrue((output / "_paper2md" / "run.json").is_file())
-            self.assertTrue((output / "_paper2md" / "source.json").is_file())
+            self.assertTrue((output / "_paperwright" / "run.json").is_file())
+            self.assertTrue((output / "_paperwright" / "source.json").is_file())
             self.assertTrue(
                 (
                     output
-                    / "_paper2md"
+                    / "_paperwright"
                     / "05-validation"
                     / "validation-report.md"
                 ).is_file()
@@ -1654,22 +1654,22 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(
                 {item.name for item in minimal.iterdir()},
-                {"article.md", "images", "_paper2md"},
+                {"article.md", "images", "_paperwright"},
             )
             self.assertEqual(
                 {
                     item.relative_to(minimal).as_posix()
-                    for item in (minimal / "_paper2md").rglob("*")
+                    for item in (minimal / "_paperwright").rglob("*")
                     if item.is_file()
                 },
                 {
-                    "_paper2md/article-model.json",
-                    "_paper2md/manifest.json",
-                    "_paper2md/reader.json",
+                    "_paperwright/article-model.json",
+                    "_paperwright/manifest.json",
+                    "_paperwright/reader.json",
                 },
             )
             minimal_manifest = json.loads(
-                (minimal / "_paper2md" / "manifest.json").read_text(
+                (minimal / "_paperwright" / "manifest.json").read_text(
                     encoding="utf-8"
                 )
             )
@@ -1680,7 +1680,7 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertIsNone(
                 minimal_manifest["layout_review"]["provenance_path"]
             )
-            self.assertTrue((minimal / "_paper2md" / "reader.json").is_file())
+            self.assertTrue((minimal / "_paperwright" / "reader.json").is_file())
             self.assertEqual(
                 minimal_manifest["reader"]["contract_version"],
                 READER_CONTRACT_VERSION,
@@ -1702,7 +1702,7 @@ class LayoutStageDTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(code, 0)
-            evidence = full / "_paper2md"
+            evidence = full / "_paperwright"
             self.assertTrue(
                 (evidence / "01-physical" / "physical-document.json").is_file()
             )
@@ -1750,7 +1750,7 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertEqual(content(outputs[0]), content(outputs[1]))
             for output in outputs:
                 run = json.loads(
-                    (output / "_paper2md" / "run.json").read_text(
+                    (output / "_paperwright" / "run.json").read_text(
                         encoding="utf-8"
                     )
                 )

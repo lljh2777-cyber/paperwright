@@ -1,6 +1,6 @@
 import unittest
 
-from paper2md.references import (
+from paperwright.references import (
     ReferenceParagraph,
     detect_reference_section,
     is_reference_heading,

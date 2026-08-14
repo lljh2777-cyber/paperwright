@@ -1,6 +1,6 @@
 {
-  "schema_version": "paper2md-hybrid-layout-validation-v0.1",
-  "candidate_generator_version": "paper2md-whitespace-candidates-v0.3",
+  "schema_version": "paperwright-hybrid-layout-validation-v0.1",
+  "candidate_generator_version": "paperwright-whitespace-candidates-v0.3",
   "ocr_used": false,
   "external_ai_used": false,
   "documents": [

@@ -7,11 +7,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from paper2md.backends.base import ExtractedAsset
-from paper2md.figures import analyze_figures
-from paper2md.manifest import validate_manifest
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.writer import write_outputs
+from paperwright.backends.base import ExtractedAsset
+from paperwright.figures import analyze_figures
+from paperwright.manifest import validate_manifest
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.writer import write_outputs
 
 
 ROOT = Path(__file__).parents[1]

@@ -15,7 +15,7 @@
 | 字段 | 默认 | Alpha 说明 |
 |---|---|---|
 | `backend` | `pdfium` | `pdfbox` 仅接口，会明确失败 |
-| `contract_version` | `paper2md-physical-document-v0.2` | 其他版本拒绝 |
+| `contract_version` | `paperwright-physical-document-v0.2` | 其他版本拒绝 |
 | `limits.max_pages` | 2000 | 每文档页数上限 |
 | `limits.max_output_bytes` | 536870912 | 每文档输出硬上限 |
 | `limits.timeout_seconds` | 120 | 当前为后端配置边界，尚非跨平台硬 sandbox |
@@ -30,7 +30,7 @@
 单文档 explicit 调试：
 
 ```bash
-paper2md convert input.pdf out \
+paperwright convert input.pdf out \
   --region-render-mode explicit \
   --region-render-page 2
 ```
@@ -40,7 +40,7 @@ batch 只允许 `off` 或 `auto`，不支持逐文档 explicit page。
 使用配置并由 CLI 覆盖：
 
 ```bash
-paper2md batch out \
+paperwright batch out \
   --input-dir papers \
   --config config/alpha.example.json \
   --region-render-mode auto \

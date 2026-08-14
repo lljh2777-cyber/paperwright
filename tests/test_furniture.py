@@ -2,8 +2,8 @@
 
 import unittest
 
-from paper2md.backends.pdfium import _mark_furniture
-from paper2md.models import BBox, Element, Page, Provenance
+from paperwright.backends.pdfium import _mark_furniture
+from paperwright.models import BBox, Element, Page, Provenance
 
 PAGE_H = 800.0
 PAGE_W = 612.0

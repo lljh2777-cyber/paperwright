@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperWright Convert"
+  short_description: "Convert scientific PDFs with PaperWright"
+  default_prompt: "Use $paperwright-convert to ask me about unresolved conversion options, then run and validate the selected workflow for these PDFs."

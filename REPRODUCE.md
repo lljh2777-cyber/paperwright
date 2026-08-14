@@ -1,4 +1,4 @@
-# Paper2MD Alpha 复现说明
+# PaperWright Alpha 复现说明
 
 ## 环境
 
@@ -49,8 +49,8 @@ D:\python\python.exe tools\run_content_smoke.py
 $env:PYTHONPATH = "src;tests"
 D:\python\python.exe tools\run_batch_checks.py `
   --repo . `
-  --output-root C:\Temp\paper2md-batch-check `
-  --summary C:\Temp\paper2md-batch-summary.json
+  --output-root C:\Temp\paperwright-batch-check `
+  --summary C:\Temp\paperwright-batch-summary.json
 ```
 
 ## wheel/sdist 安装检查
@@ -59,8 +59,8 @@ D:\python\python.exe tools\run_batch_checks.py `
 $env:PYTHONPATH = "src;tests"
 D:\python\python.exe tools\run_install_checks.py `
   --repo . `
-  --output-root C:\Temp\paper2md-install-check `
-  --summary C:\Temp\paper2md-install-summary.json
+  --output-root C:\Temp\paperwright-install-check `
+  --summary C:\Temp\paperwright-install-summary.json
 ```
 
 构建出的 wheel/sdist 仅用于隔离安装验证，不进入 Git。安装检查会实际运行

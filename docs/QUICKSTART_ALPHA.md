@@ -1,4 +1,4 @@
-# Paper2MD Alpha 快速开始
+# PaperWright Alpha 快速开始
 
 ## 支持范围
 
@@ -17,8 +17,8 @@ macOS、Windows ARM 和 Linux ARM 尚未验证。
 使用 Git：
 
 ```bash
-git clone https://github.com/lljh2777-cyber/Paper2MD.git
-cd Paper2MD
+git clone https://github.com/lljh2777-cyber/PaperWright.git
+cd PaperWright
 ```
 
 没有 Git 时，可在 GitHub 选择 **Code → Download ZIP**。解压后进入包含
@@ -32,11 +32,11 @@ py -3.12 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install .
 
-paper2md --version
-paper2md --help
-paper2md convert .\papers\a.pdf .\converted\a
-paper2md batch .\converted-batch --input-dir .\papers --continue-on-error
-paper2md validate-model .\converted\a\physical_document.json
+paperwright --version
+paperwright --help
+paperwright convert .\papers\a.pdf .\converted\a
+paperwright batch .\converted-batch --input-dir .\papers --continue-on-error
+paperwright validate-model .\converted\a\physical_document.json
 ```
 
 如果 PowerShell 禁止激活脚本，可只为当前窗口临时放行：
@@ -50,7 +50,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\python.exe -m paper2md --help
+.\.venv\Scripts\python.exe -m paperwright --help
 ```
 
 ## Linux
@@ -64,17 +64,17 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install .
 
-paper2md --version
-paper2md --help
-paper2md convert papers/a.pdf converted/a
-paper2md batch converted-batch --input-dir papers --continue-on-error
-paper2md validate-model converted/a/physical_document.json
+paperwright --version
+paperwright --help
+paperwright convert papers/a.pdf converted/a
+paperwright batch converted-batch --input-dir papers --continue-on-error
+paperwright validate-model converted/a/physical_document.json
 ```
 
 ## 显式文件列表
 
 ```bash
-paper2md batch converted-batch \
+paperwright batch converted-batch \
   --input-file papers/a.pdf \
   --input-file papers/b.pdf
 ```
@@ -82,7 +82,7 @@ paper2md batch converted-batch \
 也可使用 UTF-8 文件清单：
 
 ```bash
-paper2md batch converted-batch --file-list papers.txt
+paperwright batch converted-batch --file-list papers.txt
 ```
 
 ## auto region-render
@@ -90,7 +90,7 @@ paper2md batch converted-batch --file-list papers.txt
 默认关闭。需要时明确启用：
 
 ```bash
-paper2md batch converted-auto \
+paperwright batch converted-auto \
   --input-dir papers \
   --region-render-mode auto \
   --region-render-max-candidates 12

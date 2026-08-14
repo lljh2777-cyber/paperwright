@@ -103,15 +103,15 @@ def audit_wheel(path: Path) -> dict[str, object]:
         if forbidden:
             raise RuntimeError(f"wheel contains forbidden payload: {forbidden}")
         required = {
-            "paper2md/schemas/article_model.schema.json",
-            "paper2md/schemas/batch_summary.schema.json",
-            "paper2md/schemas/final_layout.schema.json",
-            "paper2md/schemas/layout_task.schema.json",
-            "paper2md/schemas/manifest.schema.json",
-            "paper2md/schemas/physical_document.schema.json",
-            "paper2md/schemas/reader.schema.json",
-            "paper2md/schemas/text_review.schema.json",
-            "paper2md/schemas/text_task.schema.json",
+            "paperwright/schemas/article_model.schema.json",
+            "paperwright/schemas/batch_summary.schema.json",
+            "paperwright/schemas/final_layout.schema.json",
+            "paperwright/schemas/layout_task.schema.json",
+            "paperwright/schemas/manifest.schema.json",
+            "paperwright/schemas/physical_document.schema.json",
+            "paperwright/schemas/reader.schema.json",
+            "paperwright/schemas/text_review.schema.json",
+            "paperwright/schemas/text_task.schema.json",
         }
         if not required.issubset(names):
             raise RuntimeError("wheel is missing package schemas")
@@ -189,7 +189,7 @@ def exercise_install(
     ).create(venv_root)
     scripts = venv_root / ("Scripts" if os.name == "nt" else "bin")
     python = scripts / ("python.exe" if os.name == "nt" else "python")
-    console = scripts / ("paper2md.exe" if os.name == "nt" else "paper2md")
+    console = scripts / ("paperwright.exe" if os.name == "nt" else "paperwright")
     install_argv = [
         str(python),
         "-m",
@@ -334,7 +334,7 @@ def main() -> int:
     if not deterministic_equal:
         raise RuntimeError("wheel/sdist installed batch outputs differ")
     summary = {
-        "schema_version": "paper2md-phase5-install-test-summary-v1",
+        "schema_version": "paperwright-phase5-install-test-summary-v1",
         "platform_scope": "Linux Work cloud only; Windows remains for local review",
         "python": sys.version,
         "artifacts": [

@@ -1,7 +1,7 @@
 # Manifest v0.3 迁移说明
 
-Phase 3 将 `manifest_version` 从 `paper2md-manifest-v0.2` 升至
-`paper2md-manifest-v0.3`。原有必填字段、`elements`、`images`、
+Phase 3 将 `manifest_version` 从 `paperwright-manifest-v0.2` 升至
+`paperwright-manifest-v0.3`。原有必填字段、`elements`、`images`、
 `degraded` 和 `physical_document` 保持含义兼容；新增：
 
 - `figures`：同页、确定性 Figure group，包含原生成员、bbox、输出资产、

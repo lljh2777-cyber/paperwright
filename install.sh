@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
-# Paper2MD 引导安装器 — 一键安装 CLI 与 Agent skills 到当前 harness
+# paperwright 引导安装器 — 一键安装 CLI 与 Agent skills 到当前 harness
 #
 # 用法:
-#   curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/Paper2MD/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/PaperWright/main/install.sh | bash
 #   bash install.sh [install|update|uninstall|verify] [选项]
 #
 # 选项:
 #   --harness claude|codex|cursor|gemini|all|none   目标 agent（默认自动检测）
 #   --python PATH        指定 Python 解释器（3.10–3.13）
-#   --prefix DIR         安装根目录（默认 ~/.paper2md）
+#   --prefix DIR         安装根目录（默认 ~/.paperwright）
 #   --no-skills          只装 CLI，不复制 skills
 #   --local CHECKOUT     使用本地源码目录（跳过 clone）
 #   --editable           可编辑安装（pip install -e）：源码改动即时生效，适合贡献者
 #   --yes                非交互，全部用默认值
 #
 # 安装内容:
-#   ~/.paper2md/src      源码 checkout
-#   ~/.paper2md/venv     隔离虚拟环境（pip install .）
-#   ~/.local/bin/paper2md CLI 符号链接
-#   <harness>/skills/paper2md-*  4 个 Agent skills
+#   ~/.paperwright/src      源码 checkout
+#   ~/.paperwright/venv     隔离虚拟环境（pip install .）
+#   ~/.local/bin/paperwright CLI 符号链接
+#   <harness>/skills/paperwright-*  4 个 Agent skills
 
 set -euo pipefail
 
-REPO_URL="https://github.com/lljh2777-cyber/Paper2MD.git"
+REPO_URL="https://github.com/lljh2777-cyber/PaperWright.git"
 REPO_BRANCH="main"
-PREFIX="${P2MD_PREFIX:-$HOME/.paper2md}"
+PREFIX="${PWRIGHT_PREFIX:-$HOME/.paperwright}"
 CHECKOUT_DIR="$PREFIX/src"
 VENV_DIR="$PREFIX/venv"
-BIN_LINK="${P2MD_BIN_LINK:-$HOME/.local/bin/paper2md}"
-SKILL_DIRS=("paper2md-install" "paper2md-convert" "paper2md-contribute" "paper2md-agent-workflow")
+BIN_LINK="${PWRIGHT_BIN_LINK:-$HOME/.local/bin/paperwright}"
+SKILL_DIRS=("paperwright-install" "paperwright-convert" "paperwright-contribute" "paperwright-agent-workflow")
 NO_COLOR="${NO_COLOR:-}"
 
 if [[ -z "$NO_COLOR" && -t 1 ]]; then
@@ -37,7 +37,7 @@ else
   C_RED=""; C_GREEN=""; C_YEL=""; C_BLU=""; C_OFF=""
 fi
 
-log()  { printf '%s[paper2md]%s %s\n' "$C_BLU" "$C_OFF" "$*"; }
+log()  { printf '%s[paperwright]%s %s\n' "$C_BLU" "$C_OFF" "$*"; }
 ok()   { printf '%s[ ok ]%s %s\n' "$C_GREEN" "$C_OFF" "$*"; }
 warn() { printf '%s[warn]%s %s\n' "$C_YEL" "$C_OFF" "$*" >&2; }
 die()  { printf '%s[error]%s %s\n' "$C_RED" "$C_OFF" "$*" >&2; exit 1; }
@@ -140,7 +140,7 @@ pick_python() {
 # ── 3. 获取/更新源码 ────────────────────────────────────────────────
 acquire_source() {
   if [[ -n "$LOCAL_CHECKOUT" ]]; then
-    [[ -d "$LOCAL_CHECKOUT/src/paper2md" ]] || die "--local 目录不是 Paper2MD checkout: $LOCAL_CHECKOUT"
+    [[ -d "$LOCAL_CHECKOUT/src/paperwright" ]] || die "--local 目录不是 paperwright checkout: $LOCAL_CHECKOUT"
     CHECKOUT_DIR="$LOCAL_CHECKOUT"
     log "使用本地 checkout: $CHECKOUT_DIR"
     return
@@ -177,7 +177,7 @@ install_cli() {
     "$VENV_DIR/bin/python" -m pip install --quiet "$CHECKOUT_DIR" || die "pip install 失败"
   fi
   mkdir -p "$(dirname "$BIN_LINK")"
-  ln -sf "$VENV_DIR/bin/paper2md" "$BIN_LINK"
+  ln -sf "$VENV_DIR/bin/paperwright" "$BIN_LINK"
   ok "CLI 已安装: $BIN_LINK"
 }
 
@@ -200,22 +200,22 @@ install_skills() {
     fi
   done
   ok "已复制 $count 个 skills 到 $target"
-  log "在 agent 中可通过 \$paper2md-install / \$paper2md-convert 等显式调用"
+  log "在 agent 中可通过 \$paperwright-install / \$paperwright-convert 等显式调用"
 }
 
 # ── 6. 验证 ─────────────────────────────────────────────────────────
 verify() {
-  local cli="$VENV_DIR/bin/paper2md"
+  local cli="$VENV_DIR/bin/paperwright"
   if [[ -x "$cli" ]]; then
     "$cli" --version
     "$cli" --help >/dev/null 2>&1 && ok "CLI 验证通过" || warn "CLI --help 异常"
   else
     die "未找到已安装的 CLI: $cli（先运行 install）"
   fi
-  if command -v paper2md >/dev/null 2>&1; then
-    ok "PATH 中可用: $(command -v paper2md)"
+  if command -v paperwright >/dev/null 2>&1; then
+    ok "PATH 中可用: $(command -v paperwright)"
   else
-    warn "paper2md 不在 PATH（把 $(dirname "$BIN_LINK") 加入 PATH）"
+    warn "paperwright 不在 PATH（把 $(dirname "$BIN_LINK") 加入 PATH）"
   fi
   local target
   target="$(skills_dir_for "${HARNESS:-$(detect_harness)}")"

@@ -9,17 +9,17 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from paper2md.article_model import (
+from paperwright.article_model import (
     ARTICLE_MODEL_CONTRACT_VERSION,
     article_model_to_reader,
     canonical_article_model_json,
     render_article_markdown,
     validate_article_model,
 )
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.reader import (
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.reader import (
     READER_CONTRACT_VERSION,
     canonical_reader_json,
     compile_reviewed_article,
@@ -211,8 +211,8 @@ class ReaderContractTests(unittest.TestCase):
             canonical_reader_json(second[1]),
         )
         article = first[0].markdown_text()
-        self.assertIn("<!-- p2md:block", article)
-        self.assertIn("<!-- p2md:slot", article)
+        self.assertIn("<!-- pwwd:block", article)
+        self.assertIn("<!-- pwwd:slot", article)
         self.assertNotIn("<!-- layout-region:", article)
         self.assertNotIn("<!-- page:", article)
 
@@ -366,12 +366,12 @@ class ReaderContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "images").mkdir()
-            (root / "_paper2md").mkdir()
+            (root / "_paperwright").mkdir()
             (root / "article.md").write_text(
                 compilation.markdown_text(), encoding="utf-8", newline="\n"
             )
             (root / "images/figure-0001.png").write_bytes(image_data)
-            reader_path = root / "_paper2md/reader.json"
+            reader_path = root / "_paperwright/reader.json"
             reader_path.write_text(
                 canonical_reader_json(reader),
                 encoding="utf-8",
@@ -392,19 +392,19 @@ class ReaderContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "images").mkdir()
-            (root / "_paper2md").mkdir()
+            (root / "_paperwright").mkdir()
             (root / "article.md").write_text(
                 render_article_markdown(model),
                 encoding="utf-8",
                 newline="\n",
             )
             (root / "images/figure-0001.png").write_bytes(image_data)
-            (root / "_paper2md/reader.json").write_text(
+            (root / "_paperwright/reader.json").write_text(
                 canonical_reader_json(article_model_to_reader(model)),
                 encoding="utf-8",
                 newline="\n",
             )
-            model_path = root / "_paper2md/article-model.json"
+            model_path = root / "_paperwright/article-model.json"
             model_path.write_text(
                 canonical_article_model_json(model),
                 encoding="utf-8",

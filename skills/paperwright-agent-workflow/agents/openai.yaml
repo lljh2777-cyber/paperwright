@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperWright Agent Workflow"
+  short_description: "Coordinate visual layout and source-safe text review"
+  default_prompt: "Use $paperwright-agent-workflow to coordinate visual and text sub-agents for this paper."

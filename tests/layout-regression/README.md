@@ -1,6 +1,6 @@
 # Layout regression workspace
 
-This directory is for checking whether Paper2MD layout fixes generalize across
+This directory is for checking whether PaperWright layout fixes generalize across
 papers and publishers.
 
 Local structure:

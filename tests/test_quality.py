@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.layout_models import (
+from paperwright.layout_models import (
     FinalLayout,
     LayoutAction,
     LayoutCandidate,
@@ -11,8 +11,8 @@ from paper2md.layout_models import (
     LayoutTask,
     NormalizedBBox,
 )
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.quality import (
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.quality import (
     analyze_image_links,
     analyze_layout_elements,
     analyze_manifest_inventory,

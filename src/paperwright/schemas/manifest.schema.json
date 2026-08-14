@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/manifest-v0.4-v0.10.json",
+  "title": "PaperWright manifest v0.4-v0.10",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "source_sha256",
+    "backend",
+    "contract_version",
+    "page_count",
+    "status",
+    "outputs",
+    "warnings"
+  ],
+  "properties": {
+    "manifest_version": {
+      "enum": [
+        "paperwright-manifest-v0.4",
+        "paperwright-manifest-v0.5",
+        "paperwright-manifest-v0.6",
+        "paperwright-manifest-v0.7",
+        "paperwright-manifest-v0.8",
+        "paperwright-manifest-v0.9",
+        "paperwright-manifest-v0.10"
+      ]
+    },
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "contract_version": {
+      "const": "paperwright-physical-document-v0.2"
+    },
+    "page_count": {"type": "integer", "minimum": 1},
+    "status": {
+      "enum": ["success", "success_with_degradation", "failed"]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "size_bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "region_render_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "page_indices", "max_candidates_per_document"],
+      "properties": {
+        "mode": {"enum": ["explicit", "auto"]},
+        "page_indices": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0}
+        },
+        "max_candidates_per_document": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "layout_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "prompt_version",
+        "candidate_generator_version",
+        "feature_schema_version",
+        "provenance_path",
+        "provenance_sha256",
+        "ocr_used",
+        "pages"
+      ],
+      "properties": {
+        "mode": {"const": "hybrid-reviewed"},
+        "prompt_version": {"type": "string", "minLength": 1},
+        "candidate_generator_version": {"type": "string", "minLength": 1},
+        "feature_schema_version": {"type": "string", "minLength": 1},
+        "evidence_level": {"enum": ["minimal", "standard", "full"]},
+        "provenance_path": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "provenance_sha256": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        },
+        "ocr_used": {"const": false},
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "page_index",
+              "task_sha256",
+              "final_layout_sha256",
+              "reviewer",
+              "region_count"
+            ],
+            "properties": {
+              "page_index": {"type": "integer", "minimum": 0},
+              "task_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "final_layout_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "reviewer": {"type": "string", "minLength": 1},
+              "region_count": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "path",
+        "sha256",
+        "article_path",
+        "article_sha256",
+        "anchor_contract"
+      ],
+      "properties": {
+        "contract_version": {"const": "paperwright-reader-v0.1"},
+        "path": {"const": "_paperwright/reader.json"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "article_path": {"const": "article.md"},
+        "article_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "anchor_contract": {"const": "paperwright-markdown-anchor-v0.1"}
+      }
+    },
+    "article_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_version", "path", "sha256"],
+      "properties": {
+        "contract_version": {"const": "paperwright-article-model-v0.1"},
+        "path": {"const": "_paperwright/article-model.json"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "text_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_contract_version",
+        "review_contract_version",
+        "task_path",
+        "task_sha256",
+        "review_path",
+        "review_sha256",
+        "source_article_model_sha256",
+        "parent_manifest_sha256",
+        "reviewer",
+        "operation_count",
+        "validation_path",
+        "validation_sha256"
+      ],
+      "properties": {
+        "task_contract_version": {"const": "paperwright-text-task-v0.1"},
+        "review_contract_version": {"const": "paperwright-text-review-v0.1"},
+        "task_path": {"const": "_paperwright/06-text-review/text-task.json"},
+        "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "review_path": {"const": "_paperwright/06-text-review/text-review.json"},
+        "review_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_article_model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "parent_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reviewer": {"type": "string", "minLength": 1, "maxLength": 200},
+        "operation_count": {"type": "integer", "minimum": 0},
+        "validation_path": {"const": "_paperwright/06-text-review/validation-report.json"},
+        "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "elements": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "images": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "figure_id",
+          "page",
+          "bbox",
+          "member_element_ids",
+          "source_object_ids",
+          "extraction_mode",
+          "asset",
+          "native_asset",
+          "region_render",
+          "caption",
+          "evidence_status",
+          "degraded_reasons",
+          "vector_evidence",
+          "markdown_placement"
+        ],
+        "properties": {
+          "figure_id": {"type": "string", "pattern": "^fig-p[0-9]{3}-[0-9]{3}$"},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"$ref": "#/$defs/bbox"},
+          "member_element_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "source_object_ids": {
+            "type": "array",
+            "items": {"type": ["string", "null"]}
+          },
+          "extraction_mode": {"enum": ["embedded", "grouped", "region-rendered"]},
+          "asset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "size_bytes", "width_px", "height_px"],
+            "properties": {
+              "path": {"type": "string", "pattern": "^images/[^/]+\\.png$"},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "size_bytes": {"type": "integer", "minimum": 1},
+              "width_px": {"type": "integer", "minimum": 1},
+              "height_px": {"type": "integer", "minimum": 1}
+            }
+          },
+          "native_asset": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "path",
+              "sha256",
+              "size_bytes",
+              "width_px",
+              "height_px",
+              "retained_for_provenance"
+            ],
+            "properties": {
+              "mode": {"enum": ["embedded", "grouped"]},
+              "path": {"type": "string", "pattern": "^images/[^/]+\\.png$"},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "size_bytes": {"type": "integer", "minimum": 1},
+              "width_px": {"type": "integer", "minimum": 1},
+              "height_px": {"type": "integer", "minimum": 1},
+              "retained_for_provenance": {"const": true}
+            }
+          },
+          "region_render": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason",
+              "bbox",
+              "scale",
+              "dpi",
+              "rotation",
+              "width_px",
+              "height_px",
+              "pixel_variance",
+              "page_area_ratio",
+              "source_pdf_sha256",
+              "renderer_version",
+              "bbox_rule"
+            ],
+            "properties": {
+              "status": {"enum": ["not_requested", "rendered", "rejected"]},
+              "reason": {"type": "string", "minLength": 1},
+              "bbox": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/bbox"}]},
+              "scale": {"type": ["number", "null"], "exclusiveMinimum": 0},
+              "dpi": {"type": ["number", "null"], "exclusiveMinimum": 0},
+              "rotation": {"type": ["integer", "null"], "enum": [0, 90, 180, 270, null]},
+              "width_px": {"type": ["integer", "null"], "minimum": 1},
+              "height_px": {"type": ["integer", "null"], "minimum": 1},
+              "pixel_variance": {"type": ["number", "null"], "minimum": 0},
+              "page_area_ratio": {"type": ["number", "null"], "minimum": 0, "exclusiveMaximum": 0.82},
+              "source_pdf_sha256": {
+                "anyOf": [
+                  {"type": "null"},
+                  {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                ]
+              },
+              "renderer_version": {"type": ["string", "null"]},
+              "bbox_rule": {"type": ["string", "null"]}
+            }
+          },
+          "caption": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "confidence",
+              "reason",
+              "caption_id",
+              "element_ids",
+              "text",
+              "text_sha256",
+              "bbox",
+              "matching_rule"
+            ],
+            "properties": {
+              "status": {"enum": ["matched", "ambiguous", "none"]},
+              "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "caption_id": {"type": ["string", "null"]},
+              "element_ids": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "text": {"type": ["string", "null"]},
+              "text_sha256": {
+                "anyOf": [
+                  {"type": "null"},
+                  {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+                ]
+              },
+              "bbox": {
+                "anyOf": [
+                  {"type": "null"},
+                  {"$ref": "#/$defs/bbox"}
+                ]
+              },
+              "matching_rule": {"type": ["string", "null"]}
+            }
+          },
+          "evidence_status": {"type": "string", "minLength": 1},
+          "degraded_reasons": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "vector_evidence": {"type": "object"},
+          "markdown_placement": {
+            "enum": ["immediately-before-caption", "page-end-degraded"]
+          }
+        }
+      }
+    },
+    "figure_rejections": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "degraded": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "physical_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "manifest_version": {"const": "paperwright-manifest-v0.5"}
+        }
+      },
+      "then": {"required": ["region_render_policy"]},
+      "else": {"not": {"required": ["region_render_policy"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "manifest_version": {
+            "enum": [
+              "paperwright-manifest-v0.8",
+              "paperwright-manifest-v0.9",
+              "paperwright-manifest-v0.10"
+            ]
+          }
+        }
+      },
+      "then": {"required": ["reader"]},
+      "else": {"not": {"required": ["reader"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "manifest_version": {
+            "enum": [
+              "paperwright-manifest-v0.9",
+              "paperwright-manifest-v0.10"
+            ]
+          }
+        }
+      },
+      "then": {"required": ["article_model"]},
+      "else": {"not": {"required": ["article_model"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "manifest_version": {"const": "paperwright-manifest-v0.10"}
+        }
+      },
+      "then": {"required": ["text_review"]},
+      "else": {"not": {"required": ["text_review"]}}
+    }
+  ],
+  "$defs": {
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0},
+        "y": {"type": "number", "minimum": 0},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  }
+}

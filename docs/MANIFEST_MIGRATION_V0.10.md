@@ -9,13 +9,13 @@ manifest v0.10 只由 `text-package` 写出。`layout-apply` 仍生成 manifest 
 
 ```text
 article.md
-_paper2md/article-model.json
-_paper2md/reader.json
-_paper2md/manifest.json
-_paper2md/06-text-review/text-task.json
-_paper2md/06-text-review/text-review.json
-_paper2md/06-text-review/validation-report.json
-_paper2md/06-text-review/validation-report.md
+_paperwright/article-model.json
+_paperwright/reader.json
+_paperwright/manifest.json
+_paperwright/06-text-review/text-task.json
+_paperwright/06-text-review/text-review.json
+_paperwright/06-text-review/validation-report.json
+_paperwright/06-text-review/validation-report.md
 ```
 
 manifest 的 `text_review` 摘要绑定父 manifest、源 Article Model、Text Task、
@@ -25,11 +25,11 @@ Text Review 与 JSON 验证报告的 SHA-256，并记录 reviewer 和操作数�
 ## 迁移命令
 
 ```bash
-paper2md text-package SOURCE_V09_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_V10_PACKAGE
-paper2md validate-text-package OUTPUT_V10_PACKAGE
+paperwright text-package SOURCE_V09_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_V10_PACKAGE
+paperwright validate-text-package OUTPUT_V10_PACKAGE
 ```
 
-目标目录必须不存在。Paper2MD 先验证父包、task 和 review，在同级临时目录复制
+目标目录必须不存在。PaperWright 先验证父包、task 和 review，在同级临时目录复制
 证据、重新投影文章与 Reader、构造新 manifest，并完成一次全包校验；全部成功后
 才原子发布目标目录。任何失败都不会修改父包或留下可误用的目标包。
 

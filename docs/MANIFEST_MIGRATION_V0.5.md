@@ -1,7 +1,7 @@
 # Manifest v0.5 迁移说明
 
 Phase 4 通用 region-render 仅在显式启用 `explicit` 或 `auto` 模式时输出
-`paper2md-manifest-v0.5`。默认 `off` 模式仍逐字节输出 v0.4，避免静默改变
+`paperwright-manifest-v0.5`。默认 `off` 模式仍逐字节输出 v0.4，避免静默改变
 既有工作流。
 
 v0.5 新增顶层 `region_render_policy`：
@@ -22,5 +22,5 @@ Figure 的既有 `native_asset`、`region_render`、`vector_evidence` 和 captio
 2. v0.5：必须校验 `region_render_policy`，并将 `rejected` 视为诚实回退，
    不能视为转换失败或自行替换原生资产。
 
-`src/paper2md/schemas/manifest.schema.json` 同时验证 v0.4 与 v0.5，并使用
+`src/paperwright/schemas/manifest.schema.json` 同时验证 v0.4 与 v0.5，并使用
 Draft 2020-12 条件约束保证策略字段仅出现在 v0.5。

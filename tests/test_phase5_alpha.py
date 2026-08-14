@@ -10,10 +10,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from paper2md.batch import classify_error, validate_batch_summary
-from paper2md.cli import build_parser, main
-from paper2md.config import load_config, with_cli_overrides
-from paper2md.exceptions import (
+from paperwright.batch import classify_error, validate_batch_summary
+from paperwright.cli import build_parser, main
+from paperwright.config import load_config, with_cli_overrides
+from paperwright.exceptions import (
     BackendUnavailableError,
     ConfigurationError,
     CorruptInputError,
@@ -72,7 +72,7 @@ class Phase5AlphaTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )["project"]
-        self.assertEqual(project["scripts"]["paper2md"], "paper2md.cli:main")
+        self.assertEqual(project["scripts"]["paperwright"], "paperwright.cli:main")
         self.assertIn(">=3.10", project["requires-python"])
         self.assertIn("<3.14", project["requires-python"])
 
@@ -252,7 +252,7 @@ class Phase5AlphaTests(unittest.TestCase):
         self.assertFalse((self.inputs / "nested-output").exists())
 
     def test_symlinked_input_directory_is_rejected_without_following(self):
-        with mock.patch("paper2md.batch.Path.is_symlink", return_value=True):
+        with mock.patch("paperwright.batch.Path.is_symlink", return_value=True):
             code, _, stderr = self._batch(
                 "batch",
                 str(self.root / "out"),
@@ -307,8 +307,8 @@ class Phase5AlphaTests(unittest.TestCase):
         auto_manifest = json.loads(
             (auto / "0001-mixed/manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(off_manifest["manifest_version"], "paper2md-manifest-v0.4")
-        self.assertEqual(auto_manifest["manifest_version"], "paper2md-manifest-v0.5")
+        self.assertEqual(off_manifest["manifest_version"], "paperwright-manifest-v0.4")
+        self.assertEqual(auto_manifest["manifest_version"], "paperwright-manifest-v0.5")
         self.assertEqual(
             sum(
                 item["extraction_mode"] == "region-rendered"

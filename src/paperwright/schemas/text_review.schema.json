@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/text-review-v0.1.json",
+  "title": "PaperWright structured text review v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "task_sha256",
+    "source_sha256",
+    "article_model_sha256",
+    "reviewer",
+    "operations"
+  ],
+  "properties": {
+    "contract_version": {"const": "paperwright-text-review-v0.1"},
+    "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "article_model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reviewer": {"type": "string", "minLength": 1, "maxLength": 200},
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "block_id",
+          "expected_markdown_sha256",
+          "change_mode",
+          "markdown",
+          "reason"
+        ],
+        "properties": {
+          "op": {"const": "replace-markdown"},
+          "block_id": {"type": "string", "pattern": "^blk_[0-9a-f]{24}$"},
+          "expected_markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "change_mode": {"enum": ["format-only", "dehyphenation"]},
+          "markdown": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$"},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    }
+  }
+}

@@ -9,15 +9,15 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from paper2md.article_model import (
+from paperwright.article_model import (
     article_model_to_reader,
     canonical_article_model_json,
     render_article_markdown,
     validate_article_model,
 )
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError, OutputConflictError
-from paper2md.manifest import (
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError, OutputConflictError
+from paperwright.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     TEXT_REVIEWED_MANIFEST_VERSION,
     OutputFile,
@@ -26,12 +26,12 @@ from paper2md.manifest import (
     sha256_file,
     validate_manifest,
 )
-from paper2md.reader import canonical_reader_json
-from paper2md.text_package import (
+from paperwright.reader import canonical_reader_json
+from paperwright.text_package import (
     build_text_reviewed_package,
     validate_text_reviewed_package,
 )
-from paper2md.text_review import (
+from paperwright.text_review import (
     TEXT_REVIEW_CONTRACT_VERSION,
     build_text_task,
     canonical_text_review_json,
@@ -50,10 +50,10 @@ class TextPackageTests(unittest.TestCase):
             source_sha256=reader["source_sha256"]
         )
         (root / "images").mkdir(parents=True)
-        (root / "_paper2md").mkdir()
+        (root / "_paperwright").mkdir()
         article_path = root / "article.md"
-        model_path = root / "_paper2md/article-model.json"
-        reader_path = root / "_paper2md/reader.json"
+        model_path = root / "_paperwright/article-model.json"
+        reader_path = root / "_paperwright/reader.json"
         image_path = root / "images/figure-0001.png"
         article_path.write_text(
             render_article_markdown(model), encoding="utf-8", newline="\n"
@@ -70,13 +70,13 @@ class TextPackageTests(unittest.TestCase):
         outputs = [
             OutputFile("article.md", "markdown", article_path.stat().st_size, sha256_file(article_path)),
             OutputFile(
-                "_paper2md/article-model.json",
+                "_paperwright/article-model.json",
                 "article_model",
                 model_path.stat().st_size,
                 sha256_file(model_path),
             ),
             OutputFile(
-                "_paper2md/reader.json",
+                "_paperwright/reader.json",
                 "reader_index",
                 reader_path.stat().st_size,
                 sha256_file(reader_path),
@@ -92,7 +92,7 @@ class TextPackageTests(unittest.TestCase):
             source_sha256=model["source_sha256"],
             backend="fixture",
             backend_version="1",
-            contract_version="paper2md-physical-document-v0.2",
+            contract_version="paperwright-physical-document-v0.2",
             page_count=1,
             status="success",
             outputs=outputs,
@@ -110,7 +110,7 @@ class TextPackageTests(unittest.TestCase):
             },
             reader={
                 "contract_version": reader["contract_version"],
-                "path": "_paper2md/reader.json",
+                "path": "_paperwright/reader.json",
                 "sha256": sha256_file(reader_path),
                 "article_path": "article.md",
                 "article_sha256": reader["article"]["sha256"],
@@ -118,11 +118,11 @@ class TextPackageTests(unittest.TestCase):
             },
             article_model={
                 "contract_version": model["contract_version"],
-                "path": "_paper2md/article-model.json",
+                "path": "_paperwright/article-model.json",
                 "sha256": sha256_file(model_path),
             },
         )
-        (root / "_paper2md/manifest.json").write_text(
+        (root / "_paperwright/manifest.json").write_text(
             canonical_manifest_json(manifest), encoding="utf-8", newline="\n"
         )
         return model, image_data
@@ -177,7 +177,7 @@ class TextPackageTests(unittest.TestCase):
                 (first / "images/figure-0001.png").read_bytes(), image_data
             )
             manifest = json.loads(
-                (first / "_paper2md/manifest.json").read_text(encoding="utf-8")
+                (first / "_paperwright/manifest.json").read_text(encoding="utf-8")
             )
             validate_manifest(manifest)
             validate_text_reviewed_package(first)
@@ -187,7 +187,7 @@ class TextPackageTests(unittest.TestCase):
                 self.assertEqual(sha256_file(path), output["sha256"])
 
             reviewed_model = json.loads(
-                (first / "_paper2md/article-model.json").read_text(encoding="utf-8")
+                (first / "_paperwright/article-model.json").read_text(encoding="utf-8")
             )
             validate_article_model(reviewed_model, root=first)
             self.assertEqual(
@@ -202,11 +202,11 @@ class TextPackageTests(unittest.TestCase):
                     before[block_id]["source_spans"], after[block_id]["source_spans"]
                 )
             self.assertTrue(
-                (first / "_paper2md/06-text-review/validation-report.md").is_file()
+                (first / "_paperwright/06-text-review/validation-report.md").is_file()
             )
             self.assertEqual(
                 json.loads(
-                    (source / "_paper2md/manifest.json").read_text(encoding="utf-8")
+                    (source / "_paperwright/manifest.json").read_text(encoding="utf-8")
                 )["manifest_version"],
                 HYBRID_LAYOUT_MANIFEST_VERSION,
             )

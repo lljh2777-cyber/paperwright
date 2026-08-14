@@ -87,7 +87,7 @@ def main() -> int:
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(repo / "src")
     environment["PYTHONUTF8"] = "1"
-    command = [sys.executable, "-m", "paper2md"]
+    command = [sys.executable, "-m", "paperwright"]
 
     normal = runtime / "normal-inputs"
     normal.mkdir()
@@ -204,7 +204,7 @@ def main() -> int:
         (runtime / "auto/0001-mixed/manifest.json").read_text(encoding="utf-8")
     )
     if (
-        auto_manifest["manifest_version"] != "paper2md-manifest-v0.5"
+        auto_manifest["manifest_version"] != "paperwright-manifest-v0.5"
         or sum(
             item["extraction_mode"] == "region-rendered"
             for item in auto_manifest["figures"]
@@ -281,7 +281,7 @@ def main() -> int:
         raise RuntimeError("nested output was created")
 
     summary = {
-        "schema_version": "paper2md-phase5-batch-test-summary-v1",
+        "schema_version": "paperwright-phase5-batch-test-summary-v1",
         "case_count": len(cases),
         "pass_count": sum(bool(item["pass"]) for item in cases),
         "failure_count": 0,

@@ -1,0 +1,88 @@
+# Hybrid layout review
+
+## 1. Prepare and confirm Content ROI
+
+Choose an extraction profile deliberately:
+
+- `fast`: native text coordinates plus raster evidence; quickest.
+- `standard`: fast analysis with explainable full-object escalation on risky pages; preferred starting point for mixed documents.
+- `forensic`: full object traversal on every page; compatibility and maximum evidence.
+
+```bash
+paperwright layout-prepare input.pdf roi-review --extraction-profile standard
+```
+
+Open every `page-XXXX/content-roi.png`. Ensure the red box includes title, authors, body, footnotes, Figure, Table, and captions while excluding repeated headers, footers, page numbers, and edge decoration. When uncertain, expand the box.
+
+Edit root `content-roi.json` only as required:
+
+- keep coordinates normalized to the original full page;
+- set `review_status` to `confirmed`;
+- set a nonempty `reviewer`;
+- keep every page represented exactly once;
+- never change `source_sha256`.
+
+## 2. Prepare per-page layout tasks
+
+```bash
+paperwright layout-prepare input.pdf layout-review \
+  --content-roi-json roi-review/content-roi.json \
+  --extraction-profile standard \
+  --review-mode visual-direct
+```
+
+Use the same selected profile unless a deliberate new preparation is being created. For each `page-XXXX/`, read `review-instructions.md`, inspect the clean `page.png`, and use `content-roi.png` as the single coarse content guard. In `visual-direct` mode, `overlay.png` intentionally has no rule boxes, and `layout-task.json` omits rule-generated candidate coordinates while retaining the confirmed `metadata.analysis_roi`.
+
+## 3. Produce structured review
+
+Create `page-XXXX/final-layout.json` according to `paperwright-final-layout-v0.1` and the page instructions:
+
+- use `add` actions and normalized bboxes to draw all final regions directly
+  from `page.png`;
+- keep every non-`exclude` region inside the confirmed Content ROI; if genuine
+  content falls outside, correct and reconfirm the ROI before reviewing layout;
+- leave `source_candidate_ids` empty for directly drawn regions;
+- include all panels, axes, legends, and labels of one multi-panel Figure in a
+  single visual region;
+- draw multi-column caption fragments as one caption region and attach it to the
+  corresponding Figure/Table;
+- classify and order regions;
+- make each direct region bbox exactly match its `add` action bbox;
+- attach captions to Figure/Table regions;
+- keep non-excluded `order` values consecutive from 1;
+- use `unknown` and retain the region when uncertain;
+- copy `source_sha256` and `page` from the task;
+- set the real reviewer/model name and the instructed `prompt_version`;
+- leave `source_element_ids` empty.
+
+Do not transcribe body text, read text inside Figure/Table images, or generate Markdown.
+
+Use `--review-mode candidate-assisted` only when deliberately reproducing the
+legacy rule-overlay workflow. In that mode, every candidate must still be
+assigned, split, or discarded.
+
+## 4. Validate every page
+
+```bash
+paperwright validate-final-layout layout-review/page-0001/final-layout.json \
+  --task layout-review/page-0001/layout-task.json
+```
+
+Repeat for every page. Fix schema, completeness, action, order, and semantic-role failures before applying.
+
+## 5. Apply and inspect
+
+```bash
+paperwright layout-apply input.pdf layout-review output-dir --evidence standard
+paperwright validate-reader output-dir/_paperwright/reader.json
+paperwright validate-article-model output-dir/_paperwright/article-model.json
+```
+
+Use `--evidence minimal` only for compact delivery, `standard` for normal verification, and `full` for audit/training evidence. Use `--include-source-pdf` only when the user wants the source copied into the bundle. Choose `--references keep`, `omit`, or `separate` explicitly when the default `keep` is unsuitable.
+
+Inspect the final Markdown, linked images, Figure/Table crops, reading order, captions,
+and validation report. `article-model.json`, `reader.json`, and the public Markdown
+anchors are retained at every evidence level; do not remove them from a package
+intended for reader software. The Article Model validator also checks that Markdown
+and Reader remain deterministic projections of the same source-backed model.
+A schema-valid layout is necessary but does not prove semantic correctness.

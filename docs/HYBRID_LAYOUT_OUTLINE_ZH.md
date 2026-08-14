@@ -1,8 +1,8 @@
-# Paper2MD 混合布局识别开发大纲
+# PaperWright 混合布局识别开发大纲
 
 > 状态：A–E 已实现并验证；F 已实现训练数据导出，模型训练待积累真值
 > 开发分支：`feature/hybrid-layout`
-> 目标：以“规则生成候选、AI 审查布局、Paper2MD 精确执行”为第一阶段方案，并为后续本地机器学习保留数据。
+> 目标：以“规则生成候选、AI 审查布局、PaperWright 精确执行”为第一阶段方案，并为后续本地机器学习保留数据。
 
 ## 1. 目标
 
@@ -37,7 +37,7 @@ PDFium 提取页面元素、坐标和预览图
   ↓
 AI 审查：保留、合并、拆分、补充、分类、排序、绑定
   ↓
-Paper2MD 校验结果并吸附到精确 PDF 坐标
+PaperWright 校验结果并吸附到精确 PDF 坐标
   ↓
 文字块提取原生文字；视觉块整体截图
   ↓
@@ -167,7 +167,7 @@ AI 需要标注：
 
 ## 9. 程序校验与回退
 
-Paper2MD 必须检查：
+PaperWright 必须检查：
 
 - bbox 是否位于页面范围内；
 - 文字元素是否遗漏或重复分配；
@@ -251,7 +251,7 @@ overlay.webp          可选的候选框叠加图
 - 支持候选框合并、拆分、补充、分类、排序和绑定。
 - 对 AI 结果执行 schema 和几何校验。
 
-### 阶段 D：Paper2MD 集成
+### 阶段 D：PaperWright 集成
 
 - 文字块接入现有段落重建。
 - Figure/Table 接入区域渲染。
@@ -290,18 +290,18 @@ overlay.webp          可选的候选框叠加图
 ### 15.1 生成 Content ROI 提案
 
 ```powershell
-paper2md layout-prepare input.pdf roi-proposal-dir
+paperwright layout-prepare input.pdf roi-proposal-dir
 ```
 
 首次处理可显式选择提取模式：
 
 ```powershell
-paper2md layout-prepare input.pdf roi-proposal-dir `
+paperwright layout-prepare input.pdf roi-proposal-dir `
   --extraction-profile fast
 ```
 
 `fast` 只提取 TextPage 文字和坐标，每页批量渲染一次低分辨率预览，再由像素占用图
-生成 `paper2md-layout-task-v0.2` 栅格候选；不调用 `page.get_objects()`，也不枚举或
+生成 `paperwright-layout-task-v0.2` 栅格候选；不调用 `page.get_objects()`，也不枚举或
 解码全部矢量对象。复核包 PNG 使用确定性的中等压缩，像素和坐标不变。
 
 `standard` 先执行同样的快速分析，再按页检查原生文字缺失、候选碎片过多、栅格区域
@@ -325,7 +325,7 @@ caption 后，修正根目录 `content-roi.json`，把 `review_status` 改为
 ### 15.2 在确认的 ROI 内生成 AI 区块复核包
 
 ```powershell
-paper2md layout-prepare input.pdf review-dir `
+paperwright layout-prepare input.pdf review-dir `
   --content-roi-json roi-proposal-dir/content-roi.json
 ```
 
@@ -343,20 +343,20 @@ paper2md layout-prepare input.pdf review-dir `
 ### 15.3 校验并应用复核结果
 
 ```powershell
-paper2md validate-final-layout review-dir/page-0001/final-layout.json `
+paperwright validate-final-layout review-dir/page-0001/final-layout.json `
   --task review-dir/page-0001/layout-task.json
 
-paper2md layout-apply input.pdf review-dir output-dir --evidence standard
+paperwright layout-apply input.pdf review-dir output-dir --evidence standard
 ```
 
 参考文献及行政性后置内容默认保留。需要时可显式选择：
 
 ```powershell
 # 从 article.md 省略参考文献、致谢、作者贡献等后置内容
-paper2md layout-apply input.pdf review-dir output-dir --references omit
+paperwright layout-apply input.pdf review-dir output-dir --references omit
 
 # 将参考文献写入 references.md，并省略行政性后置内容
-paper2md layout-apply input.pdf review-dir output-dir --references separate
+paperwright layout-apply input.pdf review-dir output-dir --references separate
 ```
 
 检测优先使用 References、Bibliography 等章节标题，并兼容 PDF
@@ -373,7 +373,7 @@ output-dir/
 ├── article.md
 ├── images/
 │   └── figure-0001.png
-└── _paper2md/
+└── _paperwright/
     ├── run.json
     ├── source.json
     ├── manifest.json
@@ -394,7 +394,7 @@ output-dir/
 通过文本复核生成的 manifest v0.10 派生包还包含：
 
 ```text
-_paper2md/06-text-review/
+_paperwright/06-text-review/
 ├── text-task.json
 ├── text-review.json
 ├── validation-report.json
@@ -405,8 +405,8 @@ _paper2md/06-text-review/
 覆盖 manifest v0.9 父包。
 
 `--evidence minimal` 只保留 `article.md`、`images/`、
-`_paper2md/manifest.json`、`_paper2md/article-model.json` 和
-`_paper2md/reader.json`。Article Model 是 Markdown 与 Reader 的规范共同来源，
+`_paperwright/manifest.json`、`_paperwright/article-model.json` 和
+`_paperwright/reader.json`。Article Model 是 Markdown 与 Reader 的规范共同来源，
 Reader 是阅读功能索引，
 不是审计证据，因此不会随证据级别裁剪。`--evidence full` 还会增加
 `01-physical/physical-document.json`、每页 `page.png`、Content ROI
@@ -414,7 +414,7 @@ Reader 是阅读功能索引，
 
 原 PDF 默认不复制，只在 `source.json` 记录绝对路径、文件名、大小、页数和
 SHA-256。显式使用 `--include-source-pdf` 时，才复制为
-`_paper2md/source.pdf`。所有文件先写入同级临时目录，成功后再原子改名。
+`_paperwright/source.pdf`。所有文件先写入同级临时目录，成功后再原子改名。
 
 `standard` 和 `full` 的验证报告还包含自动输出质量检查：
 
@@ -494,12 +494,12 @@ manifest 与对象映射属于确定性结构检查。AI 明确执行 `discard` 
 
 `article.md` 默认只保留标题、正文、图片和图注，不再包含页码、region
 ID、caption 绑定或跨页拼接等私有 trace 注释；每个可定位块前保留
-`p2md:block` 或 `p2md:slot` 公共隐藏锚点。完整段落映射、图注绑定与
-跨页修复仍保存在 `_paper2md/04-provenance/layout-provenance.json` 和
+`pwwd:block` 或 `pwwd:slot` 公共隐藏锚点。完整段落映射、图注绑定与
+跨页修复仍保存在 `_paperwright/04-provenance/layout-provenance.json` 和
 验证报告中。图片替代文本优先使用已绑定图注的首句，Figure/Table 标签
 在 Markdown 中单独加粗。
 
-`_paper2md/reader.json` 是 `paper2md-reader-v0.1` 图索引。block ID 从源 PDF
+`_paperwright/reader.json` 是 `paperwright-reader-v0.1` 图索引。block ID 从源 PDF
 哈希、页码、规范化 bbox、region/paragraph 身份和元素集合摘要确定性生成；
 visual slot、asset 与 relation 使用独立命名空间。它不复制图注全文，而是通过
 `caption_block_id` 和 `caption-of` 关系指向同一正文块，避免双份内容漂移。
@@ -526,11 +526,11 @@ provenance，便于复核和后续训练。
 确定性哈希。开发时可执行只读基准：
 
 ```powershell
-paper2md benchmark-extract input.pdf
-paper2md benchmark-extract input.pdf --mode text-only
+paperwright benchmark-extract input.pdf
+paperwright benchmark-extract input.pdf --mode text-only
 ```
 
-输出使用 `paper2md-extraction-timing-v0.1`，包含源文件哈希、总耗时，以及
+输出使用 `paperwright-extraction-timing-v0.1`，包含源文件哈希、总耗时，以及
 每页的 TextPage 打开、字符扫描、原生对象遍历、位图解码、阅读顺序和规范化
 耗时；同时记录文字、图片、矢量等对象数量。该命令不创建产品输出目录，
 用于判断 fast 提取应优先绕开的实际瓶颈。计时使用单调时钟，数值本身不作为
@@ -550,7 +550,7 @@ paper2md benchmark-extract input.pdf --mode text-only
 正文 ROI、栏结构、相邻图注和阅读顺序将在下一层负责排除页眉并把同一
 Figure 的面板组合成最终视觉区块。
 
-`raster` 证据接入布局任务时使用 `paper2md-layout-task-v0.2`。原生文字/对象候选仍由
+`raster` 证据接入布局任务时使用 `paperwright-layout-task-v0.2`。原生文字/对象候选仍由
 空白带规则生成；栅格候选作为独立的 `raster` 区域加入，不与文字候选混成大框，也不
 伪造 PDF 对象 ID。被栅格区域覆盖的图内标签会记录到
 `raster_suppressed_element_ids`，避免作为正文碎片输出。靠近页面上下边缘的小型期刊
@@ -561,7 +561,7 @@ Figure 的面板组合成最终视觉区块。
 ### 15.3 导出本地机器学习数据
 
 ```powershell
-paper2md layout-export-dataset dataset-dir `
+paperwright layout-export-dataset dataset-dir `
   --review-root reviewed-document-a `
   --review-root reviewed-document-b
 ```

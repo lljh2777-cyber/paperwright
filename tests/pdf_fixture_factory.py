@@ -45,7 +45,7 @@ def create_born_digital_fixture(
 ) -> dict[str, object]:
     page1 = b"\n".join(
         [
-            b"BT /F2 22 Tf 60 730 Td (Paper2MD Fixture Title) Tj ET",
+            b"BT /F2 22 Tf 60 730 Td (PaperWright Fixture Title) Tj ET",
             b"BT /F1 11 Tf 60 690 Td (A born-digital paragraph with Caf\\351.) Tj ET",
             b"BT /F2 12 Tf 60 640 Td (Table 1. Honest degradation fixture) Tj ET",
             b"BT /F1 10 Tf 70 615 Td (Group) Tj ET",
@@ -100,7 +100,7 @@ def create_born_digital_fixture(
         ),
         8: _stream(page1),
         9: _stream(page2),
-        10: b"<< /Title (Paper2MD Fixture Title) /Producer (Paper2MD self-test) >>",
+        10: b"<< /Title (PaperWright Fixture Title) /Producer (PaperWright self-test) >>",
     }
     if include_references:
         reference_content = b"\n".join(
@@ -228,7 +228,7 @@ def create_region_render_fixture(
             b"/ColorSpace /DeviceRGB /BitsPerComponent 8 ",
         ),
         7: _stream(content),
-        8: b"<< /Title (Region render fixture) /Producer (Paper2MD self-test) >>",
+        8: b"<< /Title (Region render fixture) /Producer (PaperWright self-test) >>",
     }
     payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
     offsets = {0: 0}
@@ -409,7 +409,7 @@ def create_auto_region_fixture(
         7: _stream(b"\n".join(content)),
         8: (
             b"<< /Title (Auto region fixture) "
-            b"/Producer (Paper2MD self-test) >>"
+            b"/Producer (PaperWright self-test) >>"
         ),
     }
     payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")

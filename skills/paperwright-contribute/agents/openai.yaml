@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperWright Contribute"
+  short_description: "Develop, test, and contribute to PaperWright"
+  default_prompt: "Use $paperwright-contribute to confirm unresolved scope choices, then implement and validate a PaperWright contribution."

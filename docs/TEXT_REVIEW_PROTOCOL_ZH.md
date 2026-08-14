@@ -1,23 +1,23 @@
-# Paper2MD 文本复核协议 v0.2
+# paperwright 文本复核协议 v0.2
 
 ## 目标与边界
 
-混合布局阶段由人工或视觉模型只决定页面几何和语义区域；Paper2MD 从原生 PDF
+混合布局阶段由人工或视觉模型只决定页面几何和语义区域；paperwright 从原生 PDF
 文字层恢复正文并生成规范 `article-model.json`。文本复核阶段再把该模型投影成
 不含页面图像、source span、资产与关系的 `text-task.json`，供纯文本模型做保守整理。
 
-Paper2MD 核心不会自行调用模型、外部 API 或云服务。主 Agent 负责选择具体模型、
+paperwright 核心不会自行调用模型、外部 API 或云服务。主 Agent 负责选择具体模型、
 确认隐私范围、传递任务、接收 JSON，并调用本地验证器。
 
 ## 命令
 
 ```bash
-paper2md text-prepare ARTICLE_MODEL_JSON TEXT_TASK_JSON
-paper2md validate-text-task TEXT_TASK_JSON --article-model ARTICLE_MODEL_JSON
-paper2md validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
-paper2md text-apply ARTICLE_MODEL_JSON TEXT_TASK_JSON TEXT_REVIEW_JSON REVIEWED_MODEL_JSON
-paper2md text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE
-paper2md validate-text-package OUTPUT_PACKAGE
+paperwright text-prepare ARTICLE_MODEL_JSON TEXT_TASK_JSON
+paperwright validate-text-task TEXT_TASK_JSON --article-model ARTICLE_MODEL_JSON
+paperwright validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
+paperwright text-apply ARTICLE_MODEL_JSON TEXT_TASK_JSON TEXT_REVIEW_JSON REVIEWED_MODEL_JSON
+paperwright text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE
+paperwright validate-text-package OUTPUT_PACKAGE
 ```
 
 所有输出文件都拒绝覆盖。`text-apply` 只生成新的 Article Model；`text-package`
@@ -65,7 +65,7 @@ span、asset ID、资产与关系；`join-blocks` 是唯一允许改变 block �
 操作，且只做同页相邻 body 的纯拼接。v0.2 不允许拼写/标点/事实改写，不允许
 拆分或删除正文，不允许改变 Markdown 标题层级，也不允许依据模型知识补写正文、
 图注、公式或引用。规则与协议都覆盖不到的复杂版式，可写保守的一次性脚本
-（见 `skills/paper2md-convert/references/join-blocks-protocol.md`），但必须做
+（见 `skills/paperwright-convert/references/join-blocks-protocol.md`），但必须做
 词守恒校验并保存溯源。
 
 ## 哈希链
@@ -85,5 +85,5 @@ JSON 验证报告的 SHA-256。输出清单逐文件绑定全部交付文件，�
 - 文本子 Agent：只接收 text task JSON，只返回 text review JSON；
 - 主 Agent：保管原 PDF 与哈希链，运行所有验证命令，决定是否接受并交付新模型。
 
-仓库内 [`paper2md-agent-workflow`](../skills/paper2md-agent-workflow/SKILL.md)
+仓库内 [`paperwright-agent-workflow`](../skills/paperwright-agent-workflow/SKILL.md)
 skill 固化了这一协调流程。

@@ -2,8 +2,8 @@ import json
 import math
 import unittest
 
-from paper2md.exceptions import ContractValidationError
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.exceptions import ContractValidationError
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
 
 from helpers import minimal_document
 

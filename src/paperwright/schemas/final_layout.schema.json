@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/final_layout.schema.json",
+  "title": "PaperWright final layout v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_sha256",
+    "page",
+    "reviewer",
+    "prompt_version",
+    "regions",
+    "actions",
+    "warnings"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "paperwright-final-layout-v0.1"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "page": {"$ref": "#/$defs/page"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "prompt_version": {"type": "string", "minLength": 1},
+    "regions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/region"}
+    },
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"}
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_index",
+        "width",
+        "height",
+        "rotation",
+        "coordinate_system"
+      ],
+      "properties": {
+        "page_index": {"type": "integer", "minimum": 0},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "coordinate_system": {"const": "top-left/pdf-point/y-down"}
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region_id",
+        "bbox",
+        "content_class",
+        "role",
+        "order",
+        "source_candidate_ids",
+        "source_element_ids",
+        "parent_region_id",
+        "confidence"
+      ],
+      "properties": {
+        "region_id": {"$ref": "#/$defs/identifier"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "content_class": {
+          "enum": ["exclude", "text", "visual", "unknown"]
+        },
+        "role": {
+          "enum": [
+            "heading",
+            "body",
+            "figure",
+            "table",
+            "caption",
+            "footnote",
+            "header",
+            "footer",
+            "margin",
+            "equation",
+            "other",
+            "unknown"
+          ]
+        },
+        "order": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "source_candidate_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "source_element_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "parent_region_id": {
+          "anyOf": [
+            {"$ref": "#/$defs/identifier"},
+            {"type": "null"}
+          ]
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "action",
+        "source_candidate_ids",
+        "result_region_ids",
+        "bbox",
+        "target_region_id",
+        "reason"
+      ],
+      "properties": {
+        "action_id": {"$ref": "#/$defs/identifier"},
+        "action": {
+          "enum": [
+            "keep",
+            "merge",
+            "split",
+            "resize",
+            "discard",
+            "add",
+            "reorder",
+            "attach-caption"
+          ]
+        },
+        "source_candidate_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "result_region_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "bbox": {
+          "anyOf": [
+            {"$ref": "#/$defs/bbox"},
+            {"type": "null"}
+          ]
+        },
+        "target_region_id": {
+          "anyOf": [
+            {"$ref": "#/$defs/identifier"},
+            {"type": "null"}
+          ]
+        },
+        "reason": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

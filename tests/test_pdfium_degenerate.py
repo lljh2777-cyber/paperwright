@@ -1,11 +1,11 @@
 import unittest
 
-from paper2md.backends.pdfium import (
+from paperwright.backends.pdfium import (
     _decorative_line_end_symbol_reason,
     _degenerate_bbox_reason,
     _degenerate_text_class,
 )
-from paper2md.models import BBox, Element, Provenance
+from paperwright.models import BBox, Element, Provenance
 
 
 class PDFiumDegenerateObjectTests(unittest.TestCase):

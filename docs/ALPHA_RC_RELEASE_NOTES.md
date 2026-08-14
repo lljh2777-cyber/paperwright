@@ -1,11 +1,11 @@
-# Paper2MD 0.8.0a0 Source Alpha 变更说明
+# PaperWright 0.8.0a0 Source Alpha 变更说明
 
 本版本在混合科学 PDF 布局流程上增加 Reader 互操作契约，用于源码审阅、本地
 安装和有限试用，不是正式稳定 release。
 
 ## 已包含
 
-- `paper2md --version/--help/convert/batch/validate-model/validate-reader`；
+- `paperwright --version/--help/convert/batch/validate-model/validate-reader`；
 - `text-prepare/validate-text-task/validate-text-review/text-apply/text-package/validate-text-package`；
 - `layout-prepare/validate-layout-task/validate-final-layout/layout-apply`；
 - `benchmark-extract/layout-export-dataset`；
@@ -16,7 +16,7 @@
 - Content ROI、规则/栅格候选、结构化布局复核和严格应用；
 - `fast`、选择性升级的 `standard` 和完整对象 `forensic` 提取；
 - manifest v0.4–v0.10、Reader v0.1、证据包、质量报告和训练数据导出；
-- 稳定 `p2md:block` / `p2md:slot` 锚点、Figure/图注关系与内容指纹；
+- 稳定 `pwwd:block` / `pwwd:slot` 锚点、Figure/图注关系与内容指纹；
 - Text Task v0.1 与 Text Review v0.1 的源保持文本整理边界；
 - Linux 云端复核，以及 Phase 5 留存的 Windows/Python 3.11.2 独立证据。
 
@@ -45,7 +45,7 @@
 OCR/扫描 PDF 识别、语义表格、公式 LaTeX、完整 PDFBox 后端、GUI、
 服务器/API、容器、公开 PyPI、签名、tag 或二进制发布。
 
-Paper2MD 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
+PaperWright 不调用生成式 AI、LLM API、云 OCR 或外部推理服务。
 
 ## 当前验证记录
 

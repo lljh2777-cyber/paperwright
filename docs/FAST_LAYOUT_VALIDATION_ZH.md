@@ -12,7 +12,7 @@ v0.2 任务；`standard` 能按页识别复杂页面并只升级这些页面；�
 | Pan-cancer spatial atlas | 24 | 13.311 秒 | 4,468,700 bytes | 46,513,264 bytes |
 
 两篇均使用 TextPage 文字坐标、1.5 倍低分辨率页面图和栅格残余候选，任务契约均为
-`paper2md-layout-task-v0.2`。Topological 在 Step 5 与 Step 6 两次独立准备中，全部
+`paperwright-layout-task-v0.2`。Topological 在 Step 5 与 Step 6 两次独立准备中，全部
 5 页的任务 SHA-256 逐页一致。
 
 此前 Topological 的完整对象流程曾在 15 分钟后仍未完成，但当时没有保存可复现的

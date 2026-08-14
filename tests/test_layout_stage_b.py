@@ -2,13 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.api import Paper2MD
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig
-from paper2md.layout_candidates import generate_layout_tasks
-from paper2md.layout_models import NormalizedBBox
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.raster_layout import RasterPageAnalysis, RasterVisualRegion
+from paperwright.api import PaperWright
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig
+from paperwright.layout_candidates import generate_layout_tasks
+from paperwright.layout_models import NormalizedBBox
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.raster_layout import RasterPageAnalysis, RasterVisualRegion
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -630,7 +630,7 @@ class LayoutStageBTests(unittest.TestCase):
             root = Path(temp)
             source = root / "fixture.pdf"
             create_born_digital_fixture(source)
-            product = Paper2MD(Paper2MDConfig(workspace_root=root))
+            product = PaperWright(PaperWrightConfig(workspace_root=root))
             product.register_backend("pdfium", PDFiumBackend())
             document = product.extract_physical_document(
                 source,

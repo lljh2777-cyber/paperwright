@@ -13,7 +13,7 @@
 | Topological domains in mammalian genomes identified by analysis of chromatin interactions | `b699e4cfe8050b7ff54382db4077916a01f2e708c670f89d75f445d018160c6f` | 5 | 41 | 37 | 17 | 4 |
 | Pan-cancer spatial atlas of tertiary lymphoid | `021147f9c563de8609c31d341f54f4116cc9bed36a20793b1dbf7f2f40a54459` | 24 | 134 | 93 | 65 | 9 |
 
-候选生成器版本：`paper2md-whitespace-candidates-v0.3`。
+候选生成器版本：`paperwright-whitespace-candidates-v0.3`。
 
 ## 视觉检查
 
@@ -64,9 +64,9 @@
 
 证据位于系统临时目录中的以下唯一目录，未写入稳定仓库或 Obsidian：
 
-- `paper2md-layout-validation-topological-v4`
-- `paper2md-layout-validation-topological-v5`
-- `paper2md-layout-validation-pan-cancer-v2`
-- `paper2md-layout-validation-pan-cancer-v3`
+- `paperwright-layout-validation-topological-v4`
+- `paperwright-layout-validation-topological-v5`
+- `paperwright-layout-validation-pan-cancer-v2`
+- `paperwright-layout-validation-pan-cancer-v3`
 
 这些目录包含原 PDF 的页面预览，不能提交到 Git。

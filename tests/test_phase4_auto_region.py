@@ -6,13 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.api import Paper2MD
-from paper2md.backends import BackendRegistry
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.cli import main as cli_main
-from paper2md.config import Paper2MDConfig, RegionRenderPolicy
-from paper2md.exceptions import ConfigurationError
-from paper2md.manifest import validate_manifest
+from paperwright.api import PaperWright
+from paperwright.backends import BackendRegistry
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.cli import main as cli_main
+from paperwright.config import PaperWrightConfig, RegionRenderPolicy
+from paperwright.exceptions import ConfigurationError
+from paperwright.manifest import validate_manifest
 
 from pdf_fixture_factory import create_auto_region_fixture
 
@@ -45,8 +45,8 @@ class Phase4AutoRegionTests(unittest.TestCase):
         source = root / f"{case}.pdf"
         create_auto_region_fixture(source, case, rotation=rotation)
         output = root / "output"
-        result = Paper2MD(
-            config=Paper2MDConfig(
+        result = PaperWright(
+            config=PaperWrightConfig(
                 region_render=policy or RegionRenderPolicy(mode="auto")
             ),
             registry=self._registry(),
@@ -67,7 +67,7 @@ class Phase4AutoRegionTests(unittest.TestCase):
 
     def test_complete_single_bitmap_is_not_promoted(self):
         _, manifest = self._convert("single_bitmap")
-        self.assertEqual(manifest["manifest_version"], "paper2md-manifest-v0.5")
+        self.assertEqual(manifest["manifest_version"], "paperwright-manifest-v0.5")
         self.assertEqual(manifest["region_render_policy"]["mode"], "auto")
         self.assertFalse(
             any(

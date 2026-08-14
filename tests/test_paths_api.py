@@ -2,13 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.api import Paper2MD
-from paper2md.backends.base import BackendCapabilities, BackendIdentity, BackendRegistry
-from paper2md.backends.pdfbox import PDFBoxBackend
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig
-from paper2md.exceptions import BackendUnavailableError, PathSafetyError
-from paper2md.paths import validate_conversion_paths
+from paperwright.api import PaperWright
+from paperwright.backends.base import BackendCapabilities, BackendIdentity, BackendRegistry
+from paperwright.backends.pdfbox import PDFBoxBackend
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig
+from paperwright.exceptions import BackendUnavailableError, PathSafetyError
+from paperwright.paths import validate_conversion_paths
 
 from helpers import minimal_document
 
@@ -35,7 +35,7 @@ class PathAndApiTests(unittest.TestCase):
         source, output = validate_conversion_paths(
             self.pdf,
             self.root / "new-output",
-            Paper2MDConfig(workspace_root=self.root),
+            PaperWrightConfig(workspace_root=self.root),
         )
         self.assertEqual(source, self.pdf.resolve())
         self.assertEqual(output, (self.root / "new-output").resolve())
@@ -44,26 +44,26 @@ class PathAndApiTests(unittest.TestCase):
         output = self.root / "exists"
         output.mkdir()
         with self.assertRaisesRegex(PathSafetyError, "拒绝覆盖"):
-            validate_conversion_paths(self.pdf, output, Paper2MDConfig())
+            validate_conversion_paths(self.pdf, output, PaperWrightConfig())
 
     def test_workspace_escape_is_rejected(self):
         with self.assertRaisesRegex(PathSafetyError, "越出"):
             validate_conversion_paths(
                 self.pdf,
                 self.root.parent / "outside",
-                Paper2MDConfig(workspace_root=self.root),
+                PaperWrightConfig(workspace_root=self.root),
             )
 
     def test_input_inside_output_is_rejected(self):
         with self.assertRaisesRegex(PathSafetyError, "包含输入"):
-            validate_conversion_paths(self.pdf, self.root, Paper2MDConfig())
+            validate_conversion_paths(self.pdf, self.root, PaperWrightConfig())
 
     def test_missing_input_is_rejected(self):
         with self.assertRaisesRegex(PathSafetyError, "不存在"):
             validate_conversion_paths(
                 self.root / "missing.pdf",
                 self.root / "out",
-                Paper2MDConfig(),
+                PaperWrightConfig(),
             )
 
     def test_backend_registry_rejects_duplicate(self):
@@ -73,11 +73,11 @@ class PathAndApiTests(unittest.TestCase):
             registry.register("fixture", FakeBackend())
 
     def test_api_uses_injected_backend(self):
-        config = Paper2MDConfig(backend="pdfium", workspace_root=self.root)
+        config = PaperWrightConfig(backend="pdfium", workspace_root=self.root)
         registry = BackendRegistry()
         fake = FakeBackend()
         registry.register("pdfium", fake)
-        product = Paper2MD(config=config, registry=registry)
+        product = PaperWright(config=config, registry=registry)
         document = product.extract_physical_document(self.pdf, self.root / "out")
         self.assertEqual(document.backend, "fixture")
         self.assertEqual(document.pages[0].elements[0].text, "Café α bootstrap")
@@ -90,7 +90,7 @@ class PathAndApiTests(unittest.TestCase):
 
     def test_pdfbox_stub_fails_explicitly(self):
         with self.assertRaises(BackendUnavailableError):
-            PDFBoxBackend().extract(self.pdf, Paper2MDConfig(backend="pdfbox"))
+            PDFBoxBackend().extract(self.pdf, PaperWrightConfig(backend="pdfbox"))
 
 
 if __name__ == "__main__":

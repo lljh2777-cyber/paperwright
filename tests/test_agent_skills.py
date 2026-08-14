@@ -5,10 +5,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = (
-    "paper2md-install",
-    "paper2md-convert",
-    "paper2md-contribute",
-    "paper2md-agent-workflow",
+    "paperwright-install",
+    "paperwright-convert",
+    "paperwright-contribute",
+    "paperwright-agent-workflow",
 )
 
 
@@ -33,31 +33,31 @@ class AgentSkillTests(unittest.TestCase):
             self.assertIn(f"${name}", readme)
 
     def test_conversion_skill_preserves_review_boundary(self):
-        skill_root = ROOT / "skills" / "paper2md-convert"
+        skill_root = ROOT / "skills" / "paperwright-convert"
         combined = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(skill_root.rglob("*.md"))
         )
         for required in (
-            "paper2md layout-prepare",
-            "paper2md validate-final-layout",
-            "paper2md layout-apply",
+            "paperwright layout-prepare",
+            "paperwright validate-final-layout",
+            "paperwright layout-apply",
             "source_element_ids",
             "does not prove semantic correctness",
         ):
             self.assertIn(required, combined)
 
     def test_skills_require_staged_user_decisions(self):
-        convert_root = ROOT / "skills" / "paper2md-convert"
+        convert_root = ROOT / "skills" / "paperwright-convert"
         convert = (convert_root / "SKILL.md").read_text(encoding="utf-8")
         option_guide = (
             convert_root / "references" / "options-and-questions.md"
         ).read_text(encoding="utf-8")
         install = (
-            ROOT / "skills" / "paper2md-install" / "SKILL.md"
+            ROOT / "skills" / "paperwright-install" / "SKILL.md"
         ).read_text(encoding="utf-8")
         contribute = (
-            ROOT / "skills" / "paper2md-contribute" / "SKILL.md"
+            ROOT / "skills" / "paperwright-contribute" / "SKILL.md"
         ).read_text(encoding="utf-8")
 
         self.assertIn("Ask before running", convert)
@@ -76,17 +76,17 @@ class AgentSkillTests(unittest.TestCase):
         self.assertIn("Confirm contribution scope", contribute)
 
     def test_agent_workflow_separates_visual_and_text_reviewers(self):
-        root = ROOT / "skills" / "paper2md-agent-workflow"
+        root = ROOT / "skills" / "paperwright-agent-workflow"
         combined = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted(root.rglob("*.md"))
         )
         for required in (
-            "paper2md text-prepare",
-            "paper2md validate-text-review",
-            "paper2md text-apply",
-            "paper2md text-package",
-            "paper2md validate-text-package",
+            "paperwright text-prepare",
+            "paperwright validate-text-review",
+            "paperwright text-apply",
+            "paperwright text-package",
+            "paperwright validate-text-package",
             "Text reviewer input: text task JSON only",
             "Do not merge, delete",
         ):

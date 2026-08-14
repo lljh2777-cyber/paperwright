@@ -7,14 +7,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError
-from paper2md.layout_models import (
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError
+from paperwright.layout_models import (
     FinalLayout,
     LayoutAction,
     LayoutRegion,
 )
-from paper2md.layout_review import (
+from paperwright.layout_review import (
     LAYOUT_REVIEW_PROMPT_VERSION,
     build_layout_review_instructions,
     validate_layout_review,
@@ -303,12 +303,12 @@ class LayoutStageCTests(unittest.TestCase):
             )
             self.assertEqual(
                 index["layout_task_versions"],
-                ["paper2md-layout-task-v0.2"],
+                ["paperwright-layout-task-v0.2"],
             )
             cache = index["extraction_cache"]
             self.assertEqual(
                 cache["schema_version"],
-                "paper2md-layout-extraction-cache-v0.1",
+                "paperwright-layout-extraction-cache-v0.1",
             )
             self.assertTrue(
                 (
@@ -329,7 +329,7 @@ class LayoutStageCTests(unittest.TestCase):
             )
             self.assertEqual(
                 task["contract_version"],
-                "paper2md-layout-task-v0.2",
+                "paperwright-layout-task-v0.2",
             )
             self.assertTrue(
                 any("raster" in item["element_kinds"] for item in task["candidates"])

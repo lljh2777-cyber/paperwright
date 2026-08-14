@@ -9,10 +9,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from paper2md.article_model import canonical_article_model_json
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError
-from paper2md.text_review import (
+from paperwright.article_model import canonical_article_model_json
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError
+from paperwright.text_review import (
     TEXT_REVIEW_CONTRACT_VERSION,
     TEXT_TASK_CONTRACT_VERSION,
     apply_text_review,
@@ -225,8 +225,8 @@ class JoinBlocksContractTests(unittest.TestCase):
         }
 
     def _model(self, *, joinable: bool = True) -> dict:
-        from paper2md.article_model import build_article_model
-        from paper2md.reader_contract import stable_reader_id
+        from paperwright.article_model import build_article_model
+        from paperwright.reader_contract import stable_reader_id
 
         def block_id(kind: str, span: dict) -> str:
             return stable_reader_id(
@@ -376,8 +376,8 @@ class JoinBlocksContractTests(unittest.TestCase):
                 task=cap_task,
             )
         # block referenced by a relation is not joinable
-        from paper2md.article_model import ARTICLE_MODEL_CONTRACT_VERSION
-        from paper2md.reader_contract import normalized_visible_text
+        from paperwright.article_model import ARTICLE_MODEL_CONTRACT_VERSION
+        from paperwright.reader_contract import normalized_visible_text
         import hashlib as _hashlib
 
         def _sha(value: str) -> str:
@@ -421,7 +421,7 @@ class JoinBlocksContractTests(unittest.TestCase):
                         "assets",
                         "relations",
                     ],
-                    "text_equivalence_version": "paper2md-text-equivalence-v0.1",
+                    "text_equivalence_version": "paperwright-text-equivalence-v0.1",
                 },
                 "blocks": blocks,
             }
@@ -455,7 +455,7 @@ class JoinBlocksContractTests(unittest.TestCase):
         model = self._model()
         task = build_text_task(model)
         task_v1 = deepcopy(task)
-        task_v1["contract_version"] = "paper2md-text-task-v0.1"
+        task_v1["contract_version"] = "paperwright-text-task-v0.1"
         task_v1["policy"]["allowed_operations"] = ["replace-markdown"]
         self.assertEqual(
             text_task_sha256(task_v1),
@@ -464,7 +464,7 @@ class JoinBlocksContractTests(unittest.TestCase):
         validate_text_task(task_v1)
         blocks = {item["id"]: item for item in task["blocks"]}
         review = {
-            "contract_version": "paper2md-text-review-v0.1",
+            "contract_version": "paperwright-text-review-v0.1",
             "task_sha256": text_task_sha256(task_v1),
             "source_sha256": task_v1["source_sha256"],
             "article_model_sha256": task_v1["article_model"]["sha256"],

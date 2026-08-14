@@ -37,15 +37,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 不希望改变执行策略时，直接运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m paper2md --help
+.\.venv\Scripts\python.exe -m paperwright --help
 ```
 
-### 安装后找不到 `paper2md`
+### 安装后找不到 `paperwright`
 
 通常是虚拟环境尚未激活，或者关闭终端后没有重新激活。也可以始终使用：
 
 ```bash
-python -m paper2md --help
+python -m paperwright --help
 ```
 
 ### 依赖下载失败
@@ -95,12 +95,12 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 ### Reader 为什么报告 article 或 asset 哈希不匹配？
 
 `reader.json` 会绑定 `article.md` 和每个图片资产的 SHA-256。文件被编辑、替换或
-复制不完整时，运行 `paper2md validate-reader <包>/_paper2md/reader.json` 会明确
+复制不完整时，运行 `paperwright validate-reader <包>/_paperwright/reader.json` 会明确
 失败。若只是人工修改正文，应由 Reader 使用 block ID 和可见文本指纹执行显式
 重定位；不要手工改写 `reader.json` 中的哈希来绕过检查。
 
 v0.9 文档包还可以运行
-`paper2md validate-article-model <包>/_paper2md/article-model.json`，同时检查规范
+`paperwright validate-article-model <包>/_paperwright/article-model.json`，同时检查规范
 模型、`article.md`、`reader.json` 和图片资产是否仍是同一组确定性投影。
 
 ## 明确不支持

@@ -4,14 +4,14 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from paper2md.models import BBox, Element, Page, Provenance
-from paper2md.models import PhysicalDocument
-from paper2md.layout_candidates import (
+from paperwright.models import BBox, Element, Page, Provenance
+from paperwright.models import PhysicalDocument
+from paperwright.layout_candidates import (
     generate_layout_tasks,
     propose_content_rois,
 )
-from paper2md.layout_models import LayoutTask
-from paper2md.raster_layout import (
+from paperwright.layout_models import LayoutTask
+from paperwright.raster_layout import (
     RasterLayoutConfig,
     analyze_page_raster,
     render_raster_overlay,
@@ -175,10 +175,10 @@ class RasterLayoutTests(unittest.TestCase):
 
         self.assertGreater(rois[0].y, 0.03)
         task = tasks[0]
-        self.assertEqual(task.contract_version, "paper2md-layout-task-v0.2")
+        self.assertEqual(task.contract_version, "paperwright-layout-task-v0.2")
         self.assertEqual(
             task.candidate_generator_version,
-            "paper2md-whitespace-raster-candidates-v0.3",
+            "paperwright-whitespace-raster-candidates-v0.3",
         )
         self.assertEqual(
             task.metadata["raster_evidence"]["ink_mask_sha256"],
@@ -212,7 +212,7 @@ class RasterLayoutTests(unittest.TestCase):
         legacy_task = generate_layout_tasks(document)[0]
         self.assertEqual(
             legacy_task.contract_version,
-            "paper2md-layout-task-v0.1",
+            "paperwright-layout-task-v0.1",
         )
         self.assertNotIn("raster_evidence", legacy_task.metadata)
         self.assertNotIn(

@@ -2,17 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig
-from paper2md.layout_models import (
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig
+from paperwright.layout_models import (
     LayoutCandidate,
     LayoutPage,
     LayoutTask,
     NormalizedBBox,
     RASTER_LAYOUT_TASK_VERSION,
 )
-from paper2md.layout_risk import assess_layout_risk
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.layout_risk import assess_layout_risk
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -76,7 +76,7 @@ class LayoutRiskTests(unittest.TestCase):
         )
         self.assertEqual(
             assessment.policy_version,
-            "paper2md-layout-risk-v0.2",
+            "paperwright-layout-risk-v0.2",
         )
 
     def test_independent_moderate_signals_combine_into_upgrade(self):
@@ -202,7 +202,7 @@ class LayoutRiskTests(unittest.TestCase):
 
             result = backend.extract_hybrid(
                 source,
-                Paper2MDConfig(),
+                PaperWrightConfig(),
                 full_page_indices=(0,),
             )
 

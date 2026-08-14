@@ -10,11 +10,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from paper2md.api import Paper2MD
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig
-from paper2md.manifest import sha256_file, validate_manifest
-from paper2md.models import PhysicalDocument
+from paperwright.api import PaperWright
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig
+from paperwright.manifest import sha256_file, validate_manifest
+from paperwright.models import PhysicalDocument
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -40,11 +40,11 @@ def main() -> int:
             }
         )
 
-    with tempfile.TemporaryDirectory(prefix="paper2md-stage-b-smoke-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="paperwright-stage-b-smoke-") as temporary:
         root = Path(temporary)
         source = root / "fixture.pdf"
         fixture = create_born_digital_fixture(source)
-        product = Paper2MD(Paper2MDConfig(workspace_root=root))
+        product = PaperWright(PaperWrightConfig(workspace_root=root))
         product.register_backend("pdfium", PDFiumBackend())
         first = product.convert(source, root / "run1")
         second = product.convert(source, root / "run2")
@@ -72,7 +72,7 @@ def main() -> int:
         record("fixture_pages", fixture["pages"], 2)
         record("manifest_source_hash", manifest["source_sha256"], fixture["sha256"])
         record("physical_pages", len(physical.pages), 2)
-        record("title", article.startswith("# Paper2MD Fixture Title\n"), True)
+        record("title", article.startswith("# PaperWright Fixture Title\n"), True)
         record(
             "double_column_order",
             [
@@ -115,7 +115,7 @@ def main() -> int:
             tree_hashes(second.output_dir),
         )
         summary = {
-            "schema_version": "paper2md-v2-mvp-smoke-v1",
+            "schema_version": "paperwright-v2-mvp-smoke-v1",
             "fixture": fixture,
             "backend": manifest["backend"],
             "check_count": len(checks),

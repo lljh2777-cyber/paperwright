@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paper2md.cli import main
+from paperwright.cli import main
 from pdf_fixture_factory import create_born_digital_fixture
 
 
@@ -92,7 +92,7 @@ class CLITests(unittest.TestCase):
             performance = result["performance"]
             self.assertEqual(
                 performance["schema_version"],
-                "paper2md-extraction-timing-v0.1",
+                "paperwright-extraction-timing-v0.1",
             )
             self.assertEqual(performance["page_count"], 2)
             self.assertGreaterEqual(performance["total_ms"], 0)
@@ -156,7 +156,7 @@ class CLITests(unittest.TestCase):
             raster = result["performance"]["raster_layout"]
             self.assertEqual(
                 raster["schema_version"],
-                "paper2md-raster-benchmark-v0.1",
+                "paperwright-raster-benchmark-v0.1",
             )
             self.assertEqual(len(raster["pages"]), 2)
             self.assertEqual(len(raster["layout_tasks"]), 2)
@@ -165,7 +165,7 @@ class CLITests(unittest.TestCase):
             for page in raster["pages"]:
                 self.assertEqual(
                     page["contract_version"],
-                    "paper2md-raster-layout-v0.1",
+                    "paperwright-raster-layout-v0.1",
                 )
                 self.assertEqual(len(page["mask_sha256"]["ink"]), 64)
                 self.assertGreaterEqual(page["analysis_ms"], 0)
@@ -173,7 +173,7 @@ class CLITests(unittest.TestCase):
             self.assertTrue(
                 all(
                     task["contract_version"]
-                    == "paper2md-layout-task-v0.2"
+                    == "paperwright-layout-task-v0.2"
                     for task in raster["layout_tasks"]
                 )
             )

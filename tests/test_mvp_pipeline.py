@@ -6,11 +6,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from paper2md.api import Paper2MD
-from paper2md.backends.pdfium import PDFiumBackend
-from paper2md.config import Paper2MDConfig
-from paper2md.manifest import sha256_file, validate_manifest
-from paper2md.models import PhysicalDocument
+from paperwright.api import PaperWright
+from paperwright.backends.pdfium import PDFiumBackend
+from paperwright.config import PaperWrightConfig
+from paperwright.manifest import sha256_file, validate_manifest
+from paperwright.models import PhysicalDocument
 
 from pdf_fixture_factory import create_born_digital_fixture
 
@@ -26,7 +26,7 @@ class MVPPipelineTests(unittest.TestCase):
         self.temp.cleanup()
 
     def product(self):
-        product = Paper2MD(Paper2MDConfig(workspace_root=self.root))
+        product = PaperWright(PaperWrightConfig(workspace_root=self.root))
         product.register_backend("pdfium", PDFiumBackend())
         return product
 
@@ -63,7 +63,7 @@ class MVPPipelineTests(unittest.TestCase):
     def test_title_and_basic_double_column_order(self):
         self.convert()
         markdown = (self.root / "out/article.md").read_text(encoding="utf-8")
-        self.assertTrue(markdown.startswith("# Paper2MD Fixture Title\n"))
+        self.assertTrue(markdown.startswith("# PaperWright Fixture Title\n"))
         self.assertLess(markdown.index("LEFT-ONE"), markdown.index("LEFT-TWO"))
         self.assertLess(markdown.index("LEFT-TWO"), markdown.index("RIGHT-ONE"))
         self.assertLess(markdown.index("RIGHT-ONE"), markdown.index("RIGHT-TWO"))
@@ -75,8 +75,8 @@ class MVPPipelineTests(unittest.TestCase):
 
     def test_text_only_extraction_matches_full_native_text(self):
         backend = PDFiumBackend()
-        full = backend.extract(self.source, Paper2MDConfig()).document
-        fast_result = backend.extract_text_only(self.source, Paper2MDConfig())
+        full = backend.extract(self.source, PaperWrightConfig()).document
+        fast_result = backend.extract_text_only(self.source, PaperWrightConfig())
         fast = fast_result.document
 
         for full_page, fast_page in zip(full.pages, fast.pages, strict=True):
@@ -168,7 +168,7 @@ class MVPPipelineTests(unittest.TestCase):
         with self.assertRaises(Exception):
             product.convert(corrupt, self.root / "failed-out")
         self.assertFalse((self.root / "failed-out").exists())
-        self.assertEqual(list(self.root.glob(".failed-out.paper2md-*")), [])
+        self.assertEqual(list(self.root.glob(".failed-out.paperwright-*")), [])
 
     def test_manifest_output_hashes_match(self):
         result = self.convert()

@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperWright Install"
+  short_description: "Download, install, and verify PaperWright"
+  default_prompt: "Use $paperwright-install to ask me about unresolved setup choices, install PaperWright in an isolated environment, and verify the CLI."

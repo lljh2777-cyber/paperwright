@@ -1,4 +1,4 @@
-# Paper2MD 0.8 Alpha 架构
+# PaperWright 0.8 Alpha 架构
 
 ## 数据流
 
@@ -36,52 +36,52 @@ Markdown + images + manifest     article model
 
 ## 模块边界
 
-- `paper2md.models`：不可依赖具体 PDF 后端的物理文档模型。
-- `paper2md.backends.base`：后端协议、能力描述和运行身份。
-- `paper2md.backends.pdfium`：调用 pypdfium2 的薄适配器；PDF 解析、字体/
+- `paperwright.models`：不可依赖具体 PDF 后端的物理文档模型。
+- `paperwright.backends.base`：后端协议、能力描述和运行身份。
+- `paperwright.backends.pdfium`：调用 pypdfium2 的薄适配器；PDF 解析、字体/
   图像解码均由 PDFium 完成，项目不重写底层解析器。
-- `paper2md.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
+- `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
-- `paper2md.api`：输入路径验证、后端选择和输出事务边界。
-- `paper2md.manifest`：稳定 manifest 构造与契约检查。
-- `paper2md.figures`：仅使用同页文本 marker、bbox、邻近/包含关系构建
+- `paperwright.api`：输入路径验证、后端选择和输出事务边界。
+- `paperwright.manifest`：稳定 manifest 构造与契约检查。
+- `paperwright.figures`：仅使用同页文本 marker、bbox、邻近/包含关系构建
   Figure group 与 caption association；不做图像语义理解。
-- `paper2md.region_render`：默认不启用；`auto` 只规划同页、显式
+- `paperwright.region_render`：默认不启用；`auto` 只规划同页、显式
   caption、有充分 bitmap/vector/text 几何证据且能证明 native 不完整的
   裁剪请求。跨页 continuation、近整页、caption 冲突/歧义、正文侵入和
   候选水平范围明显窄于 caption 等情形直接拒绝。
-- `paper2md.writer`：把 PhysicalDocument 与内存资产确定性写入隔离临时
+- `paperwright.writer`：把 PhysicalDocument 与内存资产确定性写入隔离临时
   目录，再原子提交。
-- `paper2md.layout_candidates`：提出 Content ROI，生成内部使用的文字、原生图形和
+- `paperwright.layout_candidates`：提出 Content ROI，生成内部使用的文字、原生图形和
   栅格风险证据；不直接决定最终语义布局。默认 `visual-direct` 审核不会把这些
   规则候选坐标交给视觉审核者。
-- `paper2md.layout_candidate_features`：只负责候选区块的几何、文字规律、字体、
+- `paperwright.layout_candidate_features`：只负责候选区块的几何、文字规律、字体、
   图形覆盖和少量模式特征，避免候选分割与特征计算互相耦合。
-- `paper2md.raster_layout`：生成 ink/text/residual mask 和高召回视觉候选。
-- `paper2md.layout_models`：定义布局任务、复核动作、最终区块及其严格契约。
-- `paper2md.layout_review`：验证候选是否完整分配、动作是否可追溯、语义角色
+- `paperwright.raster_layout`：生成 ink/text/residual mask 和高召回视觉候选。
+- `paperwright.layout_models`：定义布局任务、复核动作、最终区块及其严格契约。
+- `paperwright.layout_review`：验证候选是否完整分配、动作是否可追溯、语义角色
   是否一致。
-- `paper2md.layout_risk`：决定 `standard` 配置下哪些页面需要完整对象分析。
-- `paper2md.layout_writer`：将已验证布局吸附到 PDF 对象，恢复文字、渲染视觉
+- `paperwright.layout_risk`：决定 `standard` 配置下哪些页面需要完整对象分析。
+- `paperwright.layout_writer`：将已验证布局吸附到 PDF 对象，恢复文字、渲染视觉
   区块并生成自包含证据包。
-- `paper2md.layout_caption`：在已验证区块之间执行确定性的 Figure/Table 与
+- `paperwright.layout_caption`：在已验证区块之间执行确定性的 Figure/Table 与
   caption 几何绑定；不参与 Markdown 写出和区域渲染。
-- `paper2md.layout_continuation`：集中管理同页正文、跨页正文和已绑定 caption
+- `paperwright.layout_continuation`：集中管理同页正文、跨页正文和已绑定 caption
   的保守续接条件及 provenance 事件。
-- `paper2md.reader`：把混合布局写出器的内部 trace 编译为公开 Markdown 锚点，
+- `paperwright.reader`：把混合布局写出器的内部 trace 编译为公开 Markdown 锚点，
   生成正文块、视觉资产和图注关系索引。
-- `paper2md.article_model`：保存复核后的规范文章块、内联 Markdown、source span、
+- `paperwright.article_model`：保存复核后的规范文章块、内联 Markdown、source span、
   视觉资产和关系；严格验证后确定性投影为 `article.md` 与 `reader.json`。
-- `paper2md.text_review`：从 Article Model 投影不含页面图像和几何来源的文本任务，
+- `paperwright.text_review`：从 Article Model 投影不含页面图像和几何来源的文本任务，
   校验带任务/模型哈希的受约束 Markdown 操作，并在保持身份图不变时生成新模型。
-- `paper2md.text_package`：验证完整 v0.9 源包，应用文本复核，并原子写出带父包、
+- `paperwright.text_package`：验证完整 v0.9 源包，应用文本复核，并原子写出带父包、
   task、review 与验证报告哈希链的 manifest v0.10 派生包。
-- `paper2md.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
+- `paperwright.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
   交叉检查锚点、关系、路径、文件大小与哈希。
-- `paper2md.quality` 与 `paper2md.evidence`：区分启发式 warning 和确定性结构
+- `paperwright.quality` 与 `paperwright.evidence`：区分启发式 warning 和确定性结构
   检查，生成可定位的验证报告。
-- `paper2md.layout_dataset`：导出不含正文、页面图像和对象 ID 的数值训练数据。
-- `paper2md.cli`：暴露直接转换、布局准备/校验/应用、数据导出和只读基准命令；
+- `paperwright.layout_dataset`：导出不含正文、页面图像和对象 ID 的数值训练数据。
+- `paperwright.cli`：暴露直接转换、布局准备/校验/应用、数据导出和只读基准命令；
   错误转为明确非零退出状态。
 
 ## 提取配置
@@ -93,7 +93,7 @@ Markdown + images + manifest     article model
 准备阶段记录请求配置、实际配置、升级页和缓存哈希。应用阶段重放这些决定，
 不允许在未声明的情况下换用另一种提取方式。
 
-`standard` 使用版本化的 `paper2md-layout-risk-v0.2` 策略。原生文字缺失、没有
+`standard` 使用版本化的 `paperwright-layout-risk-v0.2` 策略。原生文字缺失、没有
 候选或候选/栅格/分隔关系达到极端数量时直接升级；中等复杂页面则综合候选碎片、
 栅格区域、分隔密度、混合内容、ROI 边界相交、栅格覆盖文字和外围内容比例。
 只有多个独立信号共同达到阈值才升级。`review-index.json` 保存策略参数、分项指标、
@@ -126,13 +126,13 @@ Markdown + images + manifest     article model
 | text task | v0.1 | 只读文本块、编辑策略及源 Article Model 哈希 |
 | text review | v0.1 | 绑定任务的格式保持/断行去连字符操作 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |
-| Markdown anchor | v0.1 | `p2md:block` / `p2md:slot` 公共隐藏锚点 |
+| Markdown anchor | v0.1 | `pwwd:block` / `pwwd:slot` 公共隐藏锚点 |
 | layout task | v0.1/v0.2 | v0.2 增加栅格证据 |
 | final layout | v0.1 | 严格结构化复核结果 |
 | layout provenance | v0.5 | 增加 reader block/asset 反向引用 |
 
 `layout-apply` 默认生成自包含包，正文和图片位于顶层，Article Model、Reader
-索引、运行信息、ROI、最终布局、provenance 与验证报告位于 `_paper2md/`。
+索引、运行信息、ROI、最终布局、provenance 与验证报告位于 `_paperwright/`。
 Article Model 与 Reader 在所有证据级别都保留；`minimal`、`standard`、`full`
 只控制审计证据范围，不改变论文正文的布局计划。
 
@@ -165,7 +165,7 @@ Article Model 复用同一稳定身份，按连续 `order` 保存每个公开块
 明确标为 `degraded`。
 
 混合布局流程默认由人工或视觉 AI 直接依据原页图像输出结构化区块计划。审核者用
-`add` 和规范化 bbox 绘制最终区块；Paper2MD 再按几何覆盖把原生 PDF 元素归属到
+`add` 和规范化 bbox 绘制最终区块；PaperWright 再按几何覆盖把原生 PDF 元素归属到
 区块。确认后的 Content ROI 是粗粒度语义内容边界：非排除区块不得越界，元素回接
 也会过滤 ROI 外围内容；页眉、页脚等仍可作为 `exclude` 区块保留审计来源。ROI
 包含标题、作者、脚注、Figure/Table 和 caption，不等同于狭义段落正文。

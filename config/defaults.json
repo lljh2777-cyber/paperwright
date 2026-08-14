@@ -1,6 +1,6 @@
 {
   "backend": "pdfium",
-  "contract_version": "paper2md-physical-document-v0.2",
+  "contract_version": "paperwright-physical-document-v0.2",
   "limits": {
     "max_pages": 2000,
     "max_output_bytes": 536870912,

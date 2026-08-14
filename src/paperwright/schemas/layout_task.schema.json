@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/layout_task.schema.json",
+  "title": "PaperWright layout task v0.1/v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_sha256",
+    "page",
+    "candidate_generator_version",
+    "feature_schema_version",
+    "preview_filename",
+    "overlay_filename",
+    "candidates",
+    "separators",
+    "metadata"
+  ],
+  "properties": {
+    "contract_version": {
+      "enum": ["paperwright-layout-task-v0.1", "paperwright-layout-task-v0.2"]
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "page": {
+      "$ref": "#/$defs/page"
+    },
+    "candidate_generator_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "preview_filename": {
+      "$ref": "#/$defs/filename"
+    },
+    "overlay_filename": {
+      "$ref": "#/$defs/filename"
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "separators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/separator"
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_index",
+        "width",
+        "height",
+        "rotation",
+        "coordinate_system"
+      ],
+      "properties": {
+        "page_index": {"type": "integer", "minimum": 0},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "coordinate_system": {"const": "top-left/pdf-point/y-down"}
+      }
+    },
+    "featureMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "bbox",
+        "source_element_ids",
+        "element_kinds",
+        "features"
+      ],
+      "properties": {
+        "candidate_id": {"$ref": "#/$defs/identifier"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "source_element_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "element_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["text", "image", "vector", "raster", "link", "annotation"]
+          }
+        },
+        "features": {"$ref": "#/$defs/featureMap"}
+      }
+    },
+    "separator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "separator_id",
+        "orientation",
+        "bbox",
+        "adjacent_candidate_ids",
+        "features"
+      ],
+      "properties": {
+        "separator_id": {"$ref": "#/$defs/identifier"},
+        "orientation": {"enum": ["horizontal", "vertical"]},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "adjacent_candidate_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "features": {"$ref": "#/$defs/featureMap"}
+      }
+    }
+  }
+}

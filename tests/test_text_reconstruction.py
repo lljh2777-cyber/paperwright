@@ -1,7 +1,7 @@
 import unittest
 
-from paper2md.models import BBox, Element, Provenance
-from paper2md.text_reconstruction import (
+from paperwright.models import BBox, Element, Provenance
+from paperwright.text_reconstruction import (
     clean_text,
     join_line_elements,
     reconstruct_text_groups,

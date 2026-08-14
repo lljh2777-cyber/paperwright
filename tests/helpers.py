@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
 
 
 def minimal_document() -> PhysicalDocument:

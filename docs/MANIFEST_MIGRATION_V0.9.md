@@ -5,12 +5,12 @@
 manifest v0.9 为混合布局文档包增加规范文章模型：
 
 ```text
-_paper2md/article-model.json
+_paperwright/article-model.json
 ```
 
 此前 `article.md` 与 `reader.json` 由同一次内存编译生成，但没有可持久化、可验证
 的共同来源。v0.9 将复核后的文章块、稳定 ID、source spans、视觉资产和关系保存为
-`paper2md-article-model-v0.1`，然后从该模型确定性生成 Markdown 与 Reader。
+`paperwright-article-model-v0.1`，然后从该模型确定性生成 Markdown 与 Reader。
 
 ## manifest 新字段
 
@@ -19,8 +19,8 @@ v0.9 在保留 v0.8 `reader` 摘要的同时，新增：
 ```json
 {
   "article_model": {
-    "contract_version": "paper2md-article-model-v0.1",
-    "path": "_paper2md/article-model.json",
+    "contract_version": "paperwright-article-model-v0.1",
+    "path": "_paperwright/article-model.json",
     "sha256": "<article-model.json sha256>"
   }
 }
@@ -56,14 +56,14 @@ Reader 都属于功能索引，因此在 `minimal`、`standard` 和 `full` 证�
 完整验证 v0.9 文档包的共同来源与两个投影：
 
 ```bash
-paper2md validate-article-model output-dir/_paper2md/article-model.json
+paperwright validate-article-model output-dir/_paperwright/article-model.json
 ```
 
 该命令会检查 Article Model 契约、稳定身份、关系、图片资产，并验证磁盘上的
-`article.md` 和 `_paper2md/reader.json` 是否与模型的确定性投影完全一致。
+`article.md` 和 `_paperwright/reader.json` 是否与模型的确定性投影完全一致。
 
 旧版 Reader 验证入口继续可用：
 
 ```bash
-paper2md validate-reader output-dir/_paper2md/reader.json
+paperwright validate-reader output-dir/_paperwright/reader.json
 ```

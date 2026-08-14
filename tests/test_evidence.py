@@ -1,6 +1,6 @@
 import unittest
 
-from paper2md.evidence import (
+from paperwright.evidence import (
     build_validation_report,
     build_warning_summary,
     validation_report_markdown,
@@ -86,7 +86,7 @@ class EvidenceWarningSummaryTests(unittest.TestCase):
         )
         self.assertEqual(
             report["contract_version"],
-            "paper2md-validation-report-v0.2",
+            "paperwright-validation-report-v0.2",
         )
         self.assertEqual(report["warning_summary"]["affected_pages"], [2])
         markdown = validation_report_markdown(report)

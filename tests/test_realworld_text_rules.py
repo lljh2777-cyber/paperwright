@@ -2,12 +2,12 @@ import hashlib
 import unittest
 from dataclasses import replace
 
-from paper2md.backends.pdfium import (
+from paperwright.backends.pdfium import (
     _reading_order,
     _restore_missing_spaces_from_charboxes,
 )
-from paper2md.models import BBox, Element, Page, PhysicalDocument, Provenance
-from paper2md.writer import (
+from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
+from paperwright.writer import (
     _format_markdown_paragraph,
     _markdown_text_groups,
     _title,

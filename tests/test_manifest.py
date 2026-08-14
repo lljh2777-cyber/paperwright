@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from paper2md.exceptions import ContractValidationError
-from paper2md.manifest import (
+from paperwright.exceptions import ContractValidationError
+from paperwright.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     OutputFile,
     PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
@@ -21,7 +21,7 @@ class ManifestTests(unittest.TestCase):
             source_sha256="c" * 64,
             backend="fixture",
             backend_version="1",
-            contract_version="paper2md-physical-document-v0.2",
+            contract_version="paperwright-physical-document-v0.2",
             page_count=1,
             status="success_with_degradation",
             outputs=[OutputFile("article.md", "markdown", 12, "d" * 64)],
@@ -29,7 +29,7 @@ class ManifestTests(unittest.TestCase):
         )
 
     def test_schema_files_are_draft_2020_12_json(self):
-        root = Path(__file__).parents[1] / "src/paper2md/schemas"
+        root = Path(__file__).parents[1] / "src/paperwright/schemas"
         for name in (
             "manifest.schema.json",
             "physical_document.schema.json",
@@ -92,13 +92,13 @@ class ManifestTests(unittest.TestCase):
             source_sha256="c" * 64,
             backend="fixture",
             backend_version="1",
-            contract_version="paper2md-physical-document-v0.2",
+            contract_version="paperwright-physical-document-v0.2",
             page_count=1,
             status="success",
             outputs=[
                 OutputFile("article.md", "markdown", 12, article_hash),
                 OutputFile(
-                    "_paper2md/reader.json",
+                    "_paperwright/reader.json",
                     "reader_index",
                     24,
                     reader_hash,
@@ -106,7 +106,7 @@ class ManifestTests(unittest.TestCase):
                 *(
                     [
                         OutputFile(
-                            "_paper2md/article-model.json",
+                            "_paperwright/article-model.json",
                             "article_model",
                             48,
                             article_model_hash,
@@ -118,19 +118,19 @@ class ManifestTests(unittest.TestCase):
                 *(
                     [
                         OutputFile(
-                            "_paper2md/06-text-review/text-task.json",
+                            "_paperwright/06-text-review/text-task.json",
                             "text_task",
                             30,
                             text_hashes["task"],
                         ),
                         OutputFile(
-                            "_paper2md/06-text-review/text-review.json",
+                            "_paperwright/06-text-review/text-review.json",
                             "text_review",
                             30,
                             text_hashes["review"],
                         ),
                         OutputFile(
-                            "_paper2md/06-text-review/validation-report.json",
+                            "_paperwright/06-text-review/validation-report.json",
                             "text_validation_report",
                             30,
                             text_hashes["validation"],
@@ -154,20 +154,20 @@ class ManifestTests(unittest.TestCase):
             },
             reader=(
                 {
-                    "contract_version": "paper2md-reader-v0.1",
-                    "path": "_paper2md/reader.json",
+                    "contract_version": "paperwright-reader-v0.1",
+                    "path": "_paperwright/reader.json",
                     "sha256": reader_hash,
                     "article_path": "article.md",
                     "article_sha256": article_hash,
-                    "anchor_contract": "paper2md-markdown-anchor-v0.1",
+                    "anchor_contract": "paperwright-markdown-anchor-v0.1",
                 }
                 if version in reader_versions
                 else None
             ),
             article_model=(
                 {
-                    "contract_version": "paper2md-article-model-v0.1",
-                    "path": "_paper2md/article-model.json",
+                    "contract_version": "paperwright-article-model-v0.1",
+                    "path": "_paperwright/article-model.json",
                     "sha256": article_model_hash,
                 }
                 if version in article_model_versions
@@ -175,17 +175,17 @@ class ManifestTests(unittest.TestCase):
             ),
             text_review=(
                 {
-                    "task_contract_version": "paper2md-text-task-v0.1",
-                    "review_contract_version": "paper2md-text-review-v0.1",
-                    "task_path": "_paper2md/06-text-review/text-task.json",
+                    "task_contract_version": "paperwright-text-task-v0.1",
+                    "review_contract_version": "paperwright-text-review-v0.1",
+                    "task_path": "_paperwright/06-text-review/text-task.json",
                     "task_sha256": text_hashes["task"],
-                    "review_path": "_paper2md/06-text-review/text-review.json",
+                    "review_path": "_paperwright/06-text-review/text-review.json",
                     "review_sha256": text_hashes["review"],
                     "source_article_model_sha256": article_model_hash,
                     "parent_manifest_sha256": "4" * 64,
                     "reviewer": "fixture-text-agent",
                     "operation_count": 1,
-                    "validation_path": "_paper2md/06-text-review/validation-report.json",
+                    "validation_path": "_paperwright/06-text-review/validation-report.json",
                     "validation_sha256": text_hashes["validation"],
                 }
                 if version == TEXT_REVIEWED_MANIFEST_VERSION

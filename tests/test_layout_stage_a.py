@@ -8,13 +8,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from paper2md.cli import main
-from paper2md.exceptions import ContractValidationError, OutputConflictError
-from paper2md.layout_export import (
+from paperwright.cli import main
+from paperwright.exceptions import ContractValidationError, OutputConflictError
+from paperwright.layout_export import (
     export_layout_task_bundle,
     render_layout_overlay,
 )
-from paper2md.layout_models import (
+from paperwright.layout_models import (
     FinalLayout,
     LayoutAction,
     LayoutCandidate,
@@ -24,12 +24,12 @@ from paper2md.layout_models import (
     LayoutTask,
     NormalizedBBox,
 )
-from paper2md.layout_review import (
+from paperwright.layout_review import (
     LAYOUT_REVIEW_PROMPT_VERSION,
     configure_layout_review_task,
     validate_layout_review,
 )
-from paper2md.models import BBox
+from paperwright.models import BBox
 
 
 def _task() -> LayoutTask:

@@ -12,7 +12,7 @@ class PublicOnboardingTests(unittest.TestCase):
         project = tomllib.loads(
             (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )["project"]
-        init_text = (ROOT / "src/paper2md/__init__.py").read_text(
+        init_text = (ROOT / "src/paperwright/__init__.py").read_text(
             encoding="utf-8"
         )
         match = re.search(r'^__version__ = "([^"]+)"$', init_text, re.MULTILINE)
@@ -26,7 +26,7 @@ class PublicOnboardingTests(unittest.TestCase):
     def test_readme_has_complete_windows_and_linux_install_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         for required in (
-            "git clone https://github.com/lljh2777-cyber/Paper2MD.git",
+            "git clone https://github.com/lljh2777-cyber/PaperWright.git",
             "py -3.12 -m venv .venv",
             r".\.venv\Scripts\Activate.ps1",
             "python3 -m venv .venv",
@@ -37,7 +37,7 @@ class PublicOnboardingTests(unittest.TestCase):
 
     def test_readme_has_module_fallback_and_output_contract(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("python -m paper2md --help", readme)
+        self.assertIn("python -m paperwright --help", readme)
         self.assertIn("article.md", readme)
         self.assertIn("physical_document.json", readme)
         self.assertIn("manifest.json", readme)
