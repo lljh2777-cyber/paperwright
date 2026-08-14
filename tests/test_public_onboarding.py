@@ -26,7 +26,7 @@ class PublicOnboardingTests(unittest.TestCase):
     def test_readme_has_complete_windows_and_linux_install_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         for required in (
-            "git clone https://github.com/lljh2777-cyber/PaperWright.git",
+            "git clone https://github.com/lljh2777-cyber/paperwright.git",
             "py -3.12 -m venv .venv",
             r".\.venv\Scripts\Activate.ps1",
             "python3 -m venv .venv",

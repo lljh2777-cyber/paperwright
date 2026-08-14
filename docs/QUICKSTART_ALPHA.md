@@ -17,8 +17,8 @@ macOS、Windows ARM 和 Linux ARM 尚未验证。
 使用 Git：
 
 ```bash
-git clone https://github.com/lljh2777-cyber/PaperWright.git
-cd PaperWright
+git clone https://github.com/lljh2777-cyber/paperwright.git
+cd paperwright
 ```
 
 没有 Git 时，可在 GitHub 选择 **Code → Download ZIP**。解压后进入包含

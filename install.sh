@@ -2,7 +2,7 @@
 # paperwright 引导安装器 — 一键安装 CLI 与 Agent skills 到当前 harness
 #
 # 用法:
-#   curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/PaperWright/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/paperwright/main/install.sh | bash
 #   bash install.sh [install|update|uninstall|verify] [选项]
 #
 # 选项:
@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/lljh2777-cyber/PaperWright.git"
+REPO_URL="https://github.com/lljh2777-cyber/paperwright.git"
 REPO_BRANCH="main"
 PREFIX="${PWRIGHT_PREFIX:-$HOME/.paperwright}"
 CHECKOUT_DIR="$PREFIX/src"

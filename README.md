@@ -52,7 +52,7 @@ paperwright --version
 （自动检测 agent harness、安装 Python、复制 4 个 skills）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/PaperWright/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lljh2777-cyber/paperwright/main/install.sh | bash
 ```
 
 引导安装器会自动：检测当前 agent harness（Claude Code / Codex / Cursor / Gemini
@@ -103,8 +103,8 @@ paperwright --help
 需要源码或 skills 时再克隆安装：
 
 ```powershell
-git clone https://github.com/lljh2777-cyber/PaperWright.git
-cd PaperWright
+git clone https://github.com/lljh2777-cyber/paperwright.git
+cd paperwright
 
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -137,8 +137,8 @@ paperwright --help
 克隆源码手动安装：
 
 ```bash
-git clone https://github.com/lljh2777-cyber/PaperWright.git
-cd PaperWright
+git clone https://github.com/lljh2777-cyber/paperwright.git
+cd paperwright
 
 python3 -m venv .venv
 source .venv/bin/activate
