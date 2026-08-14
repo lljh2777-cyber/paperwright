@@ -9,6 +9,7 @@ SKILLS = (
     "paperwright-convert",
     "paperwright-contribute",
     "paperwright-agent-workflow",
+    "paperwright-vision-qwen",
 )
 
 

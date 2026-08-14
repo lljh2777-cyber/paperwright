@@ -325,11 +325,15 @@ python -m paperwright convert input.pdf output-dir
 - [`paperwright-convert`](skills/paperwright-convert/SKILL.md)：直接转换、批量转换与人工/视觉 AI 混合复核；
 - [`paperwright-contribute`](skills/paperwright-contribute/SKILL.md)：理解架构、修改代码、测试和参与贡献。
 - [`paperwright-agent-workflow`](skills/paperwright-agent-workflow/SKILL.md)：由主 Agent 隔离协调视觉布局与纯文本复核子 Agent。
+- [`paperwright-vision-qwen`](skills/paperwright-vision-qwen/SKILL.md)（可选）：把视觉复核绑定到
+  qwen-mm-plugins 的多模态 MCP 工具（Content ROI 建议、visual-direct 区域、
+  join-blocks 断句确认、图注核查）。仅在已安装 qwen-mm-plugins 并配置 DashScope
+  key 时可用；未安装不影响核心与其余 skills。
 
 支持仓库内 skill 发现的 Agent 可以直接加载 `skills/`。其他工具可把对应 skill
 目录复制到自身的 skills 目录，或在提示中明确要求参照对应 `SKILL.md`。安装后可使用
-`$paperwright-install`、`$paperwright-convert`、`$paperwright-contribute` 或
-`$paperwright-agent-workflow` 显式调用。
+`$paperwright-install`、`$paperwright-convert`、`$paperwright-contribute`、
+`$paperwright-agent-workflow` 或 `$paperwright-vision-qwen` 显式调用。
 
 这些 skills 只指导 Agent 调用现有命令和遵守项目契约，不会替 paperwright 隐式增加
 联网、LLM、OCR 或外部 API 行为。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperWright Vision (qwen)"
+  short_description: "Optional visual reviewer backed by qwen-mm-plugins"
+  default_prompt: "Use $paperwright-vision-qwen to run visual review with qwen-mm-plugins MCP tools: Content ROI proposals, visual-direct final-layout regions, join-blocks splice confirmation, and figure/caption checks. All outputs are mapped to PaperWright contracts and validated locally."

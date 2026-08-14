@@ -28,7 +28,7 @@ PREFIX="${PWRIGHT_PREFIX:-$HOME/.paperwright}"
 CHECKOUT_DIR="$PREFIX/src"
 VENV_DIR="$PREFIX/venv"
 BIN_LINK="${PWRIGHT_BIN_LINK:-$HOME/.local/bin/paperwright}"
-SKILL_DIRS=("paperwright-install" "paperwright-convert" "paperwright-contribute" "paperwright-agent-workflow")
+SKILL_DIRS=("paperwright-install" "paperwright-convert" "paperwright-contribute" "paperwright-agent-workflow" "paperwright-vision-qwen")
 NO_COLOR="${NO_COLOR:-}"
 
 if [[ -z "$NO_COLOR" && -t 1 ]]; then
