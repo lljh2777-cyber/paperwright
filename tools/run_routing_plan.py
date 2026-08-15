@@ -81,6 +81,15 @@ def _run(argv: list[str], *, label: str, cwd: Path | None = None) -> None:
         raise SystemExit(f"{label} 失败 (exit {process.returncode})")
 
 
+def _try_run(argv: list[str], *, label: str, cwd: Path | None = None) -> bool:
+    try:
+        _run(argv, label=label, cwd=cwd)
+        return True
+    except SystemExit as exc:
+        _log(f"{label} 未成功: {exc}")
+        return False
+
+
 def _read_routing(review_dir: Path) -> dict:
     path = review_dir / "routing.json"
     if not path.is_file():
@@ -245,15 +254,15 @@ def main() -> int:
     _run(layout_apply_argv, label="layout-apply")
 
     # Text stage
-    if not l1_pages:
-        _log("无 L1 页面，跳过文本模型阶段")
+    text_pages = sorted(set(l1_pages) | set(l3_pages))
+    if not text_pages:
+        _log("无 L1/L3 页面，跳过文本模型阶段")
         return 0
 
     article_model = (
         args.output_dir / "_paperwright" / "article-model.json"
     )
     task_path = args.text_task or (args.output_dir / "text-task.json")
-    review_path = args.output_dir / "text-review.json"
     reviewed_output = args.reviewed_output or (
         args.output_dir.parent / f"{args.output_dir.name}-text-reviewed"
     )
@@ -267,43 +276,89 @@ def main() -> int:
         ),
         label="text-prepare",
     )
-    _run(
-        _cmd_python(
-            str(ROOT / "tools" / "run_text_review.py"),
-            str(task_path),
-            str(review_path),
-            "--pages",
-            ",".join(str(page) for page in l1_pages),
-        ),
-        label=f"L1 文本桥 pages={','.join(str(p) for p in l1_pages)}",
+
+    used_l1 = False
+    if l1_pages:
+        review_path = args.output_dir / "text-review.json"
+        l1_ok = _try_run(
+            _cmd_python(
+                str(ROOT / "tools" / "run_text_review.py"),
+                str(task_path),
+                str(review_path),
+                "--pages",
+                ",".join(str(page) for page in l1_pages),
+            ),
+            label=f"L1 文本桥 pages={','.join(str(p) for p in l1_pages)}",
+        )
+        _check_budget(
+            _usage_tokens(review_path.with_name(review_path.stem + ".usage.json")),
+            args.token_budget,
+        )
+        if l1_ok:
+            l1_ok = _try_run(
+                _cmd_python(
+                    "-m",
+                    "paperwright",
+                    "validate-text-review",
+                    str(review_path),
+                    "--task",
+                    str(task_path),
+                ),
+                label="validate-text-review",
+            )
+        used_l1 = l1_ok
+
+    synthesis_run_path: Path | None = None
+    if used_l1:
+        review_path = args.output_dir / "text-review.json"
+    else:
+        _log("L1 未成功，降级 L3 程序合成桥")
+        review_path = args.output_dir / "text-review.l3.json"
+        synthesis_run_path = args.output_dir / "synthesize-run.json"
+        l3_pages = sorted(set(l3_pages) | set(l1_pages))
+        _run(
+            _cmd_python(
+                str(ROOT / "tools" / "run_text_synthesize.py"),
+                str(article_model),
+                str(task_path),
+                str(review_path),
+                "--pages",
+                ",".join(str(page) for page in l3_pages),
+                "--synthesis-run",
+                str(synthesis_run_path),
+            ),
+            label=f"L3 程序合成桥 pages={','.join(str(p) for p in l3_pages)}",
+        )
+        _check_budget(
+            _usage_tokens(
+                synthesis_run_path.with_name("synthesize-cost.json")
+            ),
+            args.token_budget,
+        )
+        _run(
+            _cmd_python(
+                "-m",
+                "paperwright",
+                "validate-text-review",
+                str(review_path),
+                "--task",
+                str(task_path),
+            ),
+            label="validate-text-review",
+        )
+
+    package_argv = _cmd_python(
+        "-m",
+        "paperwright",
+        "text-package",
+        str(args.output_dir),
+        str(task_path),
+        str(review_path),
+        str(reviewed_output),
     )
-    _check_budget(
-        _usage_tokens(review_path.with_name(review_path.stem + ".usage.json")),
-        args.token_budget,
-    )
-    _run(
-        _cmd_python(
-            "-m",
-            "paperwright",
-            "validate-text-review",
-            str(review_path),
-            "--task",
-            str(task_path),
-        ),
-        label="validate-text-review",
-    )
-    _run(
-        _cmd_python(
-            "-m",
-            "paperwright",
-            "text-package",
-            str(args.output_dir),
-            str(task_path),
-            str(review_path),
-            str(reviewed_output),
-        ),
-        label="text-package",
-    )
+    if synthesis_run_path is not None:
+        package_argv.extend(["--synthesis-run", str(synthesis_run_path)])
+    _run(package_argv, label="text-package")
     _log(f"文本复核派生包: {reviewed_output}")
     return 0
 

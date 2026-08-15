@@ -169,8 +169,9 @@ paperwright 的差异化不在"某一项绝对质量最高"，而在：
    渲染失败自动保留原生文本。仍需用真实论文评估识别准确率与图片体积。
 2. **路由/分级已自动接线**。`layout-prepare` 确定性生成 `routing.json`；
    `tools/run_routing_plan.py` 读取该计划，L0 页用规则兜底布局，L2 页调视觉桥，
-   全部校验后执行 `layout-apply`，L1 页继续走文本桥与 `text-package`，并支持
-   `--token-budget` 超限停止回退。预算上限、L3 自动降级与 run.json 聚合仍待实现。
+   全部校验后执行 `layout-apply`，L1 页继续走文本桥与 `text-package`；L1 校验
+   失败会自动降级 `run_text_synthesize.py` 并写 manifest v0.11，且支持
+   `--token-budget` 超限停止回退。预算上限与 run.json 聚合仍待实现。
 3. **成本计量缺失**。没有 token/成本统计，优化无法度量。
 4. **视觉协议对模型输出的鲁棒性**。实测模型产出有 bbox 变体、单对象、order=0、越 ROI 等形态变异，需把"模型输出 → 契约规范化"做成一等公民（官方 `normalize` 步骤，而非下游脚本补丁）。
 5. **程序合成层（L3）最小原型已完成、上游化并带落盘溯源**。设计已定（§8.3）；join-blocks DSL 内核位于 `src/paperwright/synthesize.py`，`text-package --synthesis-run` 写出带确定性重放校验的 manifest v0.11。剩余差距是更广操作集与成本计量。
