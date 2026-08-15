@@ -65,7 +65,9 @@ class L1BridgeToolTests(unittest.TestCase):
             ],
             seen,
         )
-        decisions = L1_TOOL["judge"](client, candidates, model="custom-model")
+        decisions, _cost = L1_TOOL["judge"](
+            client, candidates, model="custom-model"
+        )
         self.assertEqual(len(decisions), 2)
         self.assertEqual(seen, ["custom-model"])
 
@@ -154,6 +156,10 @@ class L1BridgeToolTests(unittest.TestCase):
             self.assertEqual(
                 review_path.read_text(encoding="utf-8"),
                 canonical_text_review_json(review, task=task),
+            )
+            self.assertTrue(
+                (root / "text-review.usage.json").is_file(),
+                "L1 bridge should persist a usage report",
             )
 
             # Refusal happens before the model client is created.

@@ -29,6 +29,7 @@ from pathlib import Path
 
 from paperwright.exceptions import ContractValidationError
 from paperwright.layout_models import FinalLayout, LayoutTask
+from paperwright.llm_cost import CostReport, canonical_cost_report_json
 from paperwright.layout_review import validate_layout_review
 
 MODEL = os.environ.get("PW_VISUAL_MODEL", "qwen3.7-plus")
@@ -342,7 +343,9 @@ def _ensure_caption_regions(
     return layout
 
 
-def _generate_layout(client, task: LayoutTask, image_path: Path, model: str) -> dict:
+def _generate_layout(
+    client, task: LayoutTask, image_path: Path, model: str, cost_report: CostReport
+) -> dict:
     image_url = _data_url(image_path)
     resp = client.chat.completions.create(
         model=model,
@@ -359,6 +362,12 @@ def _generate_layout(client, task: LayoutTask, image_path: Path, model: str) -> 
         max_tokens=4096,
         extra_body={"enable_thinking": False},
     )
+    cost_report.record(
+        bridge=f"paperwright-visual-review-bridge/{model}",
+        model=model,
+        step=f"page-{task.page.page_index + 1}",
+        usage=getattr(resp, "usage", None),
+    )
     content = resp.choices[0].message.content or ""
     content = _strip_fences(content)
     data = json.loads(content)
@@ -372,6 +381,7 @@ def _review_page(
     page_dir: Path,
     model: str,
     physical_document: dict,
+    cost_report: CostReport,
     *,
     attempts: int = MAX_ATTEMPTS,
 ) -> dict:
@@ -384,7 +394,9 @@ def _review_page(
     last_error = None
     for _ in range(attempts):
         try:
-            layout = _generate_layout(client, task, image_path, model)
+            layout = _generate_layout(
+                client, task, image_path, model, cost_report
+            )
             layout = _ensure_caption_regions(task, layout, physical_document)
             validate_layout_review(FinalLayout.from_dict(layout), task)
             return layout
@@ -427,25 +439,44 @@ def main() -> int:
             print(path.name)
         return 0
 
+    cost_path = review_dir / "visual-review-cost.json"
+    if cost_path.exists():
+        raise SystemExit(f"cost 报告已存在，拒绝覆盖: {cost_path}")
+
     client, base_url = _load_client()
     physical_path = review_dir / "extraction-cache" / "physical-document.json"
     if not physical_path.is_file():
         raise SystemExit(f"缺少物理文档缓存: {physical_path}")
     physical_document = json.loads(physical_path.read_text(encoding="utf-8"))
     print(f"视觉复核: {len(page_dirs)} 页, model={MODEL}, base_url={base_url}", file=sys.stderr)
+    cost_report = CostReport()
     for path in page_dirs:
         output = path / "final-layout.json"
         if output.exists():
             print(f"{path.name}: final-layout.json 已存在，跳过", file=sys.stderr)
             continue
         print(f"{path.name}: 视觉复核中", file=sys.stderr)
-        layout = _review_page(client, path, args.model, physical_document)
+        layout = _review_page(
+            client, path, args.model, physical_document, cost_report
+        )
         output.write_text(
             json.dumps(layout, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             + "\n",
             encoding="utf-8",
         )
         print(f"{path.name}: 已写 final-layout.json", file=sys.stderr)
+    cost_path.write_text(
+        canonical_cost_report_json(cost_report),
+        encoding="utf-8",
+        newline="\n",
+    )
+    totals = cost_report.totals()
+    print(
+        f"用量: {totals['call_count']} 次调用, "
+        f"{totals['input_tokens']} in / {totals['output_tokens']} out tokens, "
+        f"估算 ${totals['estimated_cost_usd_known']}",
+        file=sys.stderr,
+    )
     return 0
 
 

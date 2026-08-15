@@ -148,9 +148,12 @@ paperwright 的差异化不在"某一项绝对质量最高"，而在：
 | extraction（规则先筛） | 规则风险信号先路由：无风险页不调模型；只对高风险块调模型 |
 | summarization（摘要压缩） | 判定任务天然无需摘要；若未来引入长上下文，可在工具输出层压缩 |
 
-### 5.4 成本计量（待实现）
+### 5.4 成本计量（部分实现）
 
-- `run.json` 增加 per-step token 用量（输入/输出/推理 tokens）与估算成本；
+- ✅ bridge 侧已记录每次模型调用的 input/output/reasoning tokens 与估算成本，
+  写为 `paperwright-llm-cost-v0.1` 报告：L1 输出 `<review>.usage.json`，
+  L3 输出 `synthesize-cost.json`，视觉桥输出 `visual-review-cost.json`；
+- 待实现：`run.json` 聚合 per-step 用量，以及 CLI 预算上限和超限降级；
 - 让"降 token"可度量：同一篇论文在不同路由/模型下的成本对比成为回归指标。
 
 ---

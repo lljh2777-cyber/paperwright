@@ -12,6 +12,7 @@ Read the actual source before editing; this map only routes investigation.
 | Evidence and quality | `manifest.py`, `evidence.py`, `quality.py`, `layout_dataset.py` | `test_manifest.py`, `test_evidence.py`, `test_quality.py`, `test_layout_stage_f.py` |
 | Reader and text review | `reader.py`, `reader_contract.py`, `article_model.py`, `text_review.py` | `test_reader.py`, `test_text_review.py` |
 | L3 synthesis bridge | `synthesize.py`, `tools/run_text_synthesize.py` | `test_synthesize.py` |
+| LLM cost accounting | `llm_cost.py`, `tools/run_*` bridges | `test_llm_cost.py` |
 | Public onboarding | `README.md`, `docs/`, `pyproject.toml` | `test_public_onboarding.py` |
 
 The `schemas/` directory contains shipped JSON schemas. `config/defaults.json` is the built-in configuration source. `tools/` contains repository validation/packaging checks and the optional

@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 from paperwright.exceptions import ContractValidationError
+from paperwright.llm_cost import CostReport, canonical_cost_report_json
 from paperwright.text_review import (
     canonical_text_review_json,
     join_candidates,
@@ -156,8 +157,9 @@ def judge(
     candidates: list[tuple[dict, dict]],
     *,
     model: str = MODEL,
-) -> list[dict]:
+) -> tuple[list[dict], CostReport]:
     decisions: list[dict] = []
+    cost_report = CostReport()
     for start in range(0, len(candidates), BATCH):
         batch = candidates[start : start + BATCH]
         resp = client.chat.completions.create(
@@ -168,13 +170,19 @@ def judge(
             response_format={"type": "json_object"},
             extra_body={"enable_thinking": False},
         )
+        cost_report.record(
+            bridge=REVIEWER,
+            model=model,
+            step=f"batch-{start // BATCH + 1}",
+            usage=getattr(resp, "usage", None),
+        )
         data = json.loads(resp.choices[0].message.content or "{}")
         for item in data.get("decisions", []):
             if not isinstance(item, dict):
                 raise ValueError("decision 必须是 JSON object")
             item["_batch_offset"] = start
         decisions.extend(data.get("decisions", []))
-    return decisions
+    return decisions, cost_report
 
 
 def build_review(
@@ -239,19 +247,39 @@ def main() -> int:
             print(f"[{i}] {p['order']}->{c['order']} | ...{_snippet(p['markdown'], True)} | {_snippet(c['markdown'], False)}...")
         return 0
 
+    cost_path = None
+    if str(args.review_json) != "-":
+        cost_path = args.review_json.with_name(
+            args.review_json.stem + ".usage.json"
+        )
+        if cost_path.exists():
+            raise SystemExit(f"输出文件已存在，拒绝覆盖: {cost_path}")
     if str(args.review_json) != "-" and args.review_json.exists():
         raise SystemExit(f"输出文件已存在，拒绝覆盖: {args.review_json}")
 
     client = _load_client()
     try:
-        decisions = judge(client, candidates, model=args.model)
+        decisions, cost_report = judge(client, candidates, model=args.model)
         review = build_review(task, candidates, decisions)
     except (ValueError, json.JSONDecodeError, ContractValidationError) as exc:
         raise SystemExit(f"L1 桥拒绝模型输出: {exc}") from exc
 
     _write_review(args.review_json, review, task)
+    if cost_path is not None:
+        cost_path.write_text(
+            canonical_cost_report_json(cost_report),
+            encoding="utf-8",
+            newline="\n",
+        )
     n_join = len(review["operations"])
     print(f"判定: {n_join} 对拼接, {len(candidates) - n_join} 对不拼", file=sys.stderr)
+    totals = cost_report.totals()
+    print(
+        f"用量: {totals['call_count']} 次调用, "
+        f"{totals['input_tokens']} in / {totals['output_tokens']} out tokens, "
+        f"估算 ${totals['estimated_cost_usd_known']}",
+        file=sys.stderr,
+    )
     for op in review["operations"]:
         print(f"  join {op['target_block_ids'][0][:14]}.. -> {op['target_block_ids'][1][:14]}.. | {op['reason'][:60]}", file=sys.stderr)
     return 0

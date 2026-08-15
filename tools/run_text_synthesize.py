@@ -32,6 +32,7 @@ import tempfile
 from pathlib import Path
 
 from paperwright.exceptions import ContractValidationError
+from paperwright.llm_cost import CostReport, canonical_cost_report_json
 from paperwright.synthesize import (
     ConservationError,
     DSLValidationError,
@@ -119,7 +120,9 @@ def _build_prompt(api: ReviewAPI) -> str:
     )
 
 
-def _generate_script(client, api: ReviewAPI) -> str:
+def _generate_script(
+    client, api: ReviewAPI, cost_report: CostReport
+) -> str:
     resp = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": _build_prompt(api)}],
@@ -127,10 +130,18 @@ def _generate_script(client, api: ReviewAPI) -> str:
         max_tokens=2048,
         extra_body={"enable_thinking": False},
     )
+    cost_report.record(
+        bridge=SYNTHESIS_REVIEWER,
+        model=MODEL,
+        step="generate",
+        usage=getattr(resp, "usage", None),
+    )
     return _strip_fences(resp.choices[0].message.content or "")
 
 
-def _repair_script(client, api: ReviewAPI, code: str, error: str) -> str:
+def _repair_script(
+    client, api: ReviewAPI, code: str, error: str, cost_report: CostReport
+) -> str:
     resp = client.chat.completions.create(
         model=MODEL,
         messages=[
@@ -166,10 +177,10 @@ def _synthesize(client, api: ReviewAPI, task: dict, attempts: int = 3) -> tuple[
         try:
             operations = execute_dsl(code, api)
             review = build_synthesis_review(task, operations)
-            return code, review
+            return code, review, cost_report
         except _REPAIRABLE_ERRORS as exc:
             print(f"执行失败: {exc}", file=sys.stderr)
-            code = _repair_script(client, api, code, str(exc))
+            code = _repair_script(client, api, code, str(exc), cost_report)
     raise SystemExit(f"L3 代码生成在 {attempts} 轮内未能产出可执行且通过校验的脚本")
 
 
@@ -259,13 +270,19 @@ def main() -> int:
     run_path = args.synthesis_run or args.review_json.with_name(
         "synthesize-run.json"
     )
+    cost_path = run_path.with_name("synthesize-cost.json")
     if run_path == args.review_json:
         raise SystemExit("synthesis-run 与 review 输出路径不能相同")
-    if not args.dry_run and (args.review_json.exists() or run_path.exists()):
-        raise SystemExit(
-            f"输出文件已存在，拒绝覆盖: "
-            f"{args.review_json if args.review_json.exists() else run_path}"
+    if cost_path == args.review_json or cost_path == run_path:
+        raise SystemExit("cost 输出路径不能与 review/run 路径相同")
+    if not args.dry_run and (
+        args.review_json.exists() or run_path.exists() or cost_path.exists()
+    ):
+        existing = next(
+            path for path in (args.review_json, run_path, cost_path)
+            if path.exists()
         )
+        raise SystemExit(f"输出文件已存在，拒绝覆盖: {existing}")
 
     if args.script:
         code = args.script.read_text(encoding="utf-8")
@@ -273,12 +290,13 @@ def main() -> int:
             print(code)
             return 0
         review = _run_script(code, api, task)
+        cost_report = CostReport()
     else:
         client = _load_client()
         if args.dry_run:
-            print(_generate_script(client, api))
+            print(_generate_script(client, api, CostReport()))
             return 0
-        code, review = _synthesize(client, api, task)
+        code, review, cost_report = _synthesize(client, api, task)
 
     run = build_synthesis_run(task, code, review)
     validate_synthesis_run(
@@ -292,6 +310,9 @@ def main() -> int:
         canonical_text_review_json(review, task=task),
         run_path,
         canonical_synthesis_run_json(run),
+    )
+    cost_path.write_text(
+        canonical_cost_report_json(cost_report), encoding="utf-8", newline="\n"
     )
     print(
         f"守恒校验、validate-text-review 与重放校验通过，已写 "

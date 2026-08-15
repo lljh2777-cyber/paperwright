@@ -82,6 +82,8 @@ Markdown + images + manifest     article model
   task、review 与验证报告哈希链的 manifest v0.10 派生包。
 - `paperwright.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
   交叉检查锚点、关系、路径、文件大小与哈希。
+- `paperwright.llm_cost`：记录可选 bridge 的模型用量与估算成本；核心包不依赖
+  任何 LLM SDK，usage 只是普通数据结构。
 - `paperwright.quality` 与 `paperwright.evidence`：区分启发式 warning 和确定性结构
   检查，生成可定位的验证报告。
 - `paperwright.layout_dataset`：导出不含正文、页面图像和对象 ID 的数值训练数据。
