@@ -25,11 +25,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
-from paperwright.text_review import text_task_sha256
+from paperwright.text_review import join_candidates, text_task_sha256
 
 MODEL = os.environ.get("PW_TEXT_MODEL", "qwen3.7-plus")
 BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
@@ -37,10 +36,6 @@ REVIEWER = "paperwright-text-review-bridge"
 TAIL = 70
 HEAD = 70
 BATCH = 25
-
-# Same signal as paperwright.text_review._SENTENCE_TERMINAL, kept local so this
-# tool does not depend on a private API.
-_SENTENCE_TERMINAL = re.compile(r"[.!?:;]\s*$")
 
 
 def _load_client():
@@ -61,24 +56,9 @@ def _load_client():
 
 
 def extract_candidates(task: dict) -> list[tuple[dict, dict]]:
-    blocks = task["blocks"]
-    by_order = {b["order"]: b for b in blocks}
-    candidates: list[tuple[dict, dict]] = []
-    for b in blocks:
-        nxt = by_order.get(b["order"] + 1)
-        if nxt is None or b["page"] != nxt["page"]:
-            continue
-        if any(
-            not blk["editable"] or blk["kind"] != "body" or blk["in_relations"]
-            for blk in (b, nxt)
-        ):
-            continue
-        curr_md = nxt["markdown"].lstrip().removeprefix("&emsp;")
-        if _SENTENCE_TERMINAL.search(b["markdown"]):
-            continue
-        if curr_md[:1].islower():
-            candidates.append((b, nxt))
-    return candidates
+    # Shared with the L3 synthesis kernel: candidates are exactly the pairs
+    # that validate-text-review can accept, so the two bridges cannot drift.
+    return [(dict(previous), dict(current)) for previous, current in join_candidates(task)]
 
 
 def _snippet(text: str, tail: bool) -> str:

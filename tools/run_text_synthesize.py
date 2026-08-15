@@ -1,267 +1,56 @@
 #!/usr/bin/env python3
-"""L3 program-synthesis bridge (minimal prototype, join-blocks).
+"""L3 program-synthesis bridge (thin model adapter for join-blocks).
 
-The model writes a RESTRICTED DSL script instead of emitting declarative JSON.
-That script is validated against an AST whitelist, executed in a clean
-namespace with a read-only ReviewAPI, and its `emit_join` calls become the same
-join-blocks operations that L1 produces — so the exact same validate-text-review
-chain applies. Word-bag conservation re-derives every merged text and asserts
-no characters were added, dropped, or changed.
-
-This is the L3 "long-tail last resort" layer from docs/VISION.md §8.3. It does
-not bypass validators; it only changes how the judgment logic is produced
-(one-shot inference -> reproducible code).
+The deterministic kernel lives in ``paperwright.synthesize``: restricted-DSL
+validation, the read-only ReviewAPI, execution limits, word-bag conservation
+and L1-compatible review construction.  This tool only owns model calls,
+prompt building and the self-repair loop, so PaperWright's core keeps its
+no-network, no-LLM boundary.
 
 Usage:
     export DASHSCOPE_API_KEY=...
     PYTHONPATH=src python tools/run_text_synthesize.py \
         article-model.json text-task.json text-review.json [--dry-run]
+
+The produced text-review.json is identical in contract to the L1 bridge and
+must pass `paperwright validate-text-review` before anything is applied.
 """
 
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import os
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 
-from paperwright.text_review import _join_joiner, text_task_sha256
+from paperwright.exceptions import ContractValidationError
+from paperwright.synthesize import (
+    ConservationError,
+    DSLValidationError,
+    ReviewAPI,
+    build_synthesis_review,
+    enrich_task_blocks,
+    execute_dsl,
+)
 
 MODEL = os.environ.get("PW_SYNTH_MODEL", "qwen3.7-plus")
 BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-REVIEWER = "paperwright-synthesize-bridge"
-MAX_ITERATIONS = 10000  # range() 迭代上限，兜底防死循环
-MAX_SCRIPT_TIME = 5.0  # 秒
 
-_SENTENCE_TERMINAL = re.compile(r"[.!?:;]\s*$")
-# 统一连字符变体（用于守恒校验的字符规范化）
-_HYPHEN_VARIANTS = {"\u2010", "\u2011", "\u2012", "\u2013", "\u2014"}
+_REPAIRABLE_ERRORS = (
+    DSLValidationError,
+    ConservationError,
+    ContractValidationError,
+    SyntaxError,
+    NameError,
+    AttributeError,
+    TypeError,
+    ValueError,
+    TimeoutError,
+    RuntimeError,
+)
 
-
-# ──────────────────────────────────────────────────────────────────────────
-# 数据准备：把 article-model 的 bbox 合并进 text-task 的块
-# ──────────────────────────────────────────────────────────────────────────
-
-def _enrich_blocks(task: dict, article_model: dict) -> list[dict]:
-    bbox_by_id: dict[str, dict] = {}
-    for blk in article_model["blocks"]:
-        spans = blk.get("source_spans") or []
-        if spans and isinstance(spans[0].get("bbox"), dict):
-            bbox_by_id[blk["id"]] = spans[0]["bbox"]
-    enriched = []
-    for b in task["blocks"]:
-        nb = dict(b)
-        nb["bbox"] = bbox_by_id.get(b["id"])
-        enriched.append(nb)
-    return enriched
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# ReviewAPI：只读查询 + 结构化 emit
-# ──────────────────────────────────────────────────────────────────────────
-
-class Block(dict):
-    """只读块视图：同时支持 a["markdown"] 与 a.markdown 两种访问。"""
-
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError as exc:
-            raise AttributeError(name) from exc
-
-
-class ReviewAPI:
-    def __init__(self, blocks: list[dict]):
-        self._blocks = [Block(b) for b in blocks]
-        self.emitted: list[dict] = []
-
-    def blocks(self) -> list[Block]:
-        return [Block(b) for b in self._blocks]
-
-    def body_blocks(self) -> list[Block]:
-        return [Block(b) for b in self._blocks if b["kind"] == "body"]
-
-    def adjacent_body_pairs(self) -> list[tuple[Block, Block]]:
-        """候选对：满足 join-blocks 全部硬性必要条件（复用校验器规则）。"""
-        by_order = {b["order"]: b for b in self._blocks}
-        pairs = []
-        for b in self._blocks:
-            nxt = by_order.get(b["order"] + 1)
-            if nxt is None or b["page"] != nxt["page"]:
-                continue
-            if any(
-                not blk["editable"] or blk["kind"] != "body" or blk["in_relations"]
-                for blk in (b, nxt)
-            ):
-                continue
-            curr_md = nxt["markdown"].lstrip().removeprefix("&emsp;")
-            if _SENTENCE_TERMINAL.search(b["markdown"]):
-                continue
-            if curr_md[:1].islower():
-                pairs.append((b, nxt))
-        return pairs
-
-    # ── 几何原语（归一化坐标，y 向下）──
-
-    def same_column(self, a: dict, b: dict) -> bool:
-        ba, bb = a.get("bbox"), b.get("bbox")
-        if not ba or not bb:
-            return False
-        return not (ba["x"] + ba["width"] <= bb["x"] or bb["x"] + bb["width"] <= ba["x"])
-
-    def vertical_gap(self, a: dict, b: dict) -> float | None:
-        ba, bb = a.get("bbox"), b.get("bbox")
-        if not ba or not bb:
-            return None
-        return bb["y"] - (ba["y"] + ba["height"])
-
-    def first_line_indent(self, block: dict) -> float | None:
-        bbox = block.get("bbox")
-        return bbox["x"] if bbox else None
-
-    # ── 文本 ──
-
-    def word_bag(self, text: str) -> dict:
-        normalized = _normalize(text)
-        return dict(Counter(normalized.split()))
-
-    # ── 产出（声明意图，不执行拼接）──
-
-    def emit_join(self, prev_id: str, curr_id: str, reason: str) -> None:
-        self.emitted.append(
-            {
-                "op": "join-blocks",
-                "target_block_ids": [prev_id, curr_id],
-                "reason": str(reason)[:1000],
-            }
-        )
-
-
-def _normalize(text: str) -> str:
-    for h in _HYPHEN_VARIANTS:
-        text = text.replace(h, "-")
-    return " ".join(text.split())
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 守恒校验：emit 的 join 由校验器重算 merged，断言字符多重集无增删改
-# ──────────────────────────────────────────────────────────────────────────
-
-def _conservation_check(task: dict, operations: list[dict]) -> None:
-    markdown_by_id = {b["id"]: b["markdown"] for b in task["blocks"]}
-    for op in operations:
-        if op["op"] != "join-blocks":
-            continue
-        prev_id, curr_id = op["target_block_ids"]
-        prev = markdown_by_id[prev_id]
-        curr = markdown_by_id[curr_id]
-        merged = prev + _join_joiner(prev) + curr.lstrip()
-        left = sorted(_normalize(merged).replace(" ", ""))
-        right = sorted(_normalize(prev + curr).replace(" ", ""))
-        if left != right:
-            raise ValueError(
-                f"守恒校验失败: join {prev_id[:14]}.. + {curr_id[:14]}.. 改变了字符集"
-            )
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 受限 DSL：ast 白名单
-# ──────────────────────────────────────────────────────────────────────────
-
-_ALLOWED_NODES = {
-    ast.Module, ast.Expr, ast.Assign, ast.AnnAssign,
-    ast.For, ast.If, ast.Compare, ast.BoolOp, ast.BinOp, ast.UnaryOp,
-    ast.Name, ast.Constant, ast.List, ast.Dict, ast.Tuple, ast.Subscript,
-    ast.Attribute, ast.Call, ast.Load, ast.Store,
-    ast.And, ast.Or, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod,
-    ast.FloorDiv, ast.Pow, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
-    ast.Is, ast.IsNot, ast.In, ast.NotIn, ast.Not, ast.USub, ast.UAdd,
-    ast.Break, ast.Continue, ast.keyword, ast.arguments, ast.comprehension,
-    ast.ListComp, ast.GeneratorExp, ast.DictComp, ast.SetComp, ast.Starred,
-    ast.Slice, ast.IfExp,
-}
-
-_FORBIDDEN_NODES = {
-    ast.Import, ast.ImportFrom, ast.ClassDef, ast.Lambda, ast.FunctionDef,
-    ast.AsyncFunctionDef, ast.Global, ast.Nonlocal, ast.Yield, ast.YieldFrom,
-    ast.With, ast.AsyncWith, ast.Try, ast.Raise, ast.ExceptHandler, ast.While,
-    ast.Await, ast.AsyncFor, ast.Return, ast.Delete, ast.NamedExpr, ast.Match,
-}
-
-_ALLOWED_BUILTINS = {
-    "len", "range", "sorted", "min", "max", "abs", "round",
-    "sum", "any", "all", "enumerate", "zip", "int", "float", "str",
-    "bool", "list", "dict", "tuple", "set", "True", "False", "None",
-    "hasattr", "isinstance", "type",
-}
-
-
-class _DSLValidator(ast.NodeVisitor):
-    def generic_visit(self, node):
-        if type(node) in _FORBIDDEN_NODES:
-            raise SyntaxError(f"forbidden syntax: {type(node).__name__}")
-        if type(node) not in _ALLOWED_NODES:
-            raise SyntaxError(f"forbidden node: {type(node).__name__}")
-        super().generic_visit(node)
-
-    def visit_Attribute(self, node):
-        if node.attr.startswith("__"):
-            raise SyntaxError("forbidden dunder attribute access")
-        self.generic_visit(node)
-
-    def visit_Call(self, node):
-        func = node.func
-        if isinstance(func, ast.Name) and func.id not in _ALLOWED_BUILTINS:
-            raise SyntaxError(f"forbidden function call: {func.id}")
-        self.generic_visit(node)
-
-
-class _LimitedRange:
-    """range 的上限版本：防 for range(10**12) 这种失控迭代。"""
-
-    def __call__(self, *args):
-        r = range(*args)
-        if len(r) > MAX_ITERATIONS:
-            raise RuntimeError(f"range 迭代超过上限 {MAX_ITERATIONS}")
-        return r
-
-
-def _execute_dsl(code: str, api: ReviewAPI) -> list[dict]:
-    import builtins
-    import signal
-
-    tree = ast.parse(code, mode="exec")
-    _DSLValidator().visit(tree)
-    namespace: dict = {"api": api}
-    for name in _ALLOWED_BUILTINS:
-        if name == "range":
-            namespace[name] = _LimitedRange()
-        elif name in ("True", "False", "None"):
-            continue
-        else:
-            namespace[name] = getattr(builtins, name)
-    compiled = compile(tree, "<synthesized>", "exec")
-
-    def _timeout(_sig, _frame):
-        raise TimeoutError("synthesized script exceeded time limit")
-
-    old = signal.signal(signal.SIGALRM, _timeout)
-    signal.setitimer(signal.ITIMER_REAL, MAX_SCRIPT_TIME)
-    try:
-        exec(compiled, namespace, namespace)
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, old)
-    return api.emitted
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# 代码生成
-# ──────────────────────────────────────────────────────────────────────────
 
 def _load_client():
     try:
@@ -307,9 +96,9 @@ def _build_prompt(api: ReviewAPI) -> str:
         "- api.emit_join(prev_id, curr_id, reason) -> declare a join (never rewrite text)\n\n"
         "Restrictions:\n"
         "- Top-level script only: NO function/class definitions, NO imports, NO while, "
-        "NO try/except, NO dunder attributes.\n"
-        "- Only call api.* methods and builtins: len, range, sorted, min, max, abs, round, "
-        "sum, any, all, enumerate, zip, int, float, str, bool, list, dict, tuple, set.\n\n"
+        "NO try/except, NO private or dunder attributes, NO print/type/getattr.\n"
+        "- Only call api.* methods and these builtins: len, range, sorted, min, max, abs, "
+        "round, sum, any, all, enumerate, zip, int, float, str, bool, list, dict, tuple, set.\n\n"
         "Join only pairs that are GENUINELY the same paragraph split by the extractor. "
         "Use geometric evidence (same column + small vertical gap) where bbox exists; "
         "author name/affiliation/email lines and heading+body are NOT joins. "
@@ -360,33 +149,26 @@ def _strip_fences(code: str) -> str:
     return code
 
 
-def _synthesize(client, api: ReviewAPI, task: dict, attempts: int = 3) -> tuple[str, list[dict]]:
+def _synthesize(client, api: ReviewAPI, task: dict, attempts: int = 3) -> tuple[str, dict]:
     code = _generate_script(client, api)
     for _ in range(attempts):
         print(f"=== 尝试生成的 DSL 脚本 ===\n{code}\n=== 结束 ===", file=sys.stderr)
         try:
-            operations = _execute_dsl(code, api)
-            _conservation_check(task, operations)
-            return code, operations
-        except (SyntaxError, AttributeError, NameError, ValueError, TimeoutError, RuntimeError) as exc:
+            operations = execute_dsl(code, api)
+            review = build_synthesis_review(task, operations)
+            return code, review
+        except _REPAIRABLE_ERRORS as exc:
             print(f"执行失败: {exc}", file=sys.stderr)
             code = _repair_script(client, api, code, str(exc))
-    raise SystemExit(f"L3 代码生成在 {attempts} 轮内未能产出可执行且守恒的脚本")
+    raise SystemExit(f"L3 代码生成在 {attempts} 轮内未能产出可执行且通过校验的脚本")
 
 
-# ──────────────────────────────────────────────────────────────────────────
-# 主流程
-# ──────────────────────────────────────────────────────────────────────────
-
-def build_review(task: dict, operations: list[dict]) -> dict:
-    return {
-        "contract_version": "paperwright-text-review-v0.2",
-        "task_sha256": text_task_sha256(task),
-        "source_sha256": task["source_sha256"],
-        "article_model_sha256": task["article_model"]["sha256"],
-        "reviewer": REVIEWER,
-        "operations": operations,
-    }
+def _run_script(code: str, api: ReviewAPI, task: dict) -> dict:
+    try:
+        operations = execute_dsl(code, api)
+    except _REPAIRABLE_ERRORS as exc:
+        raise SystemExit(f"DSL 脚本执行失败: {exc}") from exc
+    return build_synthesis_review(task, operations)
 
 
 def main() -> int:
@@ -400,27 +182,29 @@ def main() -> int:
 
     article_model = json.loads(args.article_model_json.read_text(encoding="utf-8"))
     task = json.loads(args.task_json.read_text(encoding="utf-8"))
-    blocks = _enrich_blocks(task, article_model)
-    api = ReviewAPI(blocks)
+    blocks = enrich_task_blocks(task, article_model)
+    join_allowed = "join-blocks" in task["policy"].get("allowed_operations", ())
+    api = ReviewAPI(blocks, join_allowed=join_allowed)
 
     if args.script:
         code = args.script.read_text(encoding="utf-8")
         if args.dry_run:
             print(code)
             return 0
-        operations = _execute_dsl(code, api)
-        _conservation_check(task, operations)
+        review = _run_script(code, api, task)
     else:
         client = _load_client()
         if args.dry_run:
             print(_generate_script(client, api))
             return 0
-        code, operations = _synthesize(client, api, task)
+        _, review = _synthesize(client, api, task)
 
-    print(f"DSL 产出 {len(operations)} 个 join", file=sys.stderr)
-    review = build_review(task, operations)
-    args.review_json.write_text(json.dumps(review, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"守恒校验通过，已写 {args.review_json.name}")
+    if args.review_json.exists():
+        raise SystemExit(f"输出文件已存在，拒绝覆盖: {args.review_json}")
+    args.review_json.write_text(
+        json.dumps(review, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    print(f"守恒校验与 validate-text-review 通过，已写 {args.review_json.name}")
     return 0
 
 

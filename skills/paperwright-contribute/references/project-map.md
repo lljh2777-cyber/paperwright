@@ -11,6 +11,9 @@ Read the actual source before editing; this map only routes investigation.
 | Review and layout application | `layout_models.py`, `layout_review.py`, `layout_writer.py`, `layout_caption.py`, `layout_continuation.py` | `test_layout_stage_c.py`, `test_layout_stage_d.py`, `test_realworld_text_rules.py` |
 | Evidence and quality | `manifest.py`, `evidence.py`, `quality.py`, `layout_dataset.py` | `test_manifest.py`, `test_evidence.py`, `test_quality.py`, `test_layout_stage_f.py` |
 | Reader and text review | `reader.py`, `reader_contract.py`, `article_model.py`, `text_review.py` | `test_reader.py`, `test_text_review.py` |
+| L3 synthesis bridge | `synthesize.py`, `tools/run_text_synthesize.py` | `test_synthesize.py` |
 | Public onboarding | `README.md`, `docs/`, `pyproject.toml` | `test_public_onboarding.py` |
 
-The `schemas/` directory contains shipped JSON schemas. `config/defaults.json` is the built-in configuration source. `tools/` contains repository validation and packaging checks.
+The `schemas/` directory contains shipped JSON schemas. `config/defaults.json` is the built-in configuration source. `tools/` contains repository validation/packaging checks and the optional
+model bridges (`run_text_review.py`, `run_text_synthesize.py`); their
+deterministic logic lives in `src/paperwright/`.

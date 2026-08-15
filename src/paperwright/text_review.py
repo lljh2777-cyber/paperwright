@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 import hashlib
 import json
@@ -330,12 +331,83 @@ def _validate_change(old: str, new: str, mode: str) -> None:
 _SENTENCE_TERMINAL = re.compile(r"[.!?:;]\s*$")
 
 
-def _join_joiner(previous_markdown: str) -> str:
+def join_joiner(previous_markdown: str) -> str:
     """A continuation joins with a space, unless the fragment ends mid-word
     (trailing hyphen) where the split was inside the token, or ends at a
     slash (URL / path boundary) where a space would corrupt the token."""
     previous = previous_markdown.rstrip()
     return "" if previous.endswith(("-", "‐", "‑", "/")) else " "
+
+
+# Backwards-compatible private name; new callers should use join_joiner.
+_join_joiner = join_joiner
+
+
+def _join_block_precondition_error(
+    previous_block: Mapping[str, Any],
+    current_block: Mapping[str, Any],
+) -> str | None:
+    """Return a validation message when a pair fails any hard join condition.
+
+    Candidate extraction and review validation share this single source of
+    truth, so L1 bridges and the L3 DSL can never drift apart.
+    """
+
+    for block in (previous_block, current_block):
+        if block["editable"] is not True:
+            return "join-blocks 不允许编辑视觉槽位"
+        if block["kind"] != "body":
+            return "join-blocks 只允许拼接 body 块"
+        if block["in_relations"] is not False:
+            return "join-blocks 不允许拼接参与关系（figure/caption）的块"
+    if previous_block["page"] != current_block["page"]:
+        return "join-blocks 只允许拼接同页块"
+    if abs(previous_block["order"] - current_block["order"]) != 1:
+        return "join-blocks 只允许拼接阅读顺序相邻的块"
+    previous_markdown = previous_block["markdown"]
+    current_markdown = current_block["markdown"].lstrip().removeprefix("&emsp;")
+    first = current_markdown[:1]
+    if not first or not first.islower():
+        return "join-blocks 续行必须以小写字母开头（当前块不是续行）"
+    if _SENTENCE_TERMINAL.search(previous_markdown):
+        return "join-blocks 上一块以句子终止标点结尾，不允许拼接"
+    joiner = join_joiner(previous_markdown)
+    merged = previous_markdown + joiner + current_markdown
+    if not _valid_single_line(merged):
+        return "join-blocks 合并结果必须是非空单行文本"
+    return None
+
+
+def join_candidate_pairs(
+    blocks: Sequence[Mapping[str, Any]],
+) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
+    """Return adjacent body pairs satisfying every hard join precondition.
+
+    The final review validator remains authoritative; this helper exists so
+    model bridges only receive candidates that the validator can accept.
+    """
+
+    by_order = {block["order"]: block for block in blocks}
+    pairs: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+    for block in blocks:
+        current = by_order.get(block["order"] + 1)
+        if current is None:
+            continue
+        if _join_block_precondition_error(block, current) is None:
+            pairs.append((block, current))
+    return pairs
+
+
+def join_candidates(
+    task: Mapping[str, Any],
+) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
+    """Return validator-acceptable join candidate pairs for a text task."""
+
+    validate_text_task(task)
+    allowed = task["policy"].get("allowed_operations")
+    if allowed is None or "join-blocks" not in allowed:
+        return []
+    return join_candidate_pairs(task["blocks"])
 
 
 def _validate_join_blocks(
@@ -355,34 +427,9 @@ def _validate_join_blocks(
     if target[0] in edited or target[1] in edited:
         raise ContractValidationError("join-blocks block 重复编辑")
     edited.update(target)
-    for block in (previous_block, current_block):
-        if block["editable"] is not True:
-            raise ContractValidationError("join-blocks 不允许编辑视觉槽位")
-        if block["kind"] != "body":
-            raise ContractValidationError("join-blocks 只允许拼接 body 块")
-        if block["in_relations"] is not False:
-            raise ContractValidationError(
-                "join-blocks 不允许拼接参与关系（figure/caption）的块"
-            )
-    if previous_block["page"] != current_block["page"]:
-        raise ContractValidationError("join-blocks 只允许拼接同页块")
-    if abs(previous_block["order"] - current_block["order"]) != 1:
-        raise ContractValidationError("join-blocks 只允许拼接阅读顺序相邻的块")
-    previous_markdown = previous_block["markdown"]
-    current_markdown = current_block["markdown"].lstrip().removeprefix("&emsp;")
-    first = current_markdown[:1]
-    if not first or not first.islower():
-        raise ContractValidationError(
-            "join-blocks 续行必须以小写字母开头（当前块不是续行）"
-        )
-    if _SENTENCE_TERMINAL.search(previous_markdown):
-        raise ContractValidationError(
-            "join-blocks 上一块以句子终止标点结尾，不允许拼接"
-        )
-    joiner = _join_joiner(previous_markdown)
-    merged = previous_markdown + joiner + current_markdown
-    if not _valid_single_line(merged):
-        raise ContractValidationError("join-blocks 合并结果必须是非空单行文本")
+    error = _join_block_precondition_error(previous_block, current_block)
+    if error is not None:
+        raise ContractValidationError(error)
     reason = operation.get("reason")
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 1000:
         raise ContractValidationError("join-blocks reason 非法")
@@ -500,7 +547,7 @@ def apply_text_review(
     for previous_id, current_id in joins:
         previous = block_by_id[previous_id]
         current = block_by_id[current_id]
-        joiner = _join_joiner(previous["markdown"])
+        joiner = join_joiner(previous["markdown"])
         previous["markdown"] = (
             previous["markdown"] + joiner + current["markdown"].lstrip()
         )
