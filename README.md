@@ -265,11 +265,14 @@ paperwright validate-text-review text-review.json --task text-task.json
 paperwright text-apply output-dir/_paperwright/article-model.json text-task.json \
   text-review.json article-model.reviewed.json
 paperwright text-package output-dir text-task.json text-review.json reviewed-output-dir
+paperwright text-package output-dir text-task.json text-review.json reviewed-output-dir \
+  --synthesis-run synthesize-run.json   # L3 程序合成溯源，可选
 paperwright validate-text-package reviewed-output-dir
 ```
 
 `text-apply` 适合只检查新 Article Model；`text-package` 会保留源 v0.9 包不变，
-原子写出一个完整的 manifest v0.10 派生包，并重新生成 `article.md`、
+原子写出一个完整的 manifest v0.10 派生包（提供 `--synthesis-run` 时写
+manifest v0.11，并绑定脚本重放哈希链），并重新生成 `article.md`、
 `reader.json`、Article Model、验证报告及 task/review 哈希链。
 
 文本任务和复核分别使用 v0.2 契约并绑定源 PDF、Article Model 与任务哈希。
@@ -319,6 +322,7 @@ python -m paperwright convert input.pdf output-dir
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
 - [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)
 - [manifest v0.10 文本复核派生包迁移说明](docs/MANIFEST_MIGRATION_V0.10.md)
+- [manifest v0.11 L3 程序合成派生包迁移说明](docs/MANIFEST_MIGRATION_V0.11.md)
 - [manifest v0.9 与 Article Model 迁移说明](docs/MANIFEST_MIGRATION_V0.9.md)
 - [manifest v0.8 与 Reader 迁移说明](docs/MANIFEST_MIGRATION_V0.8.md)
 

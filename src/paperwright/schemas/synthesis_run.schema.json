@@ -1,0 +1,58 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://paperwright.local/schemas/synthesis-run-v0.1.json",
+ "title": "PaperWright L3 synthesis run provenance v0.1",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "contract_version",
+  "executor_version",
+  "script",
+  "source_sha256",
+  "article_model_sha256",
+  "task_sha256",
+  "review_sha256",
+  "reviewer",
+  "operation_count"
+ ],
+ "properties": {
+  "contract_version": {
+   "const": "paperwright-synthesis-run-v0.1"
+  },
+  "executor_version": {
+   "type": "string",
+   "minLength": 1,
+   "maxLength": 200
+  },
+  "script": {
+   "type": "string",
+   "minLength": 1,
+   "maxLength": 200000
+  },
+  "source_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "article_model_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "task_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "review_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "reviewer": {
+   "type": "string",
+   "minLength": 1,
+   "maxLength": 200
+  },
+  "operation_count": {
+   "type": "integer",
+   "minimum": 0
+  }
+ }
+}

@@ -18,6 +18,7 @@ PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION = "paperwright-manifest-v0.7"
 READER_HYBRID_LAYOUT_MANIFEST_VERSION = "paperwright-manifest-v0.8"
 HYBRID_LAYOUT_MANIFEST_VERSION = "paperwright-manifest-v0.9"
 TEXT_REVIEWED_MANIFEST_VERSION = "paperwright-manifest-v0.10"
+TEXT_SYNTHESIZED_MANIFEST_VERSION = "paperwright-manifest-v0.11"
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
@@ -127,6 +128,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "reader",
         "article_model",
         "text_review",
+        "synthesis_run",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -138,6 +140,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         READER_HYBRID_LAYOUT_MANIFEST_VERSION,
         HYBRID_LAYOUT_MANIFEST_VERSION,
         TEXT_REVIEWED_MANIFEST_VERSION,
+        TEXT_SYNTHESIZED_MANIFEST_VERSION,
     }:
         raise ContractValidationError("manifest_version 不受支持")
     if value["manifest_version"] == MANIFEST_VERSION:
@@ -147,6 +150,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             or "reader" in value
             or "article_model" in value
             or "text_review" in value
+            or "synthesis_run" in value
         ):
             raise ContractValidationError(
                 "manifest v0.4 不允许扩展处理策略"
@@ -157,6 +161,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             or "reader" in value
             or "article_model" in value
             or "text_review" in value
+            or "synthesis_run" in value
         ):
             raise ContractValidationError(
                 "manifest v0.5 不允许 layout_review/reader"
@@ -205,6 +210,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
             TEXT_REVIEWED_MANIFEST_VERSION,
+            TEXT_SYNTHESIZED_MANIFEST_VERSION,
         }:
             required_review.add("evidence_level")
         if not isinstance(review, dict) or set(review) != required_review:
@@ -216,6 +222,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
             TEXT_REVIEWED_MANIFEST_VERSION,
+            TEXT_SYNTHESIZED_MANIFEST_VERSION,
         }:
             if review["evidence_level"] not in {"minimal", "standard", "full"}:
                 raise ContractValidationError("manifest evidence_level 非法")
@@ -279,6 +286,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
             READER_HYBRID_LAYOUT_MANIFEST_VERSION,
             HYBRID_LAYOUT_MANIFEST_VERSION,
             TEXT_REVIEWED_MANIFEST_VERSION,
+            TEXT_SYNTHESIZED_MANIFEST_VERSION,
         }:
             reader = value.get("reader")
             if not isinstance(reader, dict) or set(reader) != {
@@ -315,6 +323,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         if value["manifest_version"] in {
             HYBRID_LAYOUT_MANIFEST_VERSION,
             TEXT_REVIEWED_MANIFEST_VERSION,
+            TEXT_SYNTHESIZED_MANIFEST_VERSION,
         }:
             article_model = value.get("article_model")
             if not isinstance(article_model, dict) or set(article_model) != {
@@ -335,7 +344,10 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError(
                 "旧版 manifest 不允许 article_model 顶层字段"
             )
-        if value["manifest_version"] == TEXT_REVIEWED_MANIFEST_VERSION:
+        if value["manifest_version"] in {
+            TEXT_REVIEWED_MANIFEST_VERSION,
+            TEXT_SYNTHESIZED_MANIFEST_VERSION,
+        }:
             text_review = value.get("text_review")
             required_text_review = {
                 "task_contract_version",
@@ -389,6 +401,57 @@ def validate_manifest(value: dict[str, Any]) -> None:
         elif "text_review" in value:
             raise ContractValidationError(
                 "旧版 manifest 不允许 text_review 顶层字段"
+            )
+        if value["manifest_version"] == TEXT_SYNTHESIZED_MANIFEST_VERSION:
+            synthesis_run = value.get("synthesis_run")
+            required_synthesis_run = {
+                "contract_version",
+                "executor_version",
+                "path",
+                "sha256",
+                "task_path",
+                "task_sha256",
+                "review_path",
+                "review_sha256",
+                "source_article_model_path",
+                "source_article_model_sha256",
+            }
+            if (
+                not isinstance(synthesis_run, dict)
+                or set(synthesis_run) != required_synthesis_run
+            ):
+                raise ContractValidationError("manifest v0.11 缺少 synthesis_run")
+            if (
+                synthesis_run["contract_version"]
+                != "paperwright-synthesis-run-v0.1"
+                or not isinstance(synthesis_run["executor_version"], str)
+                or not synthesis_run["executor_version"]
+                or len(synthesis_run["executor_version"]) > 200
+                or synthesis_run["path"]
+                != "_paperwright/06-text-review/synthesize-run.json"
+                or synthesis_run["task_path"] != text_review["task_path"]
+                or synthesis_run["review_path"] != text_review["review_path"]
+                or synthesis_run["source_article_model_path"]
+                != "_paperwright/06-text-review/source-article-model.json"
+                or any(
+                    not isinstance(synthesis_run[field], str)
+                    or _SHA256_RE.fullmatch(synthesis_run[field]) is None
+                    for field in (
+                        "sha256",
+                        "task_sha256",
+                        "review_sha256",
+                        "source_article_model_sha256",
+                    )
+                )
+                or synthesis_run["task_sha256"] != text_review["task_sha256"]
+                or synthesis_run["review_sha256"] != text_review["review_sha256"]
+                or synthesis_run["source_article_model_sha256"]
+                != text_review["source_article_model_sha256"]
+            ):
+                raise ContractValidationError("manifest synthesis_run 契约非法")
+        elif "synthesis_run" in value:
+            raise ContractValidationError(
+                "非 v0.11 manifest 不允许 synthesis_run 顶层字段"
             )
     source_hash = value["source_sha256"]
     if not isinstance(source_hash, str) or len(source_hash) != 64:
@@ -460,6 +523,26 @@ def validate_manifest(value: dict[str, Any]) -> None:
             ):
                 raise ContractValidationError(
                     "manifest text_review 与 outputs 清单不一致"
+                )
+    if "synthesis_run" in value:
+        by_path = {item["path"]: item for item in value["outputs"]}
+        synthesis_run = value["synthesis_run"]
+        for path_field, hash_field, role in (
+            ("path", "sha256", "synthesis_run"),
+            (
+                "source_article_model_path",
+                "source_article_model_sha256",
+                "source_article_model",
+            ),
+        ):
+            output = by_path.get(synthesis_run[path_field])
+            if (
+                output is None
+                or output["role"] != role
+                or output["sha256"] != synthesis_run[hash_field]
+            ):
+                raise ContractValidationError(
+                    "manifest synthesis_run 与 outputs 清单不一致"
                 )
     for field_name in (
         "elements",

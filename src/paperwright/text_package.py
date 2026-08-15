@@ -25,11 +25,17 @@ from .exceptions import (
 from .manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     TEXT_REVIEWED_MANIFEST_VERSION,
+    TEXT_SYNTHESIZED_MANIFEST_VERSION,
     canonical_manifest_json,
     sha256_file,
     validate_manifest,
 )
 from .reader import canonical_reader_json
+from .synthesize import (
+    SYNTHESIS_RUN_CONTRACT_VERSION,
+    canonical_synthesis_run_json,
+    validate_synthesis_run,
+)
 from .text_review import (
     apply_text_review,
     canonical_text_review_json,
@@ -49,6 +55,8 @@ _TASK_PATH = "_paperwright/06-text-review/text-task.json"
 _REVIEW_PATH = "_paperwright/06-text-review/text-review.json"
 _VALIDATION_PATH = "_paperwright/06-text-review/validation-report.json"
 _VALIDATION_MARKDOWN_PATH = "_paperwright/06-text-review/validation-report.md"
+_SYNTHESIS_RUN_PATH = "_paperwright/06-text-review/synthesize-run.json"
+_SOURCE_ARTICLE_MODEL_PATH = "_paperwright/06-text-review/source-article-model.json"
 
 
 @dataclass(frozen=True)
@@ -137,7 +145,7 @@ def _load_source_package(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
-    """Validate a persisted manifest v0.10 package and its complete hash chain."""
+    """Validate a persisted manifest v0.10/v0.11 package and its hash chain."""
 
     package_root = root.expanduser().resolve()
     if not package_root.is_dir():
@@ -147,8 +155,11 @@ def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
         raise ConfigurationError("文本派生包缺少 manifest.json")
     manifest = _load_json_object(manifest_path, "manifest")
     validate_manifest(manifest)
-    if manifest["manifest_version"] != TEXT_REVIEWED_MANIFEST_VERSION:
-        raise ContractValidationError("文本派生包必须使用 manifest v0.10")
+    if manifest["manifest_version"] not in {
+        TEXT_REVIEWED_MANIFEST_VERSION,
+        TEXT_SYNTHESIZED_MANIFEST_VERSION,
+    }:
+        raise ContractValidationError("文本派生包必须使用 manifest v0.10/v0.11")
     if manifest_path.read_text(encoding="utf-8") != canonical_manifest_json(
         manifest
     ):
@@ -206,6 +217,45 @@ def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
     ):
         raise ContractValidationError("文本派生 task/review 溯源不一致")
 
+    synthesis_run_path: Path | None = None
+    if manifest["manifest_version"] == TEXT_SYNTHESIZED_MANIFEST_VERSION:
+        synthesis = manifest["synthesis_run"]
+        source_model_path = _safe_package_path(
+            package_root, synthesis["source_article_model_path"]
+        )
+        source_model = _load_json_object(
+            source_model_path, "source article model"
+        )
+        if source_model_path.read_text(
+            encoding="utf-8"
+        ) != canonical_article_model_json(source_model):
+            raise ContractValidationError("源 article model 副本不是规范 JSON")
+        validate_article_model(source_model, root=package_root)
+        if (
+            sha256_file(source_model_path)
+            != synthesis["source_article_model_sha256"]
+            or synthesis["source_article_model_sha256"]
+            != task["article_model"]["sha256"]
+        ):
+            raise ContractValidationError("源 article model 副本哈希不匹配")
+
+        synthesis_run_path = _safe_package_path(
+            package_root, synthesis["path"]
+        )
+        run = _load_json_object(synthesis_run_path, "synthesis run")
+        if synthesis_run_path.read_text(
+            encoding="utf-8"
+        ) != canonical_synthesis_run_json(run):
+            raise ContractValidationError("synthesis run 不是规范 JSON")
+        if sha256_file(synthesis_run_path) != synthesis["sha256"]:
+            raise ContractValidationError("synthesis run 哈希不匹配")
+        validate_synthesis_run(
+            run,
+            task=task,
+            article_model=source_model,
+            review=review,
+        )
+
     validation_path = _safe_package_path(package_root, _VALIDATION_PATH)
     validation = _load_json_object(validation_path, "text validation report")
     required_checks = {
@@ -229,6 +279,9 @@ def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
         "operation_count",
         "checks",
     }
+    if manifest["manifest_version"] == TEXT_SYNTHESIZED_MANIFEST_VERSION:
+        required_checks.add("synthesis_run_replay")
+        expected_fields.add("synthesis_run_sha256")
     if (
         set(validation) != expected_fields
         or validation["contract_version"] != TEXT_PACKAGE_VALIDATION_VERSION
@@ -247,6 +300,11 @@ def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
         or validation["reviewer"] != summary["reviewer"]
         or validation["operation_count"] != summary["operation_count"]
         or sha256_file(validation_path) != summary["validation_sha256"]
+        or (
+            manifest["manifest_version"] == TEXT_SYNTHESIZED_MANIFEST_VERSION
+            and validation["synthesis_run_sha256"]
+            != sha256_file(synthesis_run_path)
+        )
     ):
         raise ContractValidationError("文本派生 validation report 不一致")
     return manifest
@@ -330,13 +388,23 @@ def build_text_reviewed_package(
     task: Mapping[str, Any],
     review: Mapping[str, Any],
     destination: Path,
+    *,
+    synthesis_run: Mapping[str, Any] | None = None,
 ) -> TextPackageResult:
-    """Create a new manifest v0.10 package without mutating its v0.9 parent."""
+    """Create a manifest v0.10 package, or v0.11 when a synthesis run is
+    attached, without mutating the v0.9 parent."""
 
     source, target = _package_paths(source_root, destination)
     source_manifest, source_model = _load_source_package(source)
     validate_text_task(task, article_model=source_model)
     validate_text_review(review, task=task)
+    if synthesis_run is not None:
+        validate_synthesis_run(
+            synthesis_run,
+            task=task,
+            article_model=source_model,
+            review=review,
+        )
     reviewed_model = apply_text_review(source_model, task=task, review=review)
 
     temporary = Path(
@@ -373,6 +441,19 @@ def build_text_reviewed_package(
             _REVIEW_PATH,
             canonical_text_review_json(review, task=task),
         )
+        source_model_path: Path | None = None
+        synthesis_path: Path | None = None
+        if synthesis_run is not None:
+            source_model_path = _write_text(
+                temporary,
+                _SOURCE_ARTICLE_MODEL_PATH,
+                canonical_article_model_json(source_model),
+            )
+            synthesis_path = _write_text(
+                temporary,
+                _SYNTHESIS_RUN_PATH,
+                canonical_synthesis_run_json(synthesis_run),
+            )
 
         validate_article_model(reviewed_model, root=temporary)
         if article_path.read_text(encoding="utf-8") != render_article_markdown(
@@ -405,6 +486,9 @@ def build_text_reviewed_package(
                 "output_projections": True,
             },
         }
+        if synthesis_run is not None:
+            validation["synthesis_run_sha256"] = sha256_file(synthesis_path)
+            validation["checks"]["synthesis_run_replay"] = True
         validation_path = _write_text(
             temporary,
             _VALIDATION_PATH,
@@ -454,9 +538,28 @@ def build_text_reviewed_package(
                 ),
             )
         )
+        if synthesis_run is not None:
+            outputs.extend(
+                (
+                    _output_record(
+                        temporary,
+                        _SOURCE_ARTICLE_MODEL_PATH,
+                        "source_article_model",
+                    ),
+                    _output_record(
+                        temporary,
+                        _SYNTHESIS_RUN_PATH,
+                        "synthesis_run",
+                    ),
+                )
+            )
 
         manifest = deepcopy(source_manifest)
-        manifest["manifest_version"] = TEXT_REVIEWED_MANIFEST_VERSION
+        manifest["manifest_version"] = (
+            TEXT_SYNTHESIZED_MANIFEST_VERSION
+            if synthesis_run is not None
+            else TEXT_REVIEWED_MANIFEST_VERSION
+        )
         manifest["outputs"] = sorted(outputs, key=lambda item: item["path"])
         manifest["reader"] = {
             "contract_version": reader_value["contract_version"],
@@ -485,6 +588,21 @@ def build_text_reviewed_package(
             "validation_path": _VALIDATION_PATH,
             "validation_sha256": sha256_file(validation_path),
         }
+        if synthesis_run is not None:
+            manifest["synthesis_run"] = {
+                "contract_version": SYNTHESIS_RUN_CONTRACT_VERSION,
+                "executor_version": synthesis_run["executor_version"],
+                "path": _SYNTHESIS_RUN_PATH,
+                "sha256": sha256_file(synthesis_path),
+                "task_path": _TASK_PATH,
+                "task_sha256": sha256_file(task_path),
+                "review_path": _REVIEW_PATH,
+                "review_sha256": sha256_file(review_path),
+                "source_article_model_path": _SOURCE_ARTICLE_MODEL_PATH,
+                "source_article_model_sha256": sha256_file(
+                    source_model_path
+                ),
+            }
         validate_manifest(manifest)
         _write_text(
             temporary,

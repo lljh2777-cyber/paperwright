@@ -9,6 +9,7 @@ from paperwright.manifest import (
     PREVIOUS_HYBRID_LAYOUT_MANIFEST_VERSION,
     READER_HYBRID_LAYOUT_MANIFEST_VERSION,
     TEXT_REVIEWED_MANIFEST_VERSION,
+    TEXT_SYNTHESIZED_MANIFEST_VERSION,
     build_manifest,
     canonical_manifest_json,
     validate_manifest,
@@ -37,6 +38,7 @@ class ManifestTests(unittest.TestCase):
             "reader.schema.json",
             "text_task.schema.json",
             "text_review.schema.json",
+            "synthesis_run.schema.json",
         ):
             value = json.loads((root / name).read_text(encoding="utf-8"))
             self.assertEqual(value["$schema"], "https://json-schema.org/draft/2020-12/schema")
@@ -228,6 +230,56 @@ class ManifestTests(unittest.TestCase):
         changed["text_review"]["review_sha256"] = "9" * 64
         with self.assertRaisesRegex(ContractValidationError, "outputs"):
             validate_manifest(changed)
+
+    def test_text_synthesized_v011_requires_synthesis_run_binding(self):
+        value = self.hybrid_manifest(version=TEXT_REVIEWED_MANIFEST_VERSION)
+        run_hash = "1" * 64
+        source_model_hash = value["text_review"]["source_article_model_sha256"]
+        value["manifest_version"] = TEXT_SYNTHESIZED_MANIFEST_VERSION
+        value["outputs"].extend(
+            [
+                {
+                    "path": "_paperwright/06-text-review/source-article-model.json",
+                    "role": "source_article_model",
+                    "size_bytes": 48,
+                    "sha256": source_model_hash,
+                },
+                {
+                    "path": "_paperwright/06-text-review/synthesize-run.json",
+                    "role": "synthesis_run",
+                    "size_bytes": 96,
+                    "sha256": run_hash,
+                },
+            ]
+        )
+        value["synthesis_run"] = {
+            "contract_version": "paperwright-synthesis-run-v0.1",
+            "executor_version": "paperwright-synthesize-v0.1",
+            "path": "_paperwright/06-text-review/synthesize-run.json",
+            "sha256": run_hash,
+            "task_path": "_paperwright/06-text-review/text-task.json",
+            "task_sha256": value["text_review"]["task_sha256"],
+            "review_path": "_paperwright/06-text-review/text-review.json",
+            "review_sha256": value["text_review"]["review_sha256"],
+            "source_article_model_path": "_paperwright/06-text-review/source-article-model.json",
+            "source_article_model_sha256": source_model_hash,
+        }
+        validate_manifest(value)
+
+        missing = dict(value)
+        missing.pop("synthesis_run")
+        with self.assertRaisesRegex(ContractValidationError, "synthesis_run"):
+            validate_manifest(missing)
+
+        changed = dict(value)
+        changed["synthesis_run"]["sha256"] = "9" * 64
+        with self.assertRaisesRegex(ContractValidationError, "outputs"):
+            validate_manifest(changed)
+
+        old = self.hybrid_manifest(version=TEXT_REVIEWED_MANIFEST_VERSION)
+        old["synthesis_run"] = value["synthesis_run"]
+        with self.assertRaisesRegex(ContractValidationError, "synthesis_run"):
+            validate_manifest(old)
 
     def test_hybrid_v07_remains_accepted_without_reader(self):
         value = self.hybrid_manifest(

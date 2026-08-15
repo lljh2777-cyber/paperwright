@@ -17,6 +17,8 @@ paperwright validate-text-task TEXT_TASK_JSON --article-model ARTICLE_MODEL_JSON
 paperwright validate-text-review TEXT_REVIEW_JSON --task TEXT_TASK_JSON
 paperwright text-apply ARTICLE_MODEL_JSON TEXT_TASK_JSON TEXT_REVIEW_JSON REVIEWED_MODEL_JSON
 paperwright text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE
+paperwright text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE \
+  --synthesis-run SYNTHESIZE_RUN_JSON   # 可选：L3 溯源，写 manifest v0.11
 paperwright validate-text-package OUTPUT_PACKAGE
 ```
 
@@ -64,9 +66,11 @@ paperwright validate-text-package OUTPUT_PACKAGE
 span、asset ID、资产与关系；`join-blocks` 是唯一允许改变 block 结构与顺序的
 操作，且只做同页相邻 body 的纯拼接。v0.2 不允许拼写/标点/事实改写，不允许
 拆分或删除正文，不允许改变 Markdown 标题层级，也不允许依据模型知识补写正文、
-图注、公式或引用。规则与协议都覆盖不到的复杂版式，可写保守的一次性脚本
-（见 `skills/paperwright-convert/references/join-blocks-protocol.md`），但必须做
-词守恒校验并保存溯源。
+图注、公式或引用。规则与协议都覆盖不到的复杂版式，可由 L3 程序合成桥写受限 DSL
+（`tools/run_text_synthesize.py`）：脚本与输入/输出哈希一并写入
+`synthesize-run.json`，`text-package --synthesis-run` 将其落入
+`_paperwright/06-text-review/` 并在 manifest v0.11 哈希链中做确定性重放。
+保守脚本路径仍见 `skills/paperwright-convert/references/join-blocks-protocol.md`。
 
 ## 哈希链
 

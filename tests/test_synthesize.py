@@ -18,9 +18,14 @@ from paperwright.synthesize import (
     DSLValidationError,
     ReviewAPI,
     SYNTHESIS_REVIEWER,
+    SYNTHESIS_RUN_CONTRACT_VERSION,
+    SynthesisError,
     build_synthesis_review,
+    build_synthesis_run,
+    canonical_synthesis_run_json,
     enrich_task_blocks,
     execute_dsl,
+    validate_synthesis_run,
     verify_join_conservation,
 )
 from tests import test_text_review
@@ -244,6 +249,47 @@ for prev, curr in pairs:
         )
         with self.assertRaises(ContractValidationError):
             enrich_task_blocks(task, other_model)
+
+    def test_synthesis_run_is_canonical_and_replayable(self):
+        model, task, blocks = self._enriched()
+        script = """
+pairs = api.adjacent_body_pairs()
+prev, curr = pairs[0]
+if api.same_column(prev, curr):
+    api.emit_join(prev.id, curr.id, "persisted same-column join")
+"""
+        operations = execute_dsl(script, ReviewAPI(blocks))
+        review = build_synthesis_review(task, operations)
+        run = build_synthesis_run(task, script, review)
+        self.assertEqual(
+            run["contract_version"], SYNTHESIS_RUN_CONTRACT_VERSION
+        )
+        self.assertEqual(run["source_sha256"], task["source_sha256"])
+        self.assertEqual(
+            run["article_model_sha256"], task["article_model"]["sha256"]
+        )
+        self.assertEqual(
+            canonical_synthesis_run_json(run),
+            canonical_synthesis_run_json(json.loads(canonical_synthesis_run_json(run))),
+        )
+        self.assertEqual(
+            validate_synthesis_run(
+                run, task=task, article_model=model, review=review
+            ),
+            operations,
+        )
+
+        no_emit = dict(run, script="x = len(api.blocks())\n")
+        with self.assertRaisesRegex(SynthesisError, "重放"):
+            validate_synthesis_run(
+                no_emit, task=task, article_model=model, review=review
+            )
+
+        bad_hash = dict(run, review_sha256="0" * 64)
+        with self.assertRaisesRegex(SynthesisError, "review hash"):
+            validate_synthesis_run(
+                bad_hash, task=task, article_model=model, review=review
+            )
 
     def test_l1_tool_candidate_extraction_uses_shared_core(self):
         _, task = self._model_task()

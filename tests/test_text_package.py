@@ -20,6 +20,7 @@ from paperwright.exceptions import ContractValidationError, OutputConflictError
 from paperwright.manifest import (
     HYBRID_LAYOUT_MANIFEST_VERSION,
     TEXT_REVIEWED_MANIFEST_VERSION,
+    TEXT_SYNTHESIZED_MANIFEST_VERSION,
     OutputFile,
     build_manifest,
     canonical_manifest_json,
@@ -27,6 +28,13 @@ from paperwright.manifest import (
     validate_manifest,
 )
 from paperwright.reader import canonical_reader_json
+from paperwright.synthesize import (
+    SYNTHESIS_REVIEWER,
+    SYNTHESIS_RUN_CONTRACT_VERSION,
+    SynthesisError,
+    build_synthesis_run,
+    canonical_synthesis_run_json,
+)
 from paperwright.text_package import (
     build_text_reviewed_package,
     validate_text_reviewed_package,
@@ -126,6 +134,22 @@ class TextPackageTests(unittest.TestCase):
             canonical_manifest_json(manifest), encoding="utf-8", newline="\n"
         )
         return model, image_data
+
+    @staticmethod
+    def _empty_synthesis_review(task):
+        return {
+            "contract_version": TEXT_REVIEW_CONTRACT_VERSION,
+            "task_sha256": text_task_sha256(task),
+            "source_sha256": task["source_sha256"],
+            "article_model_sha256": task["article_model"]["sha256"],
+            "reviewer": SYNTHESIS_REVIEWER,
+            "operations": [],
+        }
+
+    @staticmethod
+    def _synthesis_run(task, review):
+        script = "x = len(api.adjacent_body_pairs())\n"
+        return build_synthesis_run(task, script, review)
 
     @staticmethod
     def _review(task):
@@ -281,6 +305,119 @@ class TextPackageTests(unittest.TestCase):
                     ]
                 ),
                 0,
+            )
+
+    def test_builds_v011_package_with_synthesis_run_replay_chain(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            source.mkdir()
+            model, _ = self._source_package(source)
+            task = build_text_task(model)
+            review = self._empty_synthesis_review(task)
+            run = self._synthesis_run(task, review)
+            run_path = root / "synthesize-run.json"
+            run_path.write_text(
+                canonical_synthesis_run_json(run),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            output = root / "output"
+            result = build_text_reviewed_package(
+                source, task, review, output, synthesis_run=run
+            )
+            self.assertEqual(
+                result.manifest["manifest_version"],
+                TEXT_SYNTHESIZED_MANIFEST_VERSION,
+            )
+            synthesis = result.manifest["synthesis_run"]
+            self.assertEqual(
+                synthesis["contract_version"], SYNTHESIS_RUN_CONTRACT_VERSION
+            )
+            self.assertTrue(
+                (
+                    output
+                    / "_paperwright/06-text-review/synthesize-run.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    output
+                    / "_paperwright/06-text-review/source-article-model.json"
+                ).is_file()
+            )
+            validate_text_reviewed_package(output)
+
+            # Same inputs must replay the same output: a script whose emits
+            # diverge from the persisted review is rejected before any
+            # destination directory appears.
+            tampered = dict(
+                run,
+                script=(
+                    "pairs = api.blocks()\n"
+                    "api.emit_join(pairs[0].id, pairs[1].id, 'tampered')\n"
+                ),
+            )
+            bad_output = root / "bad-output"
+            with self.assertRaisesRegex(SynthesisError, "重放"):
+                build_text_reviewed_package(
+                    source, task, review, bad_output, synthesis_run=tampered
+                )
+            self.assertFalse(bad_output.exists())
+
+    def test_cli_text_package_with_synthesis_run_writes_v011(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source"
+            source.mkdir()
+            model, _ = self._source_package(source)
+            task = build_text_task(model)
+            review = self._empty_synthesis_review(task)
+            run = self._synthesis_run(task, review)
+            task_path = root / "text-task.json"
+            review_path = root / "text-review.json"
+            run_path = root / "synthesize-run.json"
+            task_path.write_text(
+                canonical_text_task_json(task), encoding="utf-8", newline="\n"
+            )
+            review_path.write_text(
+                canonical_text_review_json(review, task=task),
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_path.write_text(
+                canonical_synthesis_run_json(run),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            output = root / "output"
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main(
+                    [
+                        "text-package",
+                        str(source),
+                        str(task_path),
+                        str(review_path),
+                        str(output),
+                        "--synthesis-run",
+                        str(run_path),
+                    ]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                json.loads(stdout.getvalue())["manifest_version"],
+                TEXT_SYNTHESIZED_MANIFEST_VERSION,
+            )
+            validate_stdout = io.StringIO()
+            with redirect_stdout(validate_stdout):
+                self.assertEqual(
+                    main(["validate-text-package", str(output)]), 0
+                )
+            self.assertEqual(
+                json.loads(validate_stdout.getvalue())["status"], "valid"
             )
 
 

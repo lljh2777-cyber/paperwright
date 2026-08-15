@@ -185,6 +185,11 @@ def build_parser() -> argparse.ArgumentParser:
     text_package.add_argument("task_json", type=Path)
     text_package.add_argument("review_json", type=Path)
     text_package.add_argument("output_dir", type=Path)
+    text_package.add_argument(
+        "--synthesis-run",
+        type=Path,
+        help="L3 synthesize-run.json；提供时写入 manifest v0.11 并绑定重放哈希链",
+    )
 
     validate_text_package_parser = commands.add_parser(
         "validate-text-package",
@@ -643,14 +648,19 @@ def _text_package(
     task_path: Path,
     review_path: Path,
     output_dir: Path,
+    synthesis_run_path: Path | None = None,
 ) -> int:
     task = _read_json_object(task_path, "text task")
     review = _read_json_object(review_path, "text review")
+    synthesis_run = None
+    if synthesis_run_path is not None:
+        synthesis_run = _read_json_object(synthesis_run_path, "synthesis run")
     result = build_text_reviewed_package(
         source_package,
         task,
         review,
         output_dir,
+        synthesis_run=synthesis_run,
     )
     print(
         json.dumps(
@@ -955,6 +965,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.task_json,
                 args.review_json,
                 args.output_dir,
+                args.synthesis_run,
             )
         if args.command == "validate-text-package":
             return _validate_text_package(args.package_root)

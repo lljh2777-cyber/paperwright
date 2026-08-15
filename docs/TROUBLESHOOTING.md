@@ -86,6 +86,8 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
   与 Reader 绑定到同一规范模型。
 - `text-package`：manifest v0.10，从完整 v0.9 包派生，加入父 manifest、源模型、
   task、review 与验证报告哈希；使用 `validate-text-package` 做全包复核。
+- `text-package --synthesis-run`：manifest v0.11，在 v0.10 基础上增加 L3
+  synthesis-run 溯源、源 Article Model 副本与确定性重放哈希链。
 
 这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.8.0a0`。
 

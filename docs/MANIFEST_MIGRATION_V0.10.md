@@ -1,6 +1,7 @@
 # manifest v0.10 文本复核派生包迁移说明
 
-manifest v0.10 只由 `text-package` 写出。`layout-apply` 仍生成 manifest v0.9；
+manifest v0.10 由不带 `--synthesis-run` 的 `text-package` 写出；带 L3
+溯源时写 manifest v0.11（见 [v0.11 迁移说明](MANIFEST_MIGRATION_V0.11.md)）。`layout-apply` 仍生成 manifest v0.9；
 这样视觉布局结果保持为不可变父包，文本整理成为可审计、可丢弃的完整派生包。
 
 ## 新增内容

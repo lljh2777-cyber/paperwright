@@ -76,7 +76,8 @@ Markdown + images + manifest     article model
   校验带任务/模型哈希的受约束 Markdown 操作，并在保持身份图不变时生成新模型。
 - `paperwright.synthesize`：L3 程序合成内核——受限 DSL（ast 白名单、只读原语、
   跨平台执行预算）、join 候选、声明式守恒校验，并构造与 L1 完全相同的
-  `text-review.json`；模型调用与自修复留在 `tools/run_text_synthesize.py`。
+  `text-review.json`；另含 synthesis-run v0.1 溯源契约与确定性重放校验。
+  模型调用与自修复留在 `tools/run_text_synthesize.py`。
 - `paperwright.text_package`：验证完整 v0.9 源包，应用文本复核，并原子写出带父包、
   task、review 与验证报告哈希链的 manifest v0.10 派生包。
 - `paperwright.reader_contract`：集中定义稳定 ID、可见文本指纹和 Reader 严格校验，
@@ -125,6 +126,7 @@ Markdown + images + manifest     article model
 | direct region-render manifest | v0.5 | 增加 `region_render_policy` |
 | hybrid manifest | v0.9 | 当前写出；继续接受旧 v0.6–v0.8 |
 | text-reviewed manifest | v0.10 | 从完整 v0.9 包确定性派生，不覆盖父包 |
+| text-synthesized manifest | v0.11 | v0.10 + L3 synthesis-run 溯源与重放哈希链 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
 | text task | v0.1 | 只读文本块、编辑策略及源 Article Model 哈希 |
 | text review | v0.1 | 绑定任务的格式保持/断行去连字符操作 |

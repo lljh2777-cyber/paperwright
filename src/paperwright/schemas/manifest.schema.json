@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paperwright.local/schemas/manifest-v0.4-v0.10.json",
-  "title": "PaperWright manifest v0.4-v0.10",
+  "$id": "https://paperwright.local/schemas/manifest-v0.4-v0.11.json",
+  "title": "PaperWright manifest v0.4-v0.11",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -23,7 +23,8 @@
         "paperwright-manifest-v0.7",
         "paperwright-manifest-v0.8",
         "paperwright-manifest-v0.9",
-        "paperwright-manifest-v0.10"
+        "paperwright-manifest-v0.10",
+        "paperwright-manifest-v0.11"
       ]
     },
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -188,8 +189,8 @@
         "validation_sha256"
       ],
       "properties": {
-        "task_contract_version": {"const": "paperwright-text-task-v0.1"},
-        "review_contract_version": {"const": "paperwright-text-review-v0.1"},
+        "task_contract_version": {"enum": ["paperwright-text-task-v0.1", "paperwright-text-task-v0.2"]},
+        "review_contract_version": {"enum": ["paperwright-text-review-v0.1", "paperwright-text-review-v0.2"]},
         "task_path": {"const": "_paperwright/06-text-review/text-task.json"},
         "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "review_path": {"const": "_paperwright/06-text-review/text-review.json"},
@@ -200,6 +201,23 @@
         "operation_count": {"type": "integer", "minimum": 0},
         "validation_path": {"const": "_paperwright/06-text-review/validation-report.json"},
         "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "synthesis_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_version", "executor_version", "path", "sha256", "task_path", "task_sha256", "review_path", "review_sha256", "source_article_model_path", "source_article_model_sha256"],
+      "properties": {
+        "contract_version": {"const": "paperwright-synthesis-run-v0.1"},
+        "executor_version": {"type": "string", "minLength": 1, "maxLength": 200},
+        "path": {"const": "_paperwright/06-text-review/synthesize-run.json"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "task_path": {"const": "_paperwright/06-text-review/text-task.json"},
+        "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "review_path": {"const": "_paperwright/06-text-review/text-review.json"},
+        "review_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_article_model_path": {"const": "_paperwright/06-text-review/source-article-model.json"},
+        "source_article_model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
     "elements": {
@@ -406,7 +424,8 @@
             "enum": [
               "paperwright-manifest-v0.8",
               "paperwright-manifest-v0.9",
-              "paperwright-manifest-v0.10"
+              "paperwright-manifest-v0.10",
+              "paperwright-manifest-v0.11"
             ]
           }
         }
@@ -420,7 +439,8 @@
           "manifest_version": {
             "enum": [
               "paperwright-manifest-v0.9",
-              "paperwright-manifest-v0.10"
+              "paperwright-manifest-v0.10",
+              "paperwright-manifest-v0.11"
             ]
           }
         }
@@ -431,11 +451,20 @@
     {
       "if": {
         "properties": {
-          "manifest_version": {"const": "paperwright-manifest-v0.10"}
+          "manifest_version": {"enum": ["paperwright-manifest-v0.10", "paperwright-manifest-v0.11"]}
         }
       },
       "then": {"required": ["text_review"]},
       "else": {"not": {"required": ["text_review"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "manifest_version": {"const": "paperwright-manifest-v0.11"}
+        }
+      },
+      "then": {"required": ["synthesis_run"]},
+      "else": {"properties": {"synthesis_run": false}}
     }
   ],
   "$defs": {

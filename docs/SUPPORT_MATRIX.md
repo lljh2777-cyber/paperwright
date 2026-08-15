@@ -16,7 +16,7 @@
 - 标题、段落、双栏、图片和保守 Figure/Caption；
 - Content ROI、布局候选、结构化复核、布局应用及质量证据包；
 - 混合布局包的公开 Markdown 锚点、Reader v0.1 索引及独立完整性校验；
-- Text Task/Review v0.1、完整 manifest v0.10 文本复核派生包及父包哈希链；
+- Text Task/Review v0.1/v0.2、manifest v0.10 文本复核派生包、manifest v0.11 L3 合成溯源派生包及父包哈希链；
 - `fast`、按页选择性升级的 `standard` 和完整对象 `forensic` 提取；
 - region-render 默认关闭，`auto` 为显式 opt-in；
 - 表格不可靠时输出 `degraded`，不伪造语义结构。

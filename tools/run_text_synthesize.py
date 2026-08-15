@@ -10,10 +10,13 @@ no-network, no-LLM boundary.
 Usage:
     export DASHSCOPE_API_KEY=...
     PYTHONPATH=src python tools/run_text_synthesize.py \
-        article-model.json text-task.json text-review.json [--dry-run]
+        article-model.json text-task.json text-review.json \
+        [--synthesis-run synthesize-run.json] [--dry-run]
 
 The produced text-review.json is identical in contract to the L1 bridge and
-must pass `paperwright validate-text-review` before anything is applied.
+must pass `paperwright validate-text-review` before anything is applied.  The
+script and its input/output hashes are persisted to synthesize-run.json
+(VISION §8.3 decision 7) and can feed `text-package --synthesis-run`.
 """
 
 from __future__ import annotations
@@ -31,9 +34,13 @@ from paperwright.synthesize import (
     DSLValidationError,
     ReviewAPI,
     build_synthesis_review,
+    build_synthesis_run,
+    canonical_synthesis_run_json,
     enrich_task_blocks,
     execute_dsl,
+    validate_synthesis_run,
 )
+from paperwright.text_review import canonical_text_review_json
 
 MODEL = os.environ.get("PW_SYNTH_MODEL", "qwen3.7-plus")
 BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
@@ -177,6 +184,11 @@ def main() -> int:
     ap.add_argument("task_json", type=Path)
     ap.add_argument("review_json", type=Path)
     ap.add_argument("--script", type=Path, help="跳过模型，直接执行已有 DSL 脚本")
+    ap.add_argument(
+        "--synthesis-run",
+        type=Path,
+        help="L3 溯源文件路径；默认与 review 同目录的 synthesize-run.json",
+    )
     ap.add_argument("--dry-run", action="store_true", help="只生成脚本不执行")
     args = ap.parse_args()
 
@@ -185,6 +197,17 @@ def main() -> int:
     blocks = enrich_task_blocks(task, article_model)
     join_allowed = "join-blocks" in task["policy"].get("allowed_operations", ())
     api = ReviewAPI(blocks, join_allowed=join_allowed)
+
+    run_path = args.synthesis_run or args.review_json.with_name(
+        "synthesize-run.json"
+    )
+    if run_path == args.review_json:
+        raise SystemExit("synthesis-run 与 review 输出路径不能相同")
+    if not args.dry_run and (args.review_json.exists() or run_path.exists()):
+        raise SystemExit(
+            f"输出文件已存在，拒绝覆盖: "
+            f"{args.review_json if args.review_json.exists() else run_path}"
+        )
 
     if args.script:
         code = args.script.read_text(encoding="utf-8")
@@ -197,14 +220,25 @@ def main() -> int:
         if args.dry_run:
             print(_generate_script(client, api))
             return 0
-        _, review = _synthesize(client, api, task)
+        code, review = _synthesize(client, api, task)
 
-    if args.review_json.exists():
-        raise SystemExit(f"输出文件已存在，拒绝覆盖: {args.review_json}")
-    args.review_json.write_text(
-        json.dumps(review, ensure_ascii=False, indent=1), encoding="utf-8"
+    run = build_synthesis_run(task, code, review)
+    validate_synthesis_run(
+        run,
+        task=task,
+        article_model=article_model,
+        review=review,
     )
-    print(f"守恒校验与 validate-text-review 通过，已写 {args.review_json.name}")
+    args.review_json.write_text(
+        canonical_text_review_json(review, task=task), encoding="utf-8", newline="\n"
+    )
+    run_path.write_text(
+        canonical_synthesis_run_json(run), encoding="utf-8", newline="\n"
+    )
+    print(
+        f"守恒校验、validate-text-review 与重放校验通过，已写 "
+        f"{args.review_json.name} / {run_path.name}"
+    )
     return 0
 
 

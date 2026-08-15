@@ -112,6 +112,7 @@ def audit_wheel(path: Path) -> dict[str, object]:
             "paperwright/schemas/reader.schema.json",
             "paperwright/schemas/text_review.schema.json",
             "paperwright/schemas/text_task.schema.json",
+            "paperwright/schemas/synthesis_run.schema.json",
         }
         if not required.issubset(names):
             raise RuntimeError("wheel is missing package schemas")

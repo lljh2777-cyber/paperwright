@@ -23,6 +23,9 @@ import builtins
 from collections import Counter
 from collections.abc import Mapping, Sequence as SequenceABC
 from copy import deepcopy
+import hashlib
+import json
+import re
 import signal
 import sys
 import threading
@@ -32,6 +35,7 @@ import unicodedata
 from .exceptions import PaperWrightError
 from .text_review import (
     TEXT_REVIEW_CONTRACT_VERSION,
+    canonical_text_review_json,
     join_candidate_pairs,
     join_joiner,
     text_task_sha256,
@@ -40,6 +44,8 @@ from .text_review import (
 )
 
 SYNTHESIS_REVIEWER = "paperwright-synthesize-bridge"
+SYNTHESIS_EXECUTOR_VERSION = "paperwright-synthesize-v0.1"
+SYNTHESIS_RUN_CONTRACT_VERSION = "paperwright-synthesis-run-v0.1"
 MAX_ITERATIONS = 10000  # range() 迭代上限，兜底防死循环
 DEFAULT_SCRIPT_TIMEOUT_SECONDS = 5.0
 DEFAULT_TICK_LIMIT = 500_000
@@ -619,6 +625,171 @@ def build_synthesis_review(
     return review
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Synthesis run provenance（VISION §8.3 决策 7）
+# 代码 + 输入哈希 + 输出哈希落盘，校验时可重放证明同一输入得到同一输出。
+# ──────────────────────────────────────────────────────────────────────────
+
+_RUN_FIELDS = {
+    "contract_version",
+    "executor_version",
+    "script",
+    "source_sha256",
+    "article_model_sha256",
+    "task_sha256",
+    "review_sha256",
+    "reviewer",
+    "operation_count",
+}
+_HASH_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _canonical_run_json(value: Mapping[str, Any]) -> str:
+    return (
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    )
+
+
+def _validate_run_shape(value: Mapping[str, Any]) -> None:
+    if not isinstance(value, Mapping) or set(value) != _RUN_FIELDS:
+        raise SynthesisError("synthesis run 顶层字段非法")
+    if value["contract_version"] != SYNTHESIS_RUN_CONTRACT_VERSION:
+        raise SynthesisError("synthesis run contract_version 不受支持")
+    if (
+        not isinstance(value["executor_version"], str)
+        or not value["executor_version"]
+        or len(value["executor_version"]) > 200
+    ):
+        raise SynthesisError("synthesis run executor_version 非法")
+    if (
+        not isinstance(value["script"], str)
+        or not value["script"].strip()
+        or len(value["script"]) > MAX_SOURCE_CHARS
+    ):
+        raise SynthesisError("synthesis run script 非法")
+    for field in (
+        "source_sha256",
+        "article_model_sha256",
+        "task_sha256",
+        "review_sha256",
+    ):
+        if (
+            not isinstance(value[field], str)
+            or _HASH_RE.fullmatch(value[field]) is None
+        ):
+            raise SynthesisError(f"synthesis run {field} 非法")
+    if (
+        not isinstance(value["reviewer"], str)
+        or not value["reviewer"].strip()
+        or len(value["reviewer"]) > 200
+    ):
+        raise SynthesisError("synthesis run reviewer 非法")
+    if (
+        isinstance(value["operation_count"], bool)
+        or not isinstance(value["operation_count"], int)
+        or value["operation_count"] < 0
+    ):
+        raise SynthesisError("synthesis run operation_count 非法")
+
+
+def build_synthesis_run(
+    task: Mapping[str, Any],
+    script: str,
+    review: Mapping[str, Any],
+    *,
+    executor_version: str = SYNTHESIS_EXECUTOR_VERSION,
+) -> dict[str, Any]:
+    """Build the persisted L3 provenance record pinned to task and review."""
+
+    validate_text_task(task)
+    validate_text_review(review, task=task)
+    if not isinstance(script, str) or not script.strip():
+        raise SynthesisError("synthesis run script 不能为空")
+    if len(script) > MAX_SOURCE_CHARS:
+        raise SynthesisError(f"synthesis run script 超过 {MAX_SOURCE_CHARS} 字符上限")
+    value = {
+        "contract_version": SYNTHESIS_RUN_CONTRACT_VERSION,
+        "executor_version": executor_version,
+        "script": script,
+        "source_sha256": task["source_sha256"],
+        "article_model_sha256": task["article_model"]["sha256"],
+        "task_sha256": text_task_sha256(task),
+        "review_sha256": _sha256_text(
+            canonical_text_review_json(review, task=task)
+        ),
+        "reviewer": review["reviewer"],
+        "operation_count": len(review["operations"]),
+    }
+    _validate_run_shape(value)
+    return value
+
+
+def canonical_synthesis_run_json(value: Mapping[str, Any]) -> str:
+    """Serialize a synthesis run record in canonical deterministic form."""
+
+    _validate_run_shape(value)
+    return _canonical_run_json(value)
+
+
+def validate_synthesis_run(
+    value: Mapping[str, Any],
+    *,
+    task: Mapping[str, Any],
+    article_model: Mapping[str, Any],
+    review: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Validate a run record and replay its script against the pinned inputs.
+
+    The persisted review must be byte-for-byte reproducible: the script is
+    executed again with the same task + article-model geometry and must emit
+    exactly the persisted operations.
+    """
+
+    _validate_run_shape(value)
+    validate_text_task(task, article_model=article_model)
+    validate_text_review(review, task=task)
+    if value["source_sha256"] != task["source_sha256"]:
+        raise SynthesisError("synthesis run source hash 与 task 不一致")
+    if value["article_model_sha256"] != task["article_model"]["sha256"]:
+        raise SynthesisError("synthesis run article model hash 与 task 不一致")
+    if value["task_sha256"] != text_task_sha256(task):
+        raise SynthesisError("synthesis run task hash 不匹配")
+    if value["review_sha256"] != _sha256_text(
+        canonical_text_review_json(review, task=task)
+    ):
+        raise SynthesisError("synthesis run review hash 不匹配")
+    if value["reviewer"] != review["reviewer"]:
+        raise SynthesisError("synthesis run reviewer 与 review 不一致")
+    if value["operation_count"] != len(review["operations"]):
+        raise SynthesisError("synthesis run operation_count 与 review 不一致")
+
+    blocks = enrich_task_blocks(task, article_model)
+    join_allowed = "join-blocks" in task["policy"].get("allowed_operations", ())
+    api = ReviewAPI(blocks, join_allowed=join_allowed)
+    operations = execute_dsl(
+        value["script"],
+        api,
+        timeout_seconds=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
+    )
+    if operations != list(review["operations"]):
+        raise SynthesisError(
+            "synthesis run 重放结果与 persisted review 不一致"
+        )
+    verify_join_conservation(task, operations)
+    return operations
+
+
 __all__ = [
     "Block",
     "ConservationError",
@@ -627,10 +798,15 @@ __all__ = [
     "DEFAULT_TICK_LIMIT",
     "MAX_ITERATIONS",
     "ReviewAPI",
+    "SYNTHESIS_EXECUTOR_VERSION",
+    "SYNTHESIS_RUN_CONTRACT_VERSION",
     "SynthesisError",
     "SYNTHESIS_REVIEWER",
     "build_synthesis_review",
+    "build_synthesis_run",
+    "canonical_synthesis_run_json",
     "enrich_task_blocks",
     "execute_dsl",
+    "validate_synthesis_run",
     "verify_join_conservation",
 ]
