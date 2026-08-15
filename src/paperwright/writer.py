@@ -24,6 +24,11 @@ from .manifest import (
     sha256_file,
 )
 from .models import Element, Page, PhysicalDocument
+from .content_render import (
+    ContentRegionAnalysis,
+    analyze_content_regions,
+    to_region_render_request,
+)
 from .region_render import plan_region_renders
 from .text_reconstruction import (
     ReconstructedText,
@@ -397,6 +402,93 @@ def write_outputs(
         for item in region_decisions
         if item.status == "rejected" and item.figure_id is not None
     }
+
+    # Table / display-equation region rendering is opt-in together with
+    # figure region rendering, and equally conservative: any render failure
+    # leaves the native text in place.
+    content_analysis: ContentRegionAnalysis
+    if region_render_mode in {"auto", "explicit"}:
+        content_analysis = analyze_content_regions(
+            document,
+            max_candidates=region_render_max_candidates,
+        )
+    else:
+        content_analysis = ContentRegionAnalysis((), ())
+    table_records: list[dict[str, Any]] = []
+    equation_records: list[dict[str, Any]] = []
+    content_path_by_id: dict[str, str] = {}
+    content_caption_element_to_id: dict[str, str] = {}
+    content_member_element_ids: dict[str, str] = {}
+    content_asset_paths: list[Path] = []
+    for candidate in (*content_analysis.tables, *content_analysis.equations):
+        page = document.pages[candidate.page_index]
+        request = to_region_render_request(candidate, page)
+        if source is None or region_renderer is None:
+            continue
+        try:
+            rendered = region_renderer.render_region(
+                source,
+                request,
+                expected_source_sha256=document.source_sha256,
+            )
+        except Exception:
+            continue
+        relative = f"images/{candidate.content_id}.png"
+        content_path = root / relative
+        content_path.write_bytes(rendered.data)
+        content_asset_paths.append(content_path)
+        content_path_by_id[candidate.content_id] = relative
+        image_records.append(
+            {
+                "element_id": f"content:{candidate.content_id}",
+                "content_id": candidate.content_id,
+                "kind": candidate.kind,
+                "path": relative,
+                "page": candidate.page_index + 1,
+                "bbox": rendered.bbox.to_dict(),
+                "width_px": rendered.width_px,
+                "height_px": rendered.height_px,
+                "size_bytes": len(rendered.data),
+                "sha256": rendered.sha256,
+                "renderer_version": rendered.renderer_version,
+                "source_pdf_sha256": rendered.source_sha256,
+            }
+        )
+        if candidate.caption is not None:
+            for element_id in candidate.caption.element_ids:
+                content_caption_element_to_id[element_id] = candidate.content_id
+        for element_id in candidate.member_element_ids:
+            content_member_element_ids[element_id] = candidate.content_id
+        record = {
+            "content_id": candidate.content_id,
+            "kind": candidate.kind,
+            "page": candidate.page_index + 1,
+            "bbox": rendered.bbox.to_dict(),
+            "asset": {
+                "path": relative,
+                "sha256": rendered.sha256,
+                "size_bytes": len(rendered.data),
+                "width_px": rendered.width_px,
+                "height_px": rendered.height_px,
+            },
+            "caption": (
+                {
+                    "caption_id": candidate.caption.caption_id,
+                    "element_ids": list(candidate.caption.element_ids),
+                    "text": candidate.caption.text,
+                    "bbox": candidate.caption.bbox.to_dict(),
+                }
+                if candidate.caption is not None
+                else None
+            ),
+            "fallback_reason": request.fallback_reason,
+            "bbox_rule": candidate.reason,
+        }
+        if candidate.kind == "table":
+            table_records.append(record)
+        else:
+            equation_records.append(record)
+
     image_record_by_element = {
         item["element_id"]: item for item in image_records
     }
@@ -671,6 +763,33 @@ def write_outputs(
         )
         emitted_figures.add(group.figure_id)
 
+    emitted_content: set[str] = set()
+    content_kind_by_id = {
+        item["content_id"]: item["kind"]
+        for item in (*table_records, *equation_records)
+    }
+    content_page_by_id = {
+        item["content_id"]: item["page"]
+        for item in (*table_records, *equation_records)
+    }
+
+    def emit_content(content_id: str, placement: str) -> None:
+        if content_id in emitted_content or content_id not in content_path_by_id:
+            return
+        kind = content_kind_by_id[content_id]
+        label = "Table" if kind == "table" else "Equation"
+        relative = content_path_by_id[content_id]
+        page_number = content_page_by_id[content_id]
+        lines.extend(
+            [
+                f"<!-- content: {content_id}; kind: {kind}; "
+                f"page: {page_number}; placement: {placement} -->",
+                f"![{label} from page {page_number}]({relative})",
+                "",
+            ]
+        )
+        emitted_content.add(content_id)
+
     page_marker_indexes: dict[int, int] = {}
     cross_page_blocks: list[CrossPageParagraphBlock] = []
     for page in document.pages:
@@ -702,6 +821,31 @@ def write_outputs(
             }
             for figure_id in sorted(matched_ids):
                 emit_figure(figure_by_id[figure_id], "caption-adjacent")
+            content_ids = {
+                content_id
+                for element_id in element_ids
+                for content_id in (
+                    [content_caption_element_to_id[element_id]]
+                    if element_id in content_caption_element_to_id
+                    else []
+                )
+                + (
+                    [content_member_element_ids[element_id]]
+                    if element_id in content_member_element_ids
+                    else []
+                )
+            }
+            for content_id in sorted(content_ids):
+                emit_content(content_id, "native-position")
+            is_caption_content = any(
+                element_id in content_caption_element_to_id
+                for element_id in element_ids
+            )
+            if content_ids and not is_caption_content and all(
+                element_id in content_member_element_ids
+                for element_id in element_ids
+            ):
+                continue
             if text:
                 markdown_text = _format_markdown_paragraph(
                     text,
@@ -767,6 +911,12 @@ def write_outputs(
         for group in analysis.groups:
             if group.page_index == page.page_index and group.figure_id not in emitted_figures:
                 emit_figure(group, "page-end-degraded")
+        for content_id, page_number in sorted(
+            content_page_by_id.items(),
+            key=lambda item: (item[1], item[0]),
+        ):
+            if page_number == page.page_index + 1:
+                emit_content(content_id, "page-end-degraded")
 
     merge_paragraph_continuations(
         lines,
@@ -779,6 +929,7 @@ def write_outputs(
     output_paths = [article_path, physical_path]
     output_paths.extend(root / item["path"] for item in image_records)
     output_paths.extend(figure_asset_paths)
+    output_paths.extend(content_asset_paths)
     output_paths = list(dict.fromkeys(output_paths))
     outputs = [
         OutputFile(
@@ -870,6 +1021,8 @@ def write_outputs(
         figures=figure_records,
         figure_rejections=list(analysis.rejections) + region_rejections,
         degraded=degraded,
+        tables=table_records or None,
+        equations=equation_records or None,
         physical_document={
             "path": "physical_document.json",
             "sha256": hashlib.sha256(

@@ -50,6 +50,9 @@ Markdown + images + manifest     article model
   caption、有充分 bitmap/vector/text 几何证据且能证明 native 不完整的
   裁剪请求。跨页 continuation、近整页、caption 冲突/歧义、正文侵入和
   候选水平范围明显窄于 caption 等情形直接拒绝。
+- `paperwright.content_render`：与 region-render 同开关；保守识别同页
+  表格（显式 Table caption + 列对齐原生行）和独立公式（居中、短行、
+  垂直隔离、含数学记号），失败时保留原生文字。
 - `paperwright.writer`：把 PhysicalDocument 与内存资产确定性写入隔离临时
   目录，再原子提交。
 - `paperwright.layout_candidates`：提出 Content ROI，生成内部使用的文字、原生图形和

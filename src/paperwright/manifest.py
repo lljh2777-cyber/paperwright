@@ -68,6 +68,8 @@ def build_manifest(
     reader: dict[str, Any] | None = None,
     article_model: dict[str, Any] | None = None,
     text_review: dict[str, Any] | None = None,
+    tables: list[dict[str, Any]] | None = None,
+    equations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -101,6 +103,10 @@ def build_manifest(
         manifest["article_model"] = article_model
     if text_review is not None:
         manifest["text_review"] = text_review
+    if tables is not None:
+        manifest["tables"] = tables
+    if equations is not None:
+        manifest["equations"] = equations
     validate_manifest(manifest)
     return manifest
 
@@ -129,6 +135,8 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "article_model",
         "text_review",
         "synthesis_run",
+        "tables",
+        "equations",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -550,6 +558,8 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "figures",
         "figure_rejections",
         "degraded",
+        "tables",
+        "equations",
     ):
         if field_name in value and not isinstance(value[field_name], list):
             raise ContractValidationError(f"manifest {field_name} 必须是数组")

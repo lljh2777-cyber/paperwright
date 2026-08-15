@@ -213,7 +213,8 @@ paperwright batch output-root --input-dir pdf-directory --continue-on-error
 paperwright convert input.pdf output-dir --region-render-mode auto
 ```
 
-该模式用于补充部分混合位图/矢量 Figure，但可能保守漏检。
+该模式用于补充部分混合位图/矢量 Figure；启用后还会保守识别并图片化同页表格与
+独立公式（渲染失败自动保留原生文字），行内公式不受影响，但可能保守漏检。
 
 ## 混合布局复核
 

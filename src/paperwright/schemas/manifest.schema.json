@@ -203,6 +203,14 @@
         "validation_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
+    "tables": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "equations": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
     "synthesis_run": {
       "type": "object",
       "additionalProperties": false,
