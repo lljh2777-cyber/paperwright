@@ -27,7 +27,7 @@ mode before proceeding.
 
 1. Read repository-level `AGENTS.md` instructions when present.
 2. Read the checkout's `README.md`, `pyproject.toml`, and `docs/SUPPORT_MATRIX.md`; treat them as the current source of truth rather than versions copied into prompts.
-3. Use the acquisition and installation choices confirmed above. Do not claim that a public PyPI release exists.
+3. Use the acquisition and installation choices confirmed above. If the README offers the PyPI package path, verify `pip install paperwright` before reporting success; otherwise install from source. Do not present the source Alpha as a stable public release.
 4. Confirm that the checkout root contains `pyproject.toml`, `src/paperwright/`, and `README.md`.
 5. Select a 64-bit Python version allowed by `project.requires-python` in `pyproject.toml`. Use the interpreter required by local agent instructions when specified.
 6. Create a project-local virtual environment and install the checkout with `python -m pip install .`. Use `python -m pip install -e .` only when the user is preparing to contribute.
@@ -40,7 +40,7 @@ mode before proceeding.
 - Preserve existing checkouts, virtual environments, input PDFs, and generated outputs unless the user explicitly asks to replace them.
 - Do not install into the system interpreter when an isolated environment is available.
 - Do not select `pdfbox`; the current repository keeps it only as an unavailable interface boundary.
-- Do not promise OCR, scanned-PDF support, GUI, Web/API service, container images, or support for platforms marked unverified.
+- Do not promise OCR, scanned-PDF support, GUI, Web/API service, container images, or support for platforms marked unverified in `docs/SUPPORT_MATRIX.md`.
 - Keep `LICENSE` and `NOTICE` when redistributing the source or a derivative.
 
 ## Platform commands and diagnosis

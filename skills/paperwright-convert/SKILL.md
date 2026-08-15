@@ -66,11 +66,11 @@ Read [references/direct-and-batch.md](references/direct-and-batch.md) for direct
    block on the same page — and repair them with the model-agnostic `join-blocks`
    protocol. Read [references/join-blocks-protocol.md](references/join-blocks-protocol.md)
    before running a text review; it defines when to join, the exact operation
-   schema, what the validator rejects, and when a conservative one-off script
-   is acceptable instead. Never rewrite text inside a join: the protocol is
-   pure concatenation enforced by the validator.
+   schema, what the validator rejects, and when the restricted L3 bridge
+   (`tools/run_text_synthesize.py`) is the last-resort path. Never rewrite text
+   inside a join: the protocol is pure concatenation enforced by the validator.
 6. Treat warnings as review leads, not automatic proof of failure. Treat deterministic `FAIL` results as blocking.
-6. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
+7. Report limitations plainly: no OCR, no semantic table reconstruction, no formula-to-LaTeX conversion, and conservative handling of uncertain figures.
 
 ## Safety and provenance
 

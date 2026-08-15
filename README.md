@@ -48,6 +48,7 @@ paperwright --version
 ```
 
 适合把 `paperwright` 当作转换工具使用、不需要 Agent skills 或源码开发的环境。
+如果目标索引尚未收录该 Alpha 版本，请使用下方源码安装路径。
 如果下载依赖缓慢，可加 `-i` 指定 PyPI 镜像。
 
 **② 想要完整体验（Agent skills + 自动环境）** —— Linux / macOS 引导安装器
@@ -88,8 +89,8 @@ Windows 用户请使用下方 PowerShell 手动安装流程。
 - 首次安装时能够访问 Python Package Index，以取得锁定依赖；
 - born-digital（本身含文字层）的 PDF。
 
-Windows 11 / Python 3.11.2 和 Linux / Python 3.12 已实测。macOS、Windows
-ARM 和 Linux ARM 尚未验证。
+Windows 11 / Python 3.11.2、Linux / Python 3.12 和 Python 3.13 已实测。
+macOS、Windows ARM 和 Linux ARM 尚未验证。
 
 ## Windows PowerShell 安装
 
@@ -323,6 +324,9 @@ python -m paperwright convert input.pdf output-dir
 - [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)
 - [manifest v0.10 文本复核派生包迁移说明](docs/MANIFEST_MIGRATION_V0.10.md)
 - [manifest v0.11 L3 程序合成派生包迁移说明](docs/MANIFEST_MIGRATION_V0.11.md)
+- [项目模块导览](docs/PROJECT_MAP.md)
+- [契约与兼容性规则](docs/CONTRACTS_AND_COMPATIBILITY.md)
+- [贡献验证流程](docs/VALIDATION.md)
 - [manifest v0.9 与 Article Model 迁移说明](docs/MANIFEST_MIGRATION_V0.9.md)
 - [manifest v0.8 与 Reader 迁移说明](docs/MANIFEST_MIGRATION_V0.8.md)
 
@@ -332,8 +336,7 @@ python -m paperwright convert input.pdf output-dir
 
 - [`paperwright-install`](skills/paperwright-install/SKILL.md)：下载、安装与 CLI 验证；
 - [`paperwright-convert`](skills/paperwright-convert/SKILL.md)：直接转换、批量转换与人工/视觉 AI 混合复核；
-- [`paperwright-contribute`](skills/paperwright-contribute/SKILL.md)：理解架构、修改代码、测试和参与贡献。
-- [`paperwright-agent-workflow`](skills/paperwright-agent-workflow/SKILL.md)：由主 Agent 隔离协调视觉布局与纯文本复核子 Agent。
+- [`paperwright-agent-workflow`](skills/paperwright-agent-workflow/SKILL.md)：由主 Agent 隔离协调视觉布局与纯文本复核子 Agent；
 - [`paperwright-vision-qwen`](skills/paperwright-vision-qwen/SKILL.md)（可选）：把视觉复核绑定到
   qwen-mm-plugins 的多模态 MCP 工具（Content ROI 建议、visual-direct 区域、
   join-blocks 断句确认、图注核查）。仅在已安装 qwen-mm-plugins 并配置 DashScope
@@ -341,7 +344,7 @@ python -m paperwright convert input.pdf output-dir
 
 支持仓库内 skill 发现的 Agent 可以直接加载 `skills/`。其他工具可把对应 skill
 目录复制到自身的 skills 目录，或在提示中明确要求参照对应 `SKILL.md`。安装后可使用
-`$paperwright-install`、`$paperwright-convert`、`$paperwright-contribute`、
+`$paperwright-install`、`$paperwright-convert`、
 `$paperwright-agent-workflow` 或 `$paperwright-vision-qwen` 显式调用。
 
 这些 skills 只指导 Agent 调用现有命令和遵守项目契约，不会替 paperwright 隐式增加
@@ -362,11 +365,11 @@ python -m paperwright convert input.pdf output-dir
 
 ## 版本与数据契约
 
-包版本与数据契约独立演进。当前包版本为 `0.8.0a0`，PhysicalDocument 使用
+包版本与数据契约独立演进。当前包版本为 `0.9.0a0`，PhysicalDocument 使用
 v0.2，布局任务使用 v0.1/v0.2，当前混合布局 manifest 使用 v0.9，Article
 Model 和 Reader 均使用 v0.1。直接转换的兼容模式仍可能输出 manifest v0.4 或
 v0.5；Text Task 与 Text Review 均使用 v0.2（读取旧结果时继续接受 v0.1）；读取旧结果时继续接受混合布局
-manifest v0.6–v0.8。升级包版本不代表已有
+manifest v0.6–v0.8；`text-package --synthesis-run` 写 manifest v0.11。升级包版本不代表已有
 数据契约会被隐式改写。
 
 ## 许可证与分发

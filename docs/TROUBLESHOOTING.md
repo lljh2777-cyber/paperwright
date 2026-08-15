@@ -89,10 +89,11 @@ auto 模式要求可追溯的 native Figure group；纯矢量且没有 native gr
 - `text-package --synthesis-run`：manifest v0.11，在 v0.10 基础上增加 L3
   synthesis-run 溯源、源 Article Model 副本与确定性重放哈希链。
 
-这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.8.0a0`。
+这些是数据契约版本，不要求与 Python 包版本相同。当前包版本为 `0.9.0a0`。
 
 详见 `docs/MANIFEST_MIGRATION_V0.5.md`、`docs/MANIFEST_MIGRATION_V0.8.md`、
-`docs/MANIFEST_MIGRATION_V0.9.md` 和 `docs/MANIFEST_MIGRATION_V0.10.md`。
+`docs/MANIFEST_MIGRATION_V0.9.md`、`docs/MANIFEST_MIGRATION_V0.10.md` 和
+`docs/MANIFEST_MIGRATION_V0.11.md`。
 
 ### Reader 为什么报告 article 或 asset 哈希不匹配？
 
@@ -112,4 +113,4 @@ v0.9 文档包还可以运行
 - 深层 Figure/caption 语义；
 - PDFBox 完整后端；
 - GUI、Web 服务、容器或公开 PyPI release；
-- macOS、Windows ARM、Linux ARM 和 Python 3.13。
+- macOS、Windows ARM、Linux ARM（Python 3.13 已实测，见支持矩阵）。

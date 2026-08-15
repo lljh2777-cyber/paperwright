@@ -52,10 +52,8 @@ the rendered Figure/Table assets and the final article at least once.
    paperwright text-prepare ARTICLE_MODEL_JSON TEXT_TASK_JSON
    ```
 
-3. Give the text sub-agent only `text-task.json` and the protocol in
-   [references/text-review-protocol.md](references/text-review-protocol.md),
-   plus the model-agnostic `join-blocks` splice protocol in
-   [references/join-blocks-protocol.md](references/join-blocks-protocol.md).
+3. Give the text sub-agent only `text-task.json` and the v0.2 protocol in
+   [references/text-review-protocol.md](references/text-review-protocol.md).
    Do not give it page images or permission to rewrite the paper.
 4. Require one `text-review.json`. The reviewer may include `replace-markdown`
    cleanup and `join-blocks` operations for split paragraphs; joins are pure
@@ -79,16 +77,27 @@ the rendered Figure/Table assets and the final article at least once.
    paperwright validate-text-package OUTPUT_PACKAGE
    ```
 
-   Keep the manifest v0.9 source package until the manifest v0.10 derivative
-   passes validation. The output path must not already exist.
+   When the review came from the L3 bridge, pass its run record as well:
+
+   ```bash
+   paperwright text-package SOURCE_PACKAGE TEXT_TASK_JSON TEXT_REVIEW_JSON OUTPUT_PACKAGE \
+     --synthesis-run synthesize-run.json
+   ```
+
+   Keep the manifest v0.9 source package until the manifest v0.10 (or v0.11
+   with a synthesis run) derivative passes validation. The output path must
+   not already exist.
 
 The v0.2 text protocol permits visible-text-preserving Markdown formatting,
 strict dehyphenation, and `join-blocks` same-paragraph splices (pure
 concatenation, enforced by the validator). It rejects visual-slot edits,
 semantic rewrites, stale hashes, duplicate block edits, arbitrary merging,
-deletion, and reordering. `text-apply` produces a separate model-only artifact.
-`text-package` rebuilds the Markdown, Reader, model, manifest, and validation
-records together without silently replacing the original package projections.
+deletion, and reordering. When declarative operations cannot express a long-tail
+layout, the restricted L3 bridge may author a DSL script instead; its run record
+is replayed by `validate-text-package`. `text-apply` produces a separate
+model-only artifact. `text-package` rebuilds the Markdown, Reader, model,
+manifest, and validation records together without silently replacing the
+original package projections.
 
 ## Keep agents isolated
 

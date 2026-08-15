@@ -1,4 +1,4 @@
-# PaperWright 0.8 Alpha 架构
+# PaperWright 0.9 Alpha 架构
 
 ## 数据流
 
@@ -120,7 +120,7 @@ Markdown + images + manifest     article model
 
 | 数据 | 当前版本 | 兼容说明 |
 |---|---|---|
-| Python 包 | `0.8.0a0` | Alpha 功能版本 |
+| Python 包 | `0.9.0a0` | Alpha 功能版本 |
 | PhysicalDocument | v0.2 | 后端无关物理模型 |
 | direct/off manifest | v0.4 | 保持旧默认输出 |
 | direct region-render manifest | v0.5 | 增加 `region_render_policy` |
@@ -128,8 +128,8 @@ Markdown + images + manifest     article model
 | text-reviewed manifest | v0.10 | 从完整 v0.9 包确定性派生，不覆盖父包 |
 | text-synthesized manifest | v0.11 | v0.10 + L3 synthesis-run 溯源与重放哈希链 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
-| text task | v0.1 | 只读文本块、编辑策略及源 Article Model 哈希 |
-| text review | v0.1 | 绑定任务的格式保持/断行去连字符操作 |
+| text task | v0.2 | 只读文本块、编辑策略及源 Article Model 哈希；继续读 v0.1 |
+| text review | v0.2 | 格式保持、断行去连字符与 join-blocks；继续读 v0.1 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |
 | Markdown anchor | v0.1 | `pwwd:block` / `pwwd:slot` 公共隐藏锚点 |
 | layout task | v0.1/v0.2 | v0.2 增加栅格证据 |
@@ -150,9 +150,10 @@ Article Model 复用同一稳定身份，按连续 `order` 保存每个公开块
 从该模型重新计算；验证器拒绝模型、Markdown、Reader 或图片资产之间的漂移。
 
 文本复核不会把 Article Model 交给模型任意改写。`text-task.json` 只包含块 ID、类型、
-顺序、单行 Markdown 及内容哈希，不含页面图像、source span、资产或关系。v0.1
-复核只能替换可编辑块的 Markdown：`format-only` 必须保持规范化可见文本相同，
-`dehyphenation` 只能删除词内断行连字符及其后空白。应用阶段再次绑定源模型与任务
+顺序、单行 Markdown 及内容哈希，不含页面图像、source span、资产或关系。v0.2
+复核允许替换可编辑块的 Markdown（`format-only` 必须保持规范化可见文本相同，
+`dehyphenation` 只能删除词内断行连字符及其后空白），并允许同页相邻 body 的
+`join-blocks` 纯拼接；v0.1 仍可读取但不含 join-blocks。应用阶段再次绑定源模型与任务
 哈希，并拒绝视觉槽位、身份、顺序或图关系变化。
 
 `text-package` 将通过复核的新模型重新投影为 Markdown 与 Reader，同时复制并校验

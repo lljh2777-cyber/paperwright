@@ -15,7 +15,7 @@ paperwright 是本地、可追溯、非生成式 AI 的科研 PDF 重建工具�
 | **2. + qwen 视觉复核** | 让视觉模型顶替人眼复核版面 | 路径 1 后加 `bash install.sh install --with-vision` |
 
 路径 1 安装器自动：检测 agent harness（Claude Code / Codex / Cursor / Gemini）→
-选择 3.10–3.13 Python（必要时用 uv）→ 装 CLI → 复制 5 个 skills 到
+选择 3.10–3.13 Python（必要时用 uv）→ 装 CLI → 复制 4 个 skills 到
 `~/.claude/skills` → 验证。**安装后需重启 agent 会话**。
 
 路径 2 的 `--with-vision` 额外把 qwen-mm-plugins 的两个视觉 MCP（api/core）写入

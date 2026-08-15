@@ -3,9 +3,13 @@
 ## Acquire the source
 
 ```bash
-git clone https://github.com/lljh2777-cyber/PaperWright.git
-cd PaperWright
+git clone https://github.com/lljh2777-cyber/paperwright.git
+cd paperwright
 ```
+
+If the README's PyPI path is selected, verify `pip install paperwright`
+succeeds in the chosen environment; if the index has not published the current
+Alpha version, fall back to the source checkout.
 
 Without Git, download the repository ZIP from GitHub, extract it, and enter the directory containing `pyproject.toml`.
 

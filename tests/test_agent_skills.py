@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILLS = (
     "paperwright-install",
     "paperwright-convert",
-    "paperwright-contribute",
     "paperwright-agent-workflow",
     "paperwright-vision-qwen",
 )
@@ -57,9 +56,6 @@ class AgentSkillTests(unittest.TestCase):
         install = (
             ROOT / "skills" / "paperwright-install" / "SKILL.md"
         ).read_text(encoding="utf-8")
-        contribute = (
-            ROOT / "skills" / "paperwright-contribute" / "SKILL.md"
-        ).read_text(encoding="utf-8")
 
         self.assertIn("Ask before running", convert)
         self.assertIn("no more than three", convert)
@@ -74,7 +70,15 @@ class AgentSkillTests(unittest.TestCase):
         ):
             self.assertIn(required, option_guide)
         self.assertIn("Confirm installation choices", install)
-        self.assertIn("Confirm contribution scope", contribute)
+
+    def test_contribution_skill_is_not_distributed(self):
+        self.assertFalse((ROOT / "skills" / "paperwright-contribute").exists())
+        for name in (
+            "docs/PROJECT_MAP.md",
+            "docs/CONTRACTS_AND_COMPATIBILITY.md",
+            "docs/VALIDATION.md",
+        ):
+            self.assertTrue((ROOT / name).is_file(), name)
 
     def test_agent_workflow_separates_visual_and_text_reviewers(self):
         root = ROOT / "skills" / "paperwright-agent-workflow"
@@ -89,7 +93,8 @@ class AgentSkillTests(unittest.TestCase):
             "paperwright text-package",
             "paperwright validate-text-package",
             "Text reviewer input: text task JSON only",
-            "Do not merge, delete",
+            "join-blocks",
+            "synthesize-run.json",
         ):
             self.assertIn(required, combined)
 

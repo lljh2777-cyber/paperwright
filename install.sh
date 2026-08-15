@@ -20,7 +20,7 @@
 #   ~/.paperwright/src      源码 checkout
 #   ~/.paperwright/venv     隔离虚拟环境（pip install .）
 #   ~/.local/bin/paperwright CLI 符号链接
-#   <harness>/skills/paperwright-*  5 个 Agent skills
+#   <harness>/skills/paperwright-*  4 个 Agent skills
 #   --with-vision 时：把 qwen-mm-plugins api/core MCP 写入 Claude Code 配置
 
 set -euo pipefail
@@ -31,7 +31,7 @@ PREFIX="${PWRIGHT_PREFIX:-$HOME/.paperwright}"
 CHECKOUT_DIR="$PREFIX/src"
 VENV_DIR="$PREFIX/venv"
 BIN_LINK="${PWRIGHT_BIN_LINK:-$HOME/.local/bin/paperwright}"
-SKILL_DIRS=("paperwright-install" "paperwright-convert" "paperwright-contribute" "paperwright-agent-workflow" "paperwright-vision-qwen")
+SKILL_DIRS=("paperwright-install" "paperwright-convert" "paperwright-agent-workflow" "paperwright-vision-qwen")
 NO_COLOR="${NO_COLOR:-}"
 
 if [[ -z "$NO_COLOR" && -t 1 ]]; then

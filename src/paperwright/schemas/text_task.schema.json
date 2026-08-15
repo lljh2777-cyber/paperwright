@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paperwright.local/schemas/text-task-v0.1.json",
-  "title": "PaperWright source-preserving text task v0.1",
+  "$id": "https://paperwright.local/schemas/text-task-v0.1-v0.2.json",
+  "title": "PaperWright source-preserving text task v0.1/v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,15 +12,31 @@
     "blocks"
   ],
   "properties": {
-    "contract_version": {"const": "paperwright-text-task-v0.1"},
-    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "contract_version": {
+      "enum": [
+        "paperwright-text-task-v0.1",
+        "paperwright-text-task-v0.2"
+      ]
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "article_model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["contract_version", "sha256"],
+      "required": [
+        "contract_version",
+        "sha256"
+      ],
       "properties": {
-        "contract_version": {"const": "paperwright-article-model-v0.1"},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "contract_version": {
+          "const": "paperwright-article-model-v0.1"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
       }
     },
     "policy": {
@@ -34,18 +50,34 @@
         "text_equivalence_version"
       ],
       "properties": {
-        "text_source": {"const": "born-digital-native-pdf"},
+        "text_source": {
+          "const": "born-digital-native-pdf"
+        },
         "allowed_operations": {
           "type": "array",
-          "prefixItems": [{"const": "replace-markdown"}],
-          "minItems": 1,
-          "maxItems": 1
+          "oneOf": [
+            {
+              "const": [
+                "replace-markdown"
+              ]
+            },
+            {
+              "const": [
+                "replace-markdown",
+                "join-blocks"
+              ]
+            }
+          ]
         },
         "allowed_change_modes": {
           "type": "array",
           "prefixItems": [
-            {"const": "format-only"},
-            {"const": "dehyphenation"}
+            {
+              "const": "format-only"
+            },
+            {
+              "const": "dehyphenation"
+            }
           ],
           "minItems": 2,
           "maxItems": 2
@@ -76,13 +108,18 @@
           "id",
           "kind",
           "order",
+          "page",
           "markdown",
           "markdown_sha256",
           "visible_text_sha256",
-          "editable"
+          "editable",
+          "in_relations"
         ],
         "properties": {
-          "id": {"type": "string", "pattern": "^(?:blk|slot)_[0-9a-f]{24}$"},
+          "id": {
+            "type": "string",
+            "pattern": "^(?:blk|slot)_[0-9a-f]{24}$"
+          },
           "kind": {
             "enum": [
               "title",
@@ -94,13 +131,82 @@
               "unknown"
             ]
           },
-          "order": {"type": "integer", "minimum": 1},
-          "markdown": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$"},
-          "markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "visible_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "editable": {"type": "boolean"}
+          "order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "markdown": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "markdown_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "visible_text_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "in_relations": {
+            "type": "boolean"
+          }
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "contract_version": {
+            "const": "paperwright-text-task-v0.1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "policy": {
+            "properties": {
+              "allowed_operations": {
+                "const": [
+                  "replace-markdown"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contract_version": {
+            "const": "paperwright-text-task-v0.2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "policy": {
+            "properties": {
+              "allowed_operations": {
+                "const": [
+                  "replace-markdown",
+                  "join-blocks"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

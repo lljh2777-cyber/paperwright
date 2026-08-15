@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paperwright.local/schemas/text-review-v0.1.json",
-  "title": "PaperWright structured text review v0.1",
+  "$id": "https://paperwright.local/schemas/text-review-v0.1-v0.2.json",
+  "title": "PaperWright structured text review v0.1/v0.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,31 +13,130 @@
     "operations"
   ],
   "properties": {
-    "contract_version": {"const": "paperwright-text-review-v0.1"},
-    "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "article_model_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "reviewer": {"type": "string", "minLength": 1, "maxLength": 200},
+    "contract_version": {
+      "enum": [
+        "paperwright-text-review-v0.1",
+        "paperwright-text-review-v0.2"
+      ]
+    },
+    "task_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "article_model_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
     "operations": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "op",
-          "block_id",
-          "expected_markdown_sha256",
-          "change_mode",
-          "markdown",
-          "reason"
-        ],
+        "anyOf": [
+          {
+            "$ref": "#/$defs/replaceOperation"
+          },
+          {
+            "$ref": "#/$defs/joinOperation"
+          }
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
         "properties": {
-          "op": {"const": "replace-markdown"},
-          "block_id": {"type": "string", "pattern": "^blk_[0-9a-f]{24}$"},
-          "expected_markdown_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "change_mode": {"enum": ["format-only", "dehyphenation"]},
-          "markdown": {"type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$"},
-          "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+          "contract_version": {
+            "const": "paperwright-text-review-v0.1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "operations": {
+            "items": {
+              "$ref": "#/$defs/replaceOperation"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "replaceOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "block_id",
+        "expected_markdown_sha256",
+        "change_mode",
+        "markdown",
+        "reason"
+      ],
+      "properties": {
+        "op": {
+          "const": "replace-markdown"
+        },
+        "block_id": {
+          "type": "string",
+          "pattern": "^blk_[0-9a-f]{24}$"
+        },
+        "expected_markdown_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "change_mode": {
+          "enum": [
+            "format-only",
+            "dehyphenation"
+          ]
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "joinOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "target_block_ids",
+        "reason"
+      ],
+      "properties": {
+        "op": {
+          "const": "join-blocks"
+        },
+        "target_block_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string",
+            "pattern": "^blk_[0-9a-f]{24}$"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
         }
       }
     }
