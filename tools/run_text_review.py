@@ -3,10 +3,13 @@
 
 Reads the text task produced by `paperwright text-prepare`, extracts adjacent
 body-block pairs that satisfy every hard join-blocks precondition (same page,
-adjacent order, body kind, editable, unrelated, no sentence-terminal punctuation,
-lowercase continuation), then asks a plain-text model to decide — for each pair —
-whether it is a same-paragraph split. The model only decides; it never rewrites
-text, and every join still passes `validate-text-review` before it is applied.
+forward reading-order adjacency, body kind, editable, unrelated, no
+sentence-terminal punctuation, lowercase continuation), then asks a plain-text
+model to decide — for each pair — whether it is a same-paragraph split.
+
+The model only decides; it never rewrites text.  The bridge validates every
+review with `validate-text-review` before writing it, writes canonical JSON,
+and refuses to overwrite an existing output file.
 
 This is an optional tool: the `openai` package is only imported when the script
 actually runs the model, so PaperWright's core stays free of LLM dependencies.
@@ -28,7 +31,13 @@ import os
 import sys
 from pathlib import Path
 
-from paperwright.text_review import join_candidates, text_task_sha256
+from paperwright.exceptions import ContractValidationError
+from paperwright.text_review import (
+    canonical_text_review_json,
+    join_candidates,
+    text_task_sha256,
+    validate_text_review,
+)
 
 MODEL = os.environ.get("PW_TEXT_MODEL", "qwen3.7-plus")
 BASE_URL = os.environ.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
@@ -36,6 +45,7 @@ REVIEWER = "paperwright-text-review-bridge"
 TAIL = 70
 HEAD = 70
 BATCH = 25
+VALID_VERDICTS = {"SAME_PARAGRAPH", "DIFFERENT_PARAGRAPHS"}
 
 
 def _load_client():
@@ -90,12 +100,68 @@ def build_prompt(candidates: list[tuple[dict, dict]]) -> str:
     )
 
 
-def judge(client, candidates: list[tuple[dict, dict]]) -> list[dict]:
+def validate_decisions(decisions: list[dict], candidate_count: int) -> list[dict]:
+    """Reject malformed model output instead of silently skipping it.
+
+    Every decision must have an integer batch offset and index that resolve to
+    a unique candidate in range, and a verdict from the closed enum.
+    """
+
+    if not isinstance(decisions, list):
+        raise ValueError("decisions 必须是数组")
+    if isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or candidate_count < 0:
+        raise ValueError("candidate_count 非法")
+    seen: set[int] = set()
+    normalized: list[dict] = []
+    for item in decisions:
+        if not isinstance(item, dict):
+            raise ValueError("decision 必须是 JSON object")
+        offset = item.get("_batch_offset", 0)
+        index = item.get("index")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("decision _batch_offset 必须是非负整数")
+        if isinstance(index, bool) or not isinstance(index, int):
+            raise ValueError("decision index 必须是整数")
+        global_index = offset + index
+        if global_index < 0 or global_index >= candidate_count:
+            raise ValueError(
+                f"decision index {global_index} 超出候选范围 0..{candidate_count - 1}"
+            )
+        if global_index in seen:
+            raise ValueError(f"decision index {global_index} 重复")
+        seen.add(global_index)
+        verdict = item.get("verdict")
+        if verdict not in VALID_VERDICTS:
+            raise ValueError(
+                "decision verdict 必须是 SAME_PARAGRAPH 或 DIFFERENT_PARAGRAPHS"
+            )
+        reason = item.get("reason")
+        if reason is not None and (
+            not isinstance(reason, str) or not reason.strip()
+        ):
+            raise ValueError("decision reason 必须是非空字符串")
+        normalized.append(
+            {
+                "_batch_offset": offset,
+                "index": index,
+                "verdict": verdict,
+                "reason": reason,
+            }
+        )
+    return normalized
+
+
+def judge(
+    client,
+    candidates: list[tuple[dict, dict]],
+    *,
+    model: str = MODEL,
+) -> list[dict]:
     decisions: list[dict] = []
     for start in range(0, len(candidates), BATCH):
         batch = candidates[start : start + BATCH]
         resp = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=[{"role": "user", "content": build_prompt(batch)}],
             temperature=0,
             max_tokens=2048,
@@ -104,22 +170,30 @@ def judge(client, candidates: list[tuple[dict, dict]]) -> list[dict]:
         )
         data = json.loads(resp.choices[0].message.content or "{}")
         for item in data.get("decisions", []):
+            if not isinstance(item, dict):
+                raise ValueError("decision 必须是 JSON object")
             item["_batch_offset"] = start
         decisions.extend(data.get("decisions", []))
     return decisions
 
 
-def build_review(task: dict, candidates: list[tuple[dict, dict]], decisions: list[dict]) -> dict:
+def build_review(
+    task: dict,
+    candidates: list[tuple[dict, dict]],
+    decisions: list[dict],
+    *,
+    validate: bool = True,
+) -> dict:
+    decisions = validate_decisions(decisions, len(candidates))
     verdict_by_key = {
-        item.get("_batch_offset", 0) + int(item.get("index", -1)): item
-        for item in decisions
+        item["_batch_offset"] + item["index"]: item for item in decisions
     }
     operations = []
     for i, (prev, curr) in enumerate(candidates):
         item = verdict_by_key.get(i)
-        if item is None or item.get("verdict") != "SAME_PARAGRAPH":
+        if item is None or item["verdict"] != "SAME_PARAGRAPH":
             continue
-        reason = str(item.get("reason") or "Same paragraph split by the extractor.")
+        reason = item.get("reason") or "Same paragraph split by the extractor."
         operations.append(
             {
                 "op": "join-blocks",
@@ -127,7 +201,7 @@ def build_review(task: dict, candidates: list[tuple[dict, dict]], decisions: lis
                 "reason": reason[:1000],
             }
         )
-    return {
+    review = {
         "contract_version": "paperwright-text-review-v0.2",
         "task_sha256": text_task_sha256(task),
         "source_sha256": task["source_sha256"],
@@ -135,6 +209,17 @@ def build_review(task: dict, candidates: list[tuple[dict, dict]], decisions: lis
         "reviewer": REVIEWER,
         "operations": operations,
     }
+    if validate:
+        validate_text_review(review, task=task)
+    return review
+
+
+def _write_review(review_path: Path, review: dict, task: dict) -> None:
+    canonical = canonical_text_review_json(review, task=task)
+    if str(review_path) == "-":
+        sys.stdout.write(canonical)
+        return
+    review_path.write_text(canonical, encoding="utf-8", newline="\n")
 
 
 def main() -> int:
@@ -154,13 +239,17 @@ def main() -> int:
             print(f"[{i}] {p['order']}->{c['order']} | ...{_snippet(p['markdown'], True)} | {_snippet(c['markdown'], False)}...")
         return 0
 
+    if str(args.review_json) != "-" and args.review_json.exists():
+        raise SystemExit(f"输出文件已存在，拒绝覆盖: {args.review_json}")
+
     client = _load_client()
-    decisions = judge(client, candidates)
-    review = build_review(task, candidates, decisions)
-    if str(args.review_json) == "-":
-        print(json.dumps(review, ensure_ascii=False, indent=1))
-    else:
-        args.review_json.write_text(json.dumps(review, ensure_ascii=False, indent=1), encoding="utf-8")
+    try:
+        decisions = judge(client, candidates, model=args.model)
+        review = build_review(task, candidates, decisions)
+    except (ValueError, json.JSONDecodeError, ContractValidationError) as exc:
+        raise SystemExit(f"L1 桥拒绝模型输出: {exc}") from exc
+
+    _write_review(args.review_json, review, task)
     n_join = len(review["operations"])
     print(f"判定: {n_join} 对拼接, {len(candidates) - n_join} 对不拼", file=sys.stderr)
     for op in review["operations"]:

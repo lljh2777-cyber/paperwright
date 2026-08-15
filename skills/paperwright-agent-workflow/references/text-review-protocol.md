@@ -48,7 +48,8 @@ Two adjacent body blocks may be spliced as one paragraph:
 ```
 
 The validator recomputes and enforces every condition: both blocks are `body`,
-editable and unrelated; same page; reading-order adjacent; the first block does
+editable and unrelated; same page; the second block's `order` equals the
+first block's `order + 1` (reversed pairs are rejected); the first block does
 not end with `. ! ? : ;`; the second block starts with a lowercase letter. The
 result is pure concatenation (one space, or no space after a trailing hyphen or
 slash). The first block keeps its stable ID; the second is removed from the

@@ -362,8 +362,8 @@ def _join_block_precondition_error(
             return "join-blocks 不允许拼接参与关系（figure/caption）的块"
     if previous_block["page"] != current_block["page"]:
         return "join-blocks 只允许拼接同页块"
-    if abs(previous_block["order"] - current_block["order"]) != 1:
-        return "join-blocks 只允许拼接阅读顺序相邻的块"
+    if current_block["order"] != previous_block["order"] + 1:
+        return "join-blocks 只允许拼接阅读顺序相邻的块（后块 order 必须等于前块 order + 1，禁止反向）"
     previous_markdown = previous_block["markdown"]
     current_markdown = current_block["markdown"].lstrip().removeprefix("&emsp;")
     first = current_markdown[:1]

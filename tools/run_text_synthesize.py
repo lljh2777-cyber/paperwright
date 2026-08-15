@@ -16,7 +16,9 @@ Usage:
 The produced text-review.json is identical in contract to the L1 bridge and
 must pass `paperwright validate-text-review` before anything is applied.  The
 script and its input/output hashes are persisted to synthesize-run.json
-(VISION §8.3 decision 7) and can feed `text-package --synthesis-run`.
+(VISION §8.3 decision 7) and can feed `text-package --synthesis-run`.  The two
+files are materialized as same-directory temp files and replaced only after
+both writes succeed, so a failed run does not leave half an output pair.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 from paperwright.exceptions import ContractValidationError
@@ -178,6 +181,61 @@ def _run_script(code: str, api: ReviewAPI, task: dict) -> dict:
     return build_synthesis_review(task, operations)
 
 
+def _write_temp_text(path: Path, value: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(value)
+    except Exception:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
+    return Path(temp_name)
+
+
+def _write_outputs_atomic(
+    review_path: Path,
+    review_text: str,
+    run_path: Path,
+    run_text: str,
+) -> None:
+    """Write review and run through same-directory temp files.
+
+    Both files are fully materialized before either destination is replaced.
+    If the second replace fails, the first destination is rolled back because
+    both paths were confirmed absent before generation.
+    """
+
+    if review_path == run_path:
+        raise SystemExit("synthesis-run 与 review 输出路径不能相同")
+    review_temp = _write_temp_text(review_path, review_text)
+    try:
+        run_temp = _write_temp_text(run_path, run_text)
+    except Exception:
+        review_temp.unlink(missing_ok=True)
+        raise
+    try:
+        os.replace(review_temp, review_path)
+    except Exception:
+        review_temp.unlink(missing_ok=True)
+        run_temp.unlink(missing_ok=True)
+        raise
+    try:
+        os.replace(run_temp, run_path)
+    except Exception:
+        run_temp.unlink(missing_ok=True)
+        try:
+            review_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("article_model_json", type=Path)
@@ -229,11 +287,11 @@ def main() -> int:
         article_model=article_model,
         review=review,
     )
-    args.review_json.write_text(
-        canonical_text_review_json(review, task=task), encoding="utf-8", newline="\n"
-    )
-    run_path.write_text(
-        canonical_synthesis_run_json(run), encoding="utf-8", newline="\n"
+    _write_outputs_atomic(
+        args.review_json,
+        canonical_text_review_json(review, task=task),
+        run_path,
+        canonical_synthesis_run_json(run),
     )
     print(
         f"守恒校验、validate-text-review 与重放校验通过，已写 "

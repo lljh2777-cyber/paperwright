@@ -358,6 +358,19 @@ class JoinBlocksContractTests(unittest.TestCase):
                 ),
                 task=task,
             )
+        # reversed adjacent pair must be rejected, not silently merged backwards
+        second = model["blocks"][2]
+        with self.assertRaisesRegex(ContractValidationError, "禁止反向"):
+            validate_text_review(
+                review_with(
+                    {
+                        "op": "join-blocks",
+                        "target_block_ids": [second["id"], first["id"]],
+                        "reason": "r",
+                    }
+                ),
+                task=task,
+            )
         # continuation must start lowercase
         cap_model = self._model(joinable=False)
         cap_task = build_text_task(cap_model)

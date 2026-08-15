@@ -52,7 +52,7 @@ paperwright validate-text-package OUTPUT_PACKAGE
 校验器强制（全部满足才通过）：
 
 1. 两块都是 `body`、可编辑、不参与任何 Figure/Caption 关系；
-2. 同一页，且 `order` 相邻；
+2. 同一页，且后块 `order` = 前块 `order` + 1（正向相邻，反向 pair 会被拒绝）；
 3. 前块不以 `.!?:;` 结尾、后块首字符是小写字母 —— 续行的可证明信号；
 4. 结果 = 前块文本 + 空格（前块以连字符结尾时无空格）+ 后块文本，零改写。
 
