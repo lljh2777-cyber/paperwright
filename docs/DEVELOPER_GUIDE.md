@@ -1,0 +1,125 @@
+# PaperWright 开发者指南
+
+本文面向**修改 paperwright 源码、契约或桥工具的开发者**。用户流程见
+[用户指南](USER_GUIDE.md)，产品定位见 [VISION](VISION.md)。
+
+## 1. 架构分层
+
+| 层 | 模块 | 职责 |
+|---|---|---|
+| L0 确定性内核 | `backends/pdfium.py`, `models.py`, `figures.py`, `content_render.py`, `region_render.py`, `writer.py` | PDFium 提取、Figure/Table/Equation 图片化、Markdown/manifest 写出 |
+| L1 文本判断 | `text_review.py`, `tools/run_text_review.py` | 只判断格式整理与 join-blocks，写 `text-review.json` |
+| L2 视觉判断 | `layout_models.py`, `layout_review.py`, `layout_writer.py`, `tools/run_visual_review.py` | 只判断版面几何/角色，写 `final-layout.json` |
+| L3 程序合成 | `synthesize.py`, `tools/run_text_synthesize.py` | 受限 DSL + 守恒校验 + 重放溯源 |
+| 路由/编排 | `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | 决定每页走哪层并自动执行 |
+| 度量 | `llm_cost.py` | 记录 bridge token/成本，核心不依赖 LLM SDK |
+
+核心原则：
+- 校验器是唯一真值源；模型产物全部过 `validate-*`
+- 核心不 import `openai`、不联网
+- 坐标与契约不变：PhysicalDocument v0.2、Article Model v0.1、Reader v0.1
+
+## 2. 目录地图
+
+```text
+src/paperwright/      核心包（确定性逻辑）
+  schemas/            JSON Schema（随包发布）
+tools/                仓库工具 + 可选模型桥
+  run_text_review.py  L1 桥
+  run_text_synthesize.py  L3 桥
+  run_visual_review.py    L2 桥（直连 DashScope）
+  run_routing_plan.py     路由执行器
+tests/                单测；fixtures 自生成，不提交真实 PDF
+docs/                 用户/开发/契约文档
+skills/               4 个可分发 Agent skills
+```
+
+详细模块路由见 [PROJECT_MAP](PROJECT_MAP.md)。
+
+## 3. 数据契约与兼容性
+
+- 包版本与数据契约独立演进。
+- 改动任何契约前先读 [契约与兼容性规则](CONTRACTS_AND_COMPATIBILITY.md)。
+- 新增 manifest 版本必须有迁移文档；现有：
+  - v0.4 直接转换
+  - v0.5 直接转换 + region-render
+  - v0.9 混合布局
+  - v0.10 文本复核派生包
+  - v0.11 L3 合成派生包
+- 对应 schema 在 `src/paperwright/schemas/`，随包发布；修改后更新
+  `tools/run_install_checks.py` 的必需 schema 清单（如新增文件）。
+
+## 4. 如何新增一个文本操作（以 reorder 为例）
+
+1. 在 `text_review.py`：
+   - 定义操作字段与守恒校验函数
+   - 在 `validate_text_review` 中接受该 op
+   - 在 `apply_text_review` 中实现模型投影
+2. 更新 `schemas/text_review.schema.json`
+3. 更新 `docs/TEXT_REVIEW_PROTOCOL_ZH.md`
+4. 若要 L3 也能产出：
+   - 在 `synthesize.py` 的 `ReviewAPI` 增加 `emit_*`
+   - 增加守恒校验与 AST 白名单测试
+5. 加单测覆盖合法/非法/守恒破坏三种情况
+
+## 5. 如何新增一个 L2 桥或路由信号
+
+- 桥工具放 `tools/`，薄封装模型调用；
+- 确定性逻辑放 `src/paperwright/`；
+- 路由信号在 `routing.py` 中表达，必须只用 PhysicalDocument/LayoutTask/
+  LayoutRiskAssessment 的确定性字段；
+- 编排器在 `tools/run_routing_plan.py` 中接线。
+
+## 6. 如何跑测试与验证
+
+```bash
+# 定点单测
+PYTHONPATH=src:. python -m unittest tests.test_routing -v
+
+# 全量
+PYTHONPATH=src python -m unittest discover -s tests
+
+# 仓库检查
+python tools/generate_fixtures.py --check
+python -m compileall -q src tests tools
+python tools/check_repo_policy.py --root .
+git diff --check
+
+# 内容冒烟（重建/布局/manifest 变更必跑）
+PYTHONPATH=src:tests python tools/run_content_smoke.py
+
+# 安装/打包（依赖/入口/发布相关）
+python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check --summary /tmp/pw-install-summary.json
+```
+
+完整清单见 [VALIDATION](VALIDATION.md)。
+
+## 7. 仓库政策
+
+- 禁止提交 PDF、渲染产物、真实论文输出、二进制、凭据；
+- 禁止超过 5 MiB 的源码交付内容；
+- `tools/check_repo_policy.py` 是防误提交，不替代正式安全扫描；
+- 提交前保持工作区只含有意变更，`git status --short` 确认。
+
+## 8. 提交与推送
+
+- 提交信息格式：`feat:` / `fix:` / `docs:` / `test:` / `refactor:`
+- 说明行为、影响文件、验证结果
+- 推送前跑相关测试；不要声称只跑定向测试为“全量通过”
+
+## 9. 当前路线图
+
+见 [VISION](VISION.md) §7。已完成：
+
+- L0 内核、L1/L2/L3 桥
+- L3 落盘溯源与 manifest v0.11
+- 表格/公式图片化第一版
+- token/成本计量
+- 确定性路由 + 自动编排 + L1→L3 降级
+
+未完成：
+
+- `run.json` 聚合 per-step token/成本
+- 预算上限产品化到 CLI 配置
+- L3 操作集扩展与规则回填
+- 真实论文回归校准路由阈值

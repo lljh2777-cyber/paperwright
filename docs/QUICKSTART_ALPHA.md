@@ -1,5 +1,7 @@
 # paperwright 快速开始（Alpha）
 
+> 更完整的工作流、命令与成本说明见 [用户指南](USER_GUIDE.md)。
+
 paperwright 是本地、可追溯、非生成式 AI 的科研 PDF 重建工具：PDF → Markdown +
 图片 + 清单 + 溯源。当前版本 `0.9.0a0`。
 

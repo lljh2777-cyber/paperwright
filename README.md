@@ -320,6 +320,8 @@ python -m paperwright convert input.pdf output-dir
 启发式文本问题标为 `warning`，不会阻断输出；确定性结构检查单独给出
 `PASS/FAIL`。
 
+- [用户指南](docs/USER_GUIDE.md)
+- [开发者指南](docs/DEVELOPER_GUIDE.md)
 - [产品愿景与架构](docs/VISION.md)
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
