@@ -182,7 +182,9 @@ output-dir/
 输出目录必须尚不存在，paperwright 不会覆盖已有数据。
 
 混合布局准备阶段还会生成 `routing.json`，确定性建议每页走 L0 规则 /
-L1 文本模型 / L2 视觉模型 / 人工复核，供 Agent 决定调用哪个桥。
+L1 文本模型 / L2 视觉模型 / 人工复核，供 Agent 决定调用哪个桥；也可直接
+`PYTHONPATH=src python tools/run_routing_plan.py input.pdf review-dir out-dir`
+自动执行整个路由计划（支持 `--token-budget` 超限停止）。
 
 ## 页眉页脚剔除（--furniture）
 

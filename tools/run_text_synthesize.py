@@ -63,6 +63,22 @@ _REPAIRABLE_ERRORS = (
 )
 
 
+def _parse_pages(pages_arg: str | None) -> set[int] | None:
+    if not pages_arg:
+        return None
+    pages: set[int] = set()
+    for part in pages_arg.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start, end = part.split("-", 1)
+            pages.update(range(int(start), int(end) + 1))
+        else:
+            pages.add(int(part))
+    return pages
+
+
 def _load_client():
     try:
         from openai import OpenAI
@@ -253,6 +269,7 @@ def main() -> int:
     ap.add_argument("task_json", type=Path)
     ap.add_argument("review_json", type=Path)
     ap.add_argument("--script", type=Path, help="跳过模型，直接执行已有 DSL 脚本")
+    ap.add_argument("--pages", help="只处理指定页（1-based，如 2-5 或 1,3,9）")
     ap.add_argument(
         "--synthesis-run",
         type=Path,
@@ -264,6 +281,9 @@ def main() -> int:
     article_model = json.loads(args.article_model_json.read_text(encoding="utf-8"))
     task = json.loads(args.task_json.read_text(encoding="utf-8"))
     blocks = enrich_task_blocks(task, article_model)
+    pages = _parse_pages(args.pages)
+    if pages is not None:
+        blocks = [block for block in blocks if block["page"] + 1 in pages]
     join_allowed = "join-blocks" in task["policy"].get("allowed_operations", ())
     api = ReviewAPI(blocks, join_allowed=join_allowed)
 

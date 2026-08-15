@@ -167,10 +167,10 @@ paperwright 的差异化不在"某一项绝对质量最高"，而在：
 1. **表格/公式图片化已部分通用化**。`region-render-mode auto/explicit` 现在除 Figure 外，
    也会保守识别并渲染**同页表格**与**独立公式**（`content_render.py`）；行内公式仍保留文字层，
    渲染失败自动保留原生文本。仍需用真实论文评估识别准确率与图片体积。
-2. **路由/分级已部分自动化**。`layout-prepare` 现在会确定性生成
-   `routing.json`（`paperwright-routing-v0.1`）：普通页 L0，断句碎片 L1，
-   复杂几何/风险升级页 L2，无文字层转人工；L3 仍作为 L1/L2 表达失败后的
-   最后手段。桥接工具的执行与预算上限尚未自动接线。
+2. **路由/分级已自动接线**。`layout-prepare` 确定性生成 `routing.json`；
+   `tools/run_routing_plan.py` 读取该计划，L0 页用规则兜底布局，L2 页调视觉桥，
+   全部校验后执行 `layout-apply`，L1 页继续走文本桥与 `text-package`，并支持
+   `--token-budget` 超限停止回退。预算上限、L3 自动降级与 run.json 聚合仍待实现。
 3. **成本计量缺失**。没有 token/成本统计，优化无法度量。
 4. **视觉协议对模型输出的鲁棒性**。实测模型产出有 bbox 变体、单对象、order=0、越 ROI 等形态变异，需把"模型输出 → 契约规范化"做成一等公民（官方 `normalize` 步骤，而非下游脚本补丁）。
 5. **程序合成层（L3）最小原型已完成、上游化并带落盘溯源**。设计已定（§8.3）；join-blocks DSL 内核位于 `src/paperwright/synthesize.py`，`text-package --synthesis-run` 写出带确定性重放校验的 manifest v0.11。剩余差距是更广操作集与成本计量。

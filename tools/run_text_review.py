@@ -66,10 +66,38 @@ def _load_client():
     return OpenAI(api_key=key, base_url=BASE_URL)
 
 
-def extract_candidates(task: dict) -> list[tuple[dict, dict]]:
+def _parse_pages(pages_arg: str | None) -> set[int] | None:
+    if not pages_arg:
+        return None
+    pages: set[int] = set()
+    for part in pages_arg.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start, end = part.split("-", 1)
+            pages.update(range(int(start), int(end) + 1))
+        else:
+            pages.add(int(part))
+    return pages
+
+
+def extract_candidates(
+    task: dict, pages: set[int] | None = None
+) -> list[tuple[dict, dict]]:
     # Shared with the L3 synthesis kernel: candidates are exactly the pairs
     # that validate-text-review can accept, so the two bridges cannot drift.
-    return [(dict(previous), dict(current)) for previous, current in join_candidates(task)]
+    candidates = [
+        (dict(previous), dict(current))
+        for previous, current in join_candidates(task)
+    ]
+    if pages is None:
+        return candidates
+    return [
+        (previous, current)
+        for previous, current in candidates
+        if previous["page"] + 1 in pages
+    ]
 
 
 def _snippet(text: str, tail: bool) -> str:
@@ -235,11 +263,12 @@ def main() -> int:
     ap.add_argument("task_json", type=Path)
     ap.add_argument("review_json", type=Path)
     ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--pages", help="只处理指定页（1-based，如 2-5 或 1,3,9）")
     ap.add_argument("--dry-run", action="store_true", help="只列候选对，不调模型")
     args = ap.parse_args()
 
     task = json.loads(args.task_json.read_text(encoding="utf-8"))
-    candidates = extract_candidates(task)
+    candidates = extract_candidates(task, pages=_parse_pages(args.pages))
     print(f"候选对: {len(candidates)}", file=sys.stderr)
 
     if args.dry_run:
