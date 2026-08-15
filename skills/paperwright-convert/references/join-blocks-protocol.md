@@ -62,17 +62,18 @@ paperwright text-apply <article-model.json> text-task.json text-review.json arti
 `validate-text-review` 输出 `valid` 才能进入 `text-apply`；被拒的操作会给出原因，
 模型据此修正（改目标块、换对、或放弃）。
 
-## 规则与协议都覆盖不到时：写临时脚本
+## 规则与协议都覆盖不到时：L3 程序合成
 
 三列、侧栏、浮动注记等复杂版式，若相邻对/小写证据不满足，但仍能从页面看出
-是同一段，允许模型**写一个一次性脚本来处理**，前提是：
+是同一段，可用 L3 程序合成桥（`tools/run_text_synthesize.py`）：
 
-1. 用 `pypdfium2` 读取 PDF 文字层的坐标（`get_textpage` 或按元素 bbox），
-   对目标片段断言：片段 A 的尾行与片段 B 的首行在阅读顺序上连续（列序、
-   垂直间距、无其他正文行插入）；
-2. 脚本输出合并后的文本与 `word 守恒校验`（合并前后词频一致）；
-3. 脚本和输出一并保存到输出目录的 `_paperwright/` 下作为溯源，不改动已生成的
-   Article Model 文件（除非用户明确要求写入）。
+1. 模型只写**受限 DSL 脚本**（ast 白名单、只读 `api.*` 原语、无 import/反射/IO）；
+2. 脚本通过 `emit_join` 声明意图，守恒校验 + `validate-text-review` 仍强制
+   "纯拼接、零改写"；
+3. 脚本全文、task/Article Model/source/review 哈希一并写入
+   `synthesize-run.json`；`text-package --synthesis-run` 将其落入
+   `_paperwright/06-text-review/` 并写 manifest v0.11，`validate-text-package`
+   会重新执行脚本证明同一输入重放得到同一输出。
 
-这条路径是"模型即席判断"，不像协议那样由校验器强制，所以**宁可保守**：
-无法证明连续就不拼。规则 + 协议 + 保守脚本三层覆盖大多数真实论文。
+无法用 DSL 表达且仍要保守处理时，才退回人工检查；不要绕过校验器手改
+Article Model。
