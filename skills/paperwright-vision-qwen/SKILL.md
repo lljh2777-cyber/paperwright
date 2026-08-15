@@ -73,10 +73,27 @@ The validators — not the visual model — are the source of truth. If a visual
 judgment fails validation, fix the artifact or fall back to a human reviewer;
 do not weaken the contract to fit the model output.
 
+## Direct bridge fallback
+
+If the qwen-mm-plugins MCP tool keeps timing out, use the repository's direct
+DashScope bridge instead — it calls the OpenAI-compatible endpoint with the
+same key/base URL and writes the same validated `final-layout.json` per page:
+
+```bash
+export DASHSCOPE_API_KEY=...
+PYTHONPATH=src python tools/run_visual_review.py LAYOUT_REVIEW_DIR
+PYTHONPATH=src python tools/run_visual_review.py LAYOUT_REVIEW_DIR --pages 1-3
+```
+
+The bridge reads `DASHSCOPE_API_KEY`/`DASHSCOPE_BASE_URL` from the environment,
+`~/.qwen-mm-plugins/config`, or `~/.dashscope_key`; it validates every layout
+with PaperWright before writing. This is the recommended path when MCP is
+unavailable or unstable.
+
 ## Troubleshooting
 
-- MCP tools missing → reinstall qwen-mm-plugins and reconnect; this skill is
-  intentionally a no-op without them.
+- MCP tools missing → reinstall qwen-mm-plugins and reconnect; use the direct
+  bridge above when they are unavailable.
 - 403 / model-not-allowed → the DashScope key or workspace model list changed;
   report it and fall back to human review.
 - Model confidently wrong about a splice → trust the text evidence + validator,

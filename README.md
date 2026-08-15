@@ -340,7 +340,8 @@ python -m paperwright convert input.pdf output-dir
 - [`paperwright-vision-qwen`](skills/paperwright-vision-qwen/SKILL.md)（可选）：把视觉复核绑定到
   qwen-mm-plugins 的多模态 MCP 工具（Content ROI 建议、visual-direct 区域、
   join-blocks 断句确认、图注核查）。仅在已安装 qwen-mm-plugins 并配置 DashScope
-  key 时可用；未安装不影响核心与其余 skills。
+  key 时可用；未安装不影响核心与其余 skills。MCP 超时时可用直连桥
+  `tools/run_visual_review.py` 直接生成并校验 `final-layout.json`。
 
 支持仓库内 skill 发现的 Agent 可以直接加载 `skills/`。其他工具可把对应 skill
 目录复制到自身的 skills 目录，或在提示中明确要求参照对应 `SKILL.md`。安装后可使用
