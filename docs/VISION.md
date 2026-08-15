@@ -167,7 +167,10 @@ paperwright 的差异化不在"某一项绝对质量最高"，而在：
 1. **表格/公式图片化已部分通用化**。`region-render-mode auto/explicit` 现在除 Figure 外，
    也会保守识别并渲染**同页表格**与**独立公式**（`content_render.py`）；行内公式仍保留文字层，
    渲染失败自动保留原生文本。仍需用真实论文评估识别准确率与图片体积。
-2. **路由/分级未自动化**。规则风险信号已存在于质量检查里，但还没接成"决定调不调模型"的路由器。
+2. **路由/分级已部分自动化**。`layout-prepare` 现在会确定性生成
+   `routing.json`（`paperwright-routing-v0.1`）：普通页 L0，断句碎片 L1，
+   复杂几何/风险升级页 L2，无文字层转人工；L3 仍作为 L1/L2 表达失败后的
+   最后手段。桥接工具的执行与预算上限尚未自动接线。
 3. **成本计量缺失**。没有 token/成本统计，优化无法度量。
 4. **视觉协议对模型输出的鲁棒性**。实测模型产出有 bbox 变体、单对象、order=0、越 ROI 等形态变异，需把"模型输出 → 契约规范化"做成一等公民（官方 `normalize` 步骤，而非下游脚本补丁）。
 5. **程序合成层（L3）最小原型已完成、上游化并带落盘溯源**。设计已定（§8.3）；join-blocks DSL 内核位于 `src/paperwright/synthesize.py`，`text-package --synthesis-run` 写出带确定性重放校验的 manifest v0.11。剩余差距是更广操作集与成本计量。
@@ -177,7 +180,7 @@ paperwright 的差异化不在"某一项绝对质量最高"，而在：
 ## 7. 路线图（建议）
 
 - **Phase 1 — 定位与文本桥**（✅ 已完成）：定稿 VISION 文档、同步 README；实现 L1 纯文本直连桥 `tools/run_text_review.py`；修复 join-blocks 斜杠边界（`join_joiner`）。
-- **Phase 2 — 图片化通用化 + 分级路由 + L3 原型**：把 region-render 扩展到表格/公式区块；风险信号 → 路由器 → 决定每页/块走 L0/L1/L2；实现 **L3 程序合成最小原型**（join-blocks DSL：ast 白名单 + 只读原语 + 声明式守恒校验）——✅ L3 原型已提交、上游化并完成落盘溯源（manifest v0.11）。
+- **Phase 2 — 图片化通用化 + 分级路由 + L3 原型**：把 region-render 扩展到表格/公式区块；风险信号 → 路由器 → 决定每页/块走 L0/L1/L2；实现 **L3 程序合成最小原型**（join-blocks DSL：ast 白名单 + 只读原语 + 声明式守恒校验）——✅ L3 原型已提交、上游化并完成落盘溯源（manifest v0.11）；✅ 表格/公式图片化第一版；✅ 确定性路由 v0.1。
 - **Phase 3 — 闭环与反哺**：校验器聚合报错 → 带错误清单回喂模型 self-repair；用 `layout-export-dataset` 积累 (page.png, final-layout) 语料；**同类版式被 L3 反复处理后固化为新规则回填 L0**（AI 探索、规则沉淀）。
 
 ---

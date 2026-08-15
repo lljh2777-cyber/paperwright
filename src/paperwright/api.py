@@ -26,6 +26,7 @@ from .layout_review import (
     validate_layout_review,
 )
 from .layout_risk import assess_layout_risk
+from .routing import plan_routing
 from .layout_roi import (
     canonical_content_roi_json,
     content_roi_contract,
@@ -560,6 +561,12 @@ class PaperWright:
                     effective_extraction_profile = "hybrid-standard"
                 else:
                     effective_extraction_profile = "fast"
+            routing_plan = plan_routing(
+                result.document,
+                tasks,
+                risk_assessment=risk_assessment,
+                mode="auto",
+            )
             tasks = tuple(
                 configure_layout_review_task(task, review_mode)
                 for task in tasks
@@ -605,8 +612,18 @@ class PaperWright:
                 temporary,
                 result,
             )
+            (temporary / "routing.json").write_text(
+                routing_plan.canonical_json(),
+                encoding="utf-8",
+                newline="\n",
+            )
             index = {
                 "contract_version": "paperwright-layout-review-index-v0.1",
+                "routing": {
+                    "path": "routing.json",
+                    "contract_version": routing_plan.contract_version,
+                    "page_summary": routing_plan.to_dict()["summary"],
+                },
                 "source_sha256": result.document.source_sha256,
                 "backend": result.document.backend,
                 "backend_version": result.document.backend_version,

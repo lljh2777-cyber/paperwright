@@ -65,6 +65,8 @@ Markdown + images + manifest     article model
 - `paperwright.layout_review`：验证候选是否完整分配、动作是否可追溯、语义角色
   是否一致。
 - `paperwright.layout_risk`：决定 `standard` 配置下哪些页面需要完整对象分析。
+- `paperwright.routing`：确定性路由 v0.1——综合 native text、候选/分隔带、
+  小写续行碎片与布局风险，把每页建议到 L0/L1/L2/L3/人工，并给出可执行动作。
 - `paperwright.layout_writer`：将已验证布局吸附到 PDF 对象，恢复文字、渲染视觉
   区块并生成自包含证据包。
 - `paperwright.layout_caption`：在已验证区块之间执行确定性的 Figure/Table 与
