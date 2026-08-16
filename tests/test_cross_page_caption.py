@@ -373,6 +373,62 @@ class CrossPageCaptionTests(unittest.TestCase):
             )
         )
 
+    def test_issue_routing_ignores_bare_figure_panel_label(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        panel_label = Element(
+            "panel-label",
+            "text",
+            1,
+            BBox(10, 8, 20, 8),
+            provenance,
+            text="Figure 1A",
+            metadata={"line_group": 2, "line_position": 0},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (panel_label,)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+                metadata={"raster_evidence": {"region_count": 1}},
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        self.assertFalse(
+            any(
+                item["kind"]
+                in {
+                    ISSUE_CAPTION_VISUAL_BINDING,
+                    ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING,
+                }
+                for item in issues
+            )
+        )
+
     def test_issue_routing_keeps_arrow_prefixed_split_caption(self):
         provenance = Provenance("fixture", "native", "fixture")
         arrow = Element(

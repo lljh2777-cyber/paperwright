@@ -223,6 +223,9 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 [Caption–visual 关系标注集 v0.1](docs/CAPTION_RELATION_DATASET_V0.1.md)。
 首个跨 PLOS、eLife、BMC、Frontiers、Scientific Reports 和 MDPI 的独立基线及规则修正
 记录见 [独立出版社 Holdout v0.1](docs/HOLDOUT_V0.1.md)。
+后续又冻结 8 篇/171 页自然版式批次，并建立含 7 个出版社显式跨页正例的 marker-selected
+挑战集；抽样边界、基线混淆矩阵和裸面板标签修正见
+[跨页 Caption 挑战集 v0.2](docs/CAPTION_CHALLENGE_V0.2.md)。
 
 ## 页眉页脚剔除（--furniture）
 

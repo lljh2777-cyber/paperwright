@@ -70,6 +70,10 @@ _FIGURE_CAPTION = re.compile(
     r"^\s*fig(?:ure)?\.?\s+S?\d+[A-Za-z]?\s*(?:[|.:]|$)",
     re.IGNORECASE,
 )
+_BARE_FIGURE_PANEL_LABEL = re.compile(
+    r"^\s*fig(?:ure)?\.?\s+S?\d+[A-Za-z]\s*$",
+    re.IGNORECASE,
+)
 _NEXT_PAGE_CAPTION_MARKER = re.compile(
     r"(?:see|continued?\s+on)\s+(?:the\s+)?next\s+page.{0,40}(?:caption|legend)|"
     r"(?:caption|legend).{0,40}(?:on|at)\s+(?:the\s+)?next\s+page",
@@ -141,6 +145,15 @@ def _caption_text_elements(page: Page) -> tuple[Element, ...]:
         item
         for item in _usable_text_elements(page)
         if _FIGURE_CAPTION.match(item.text or "")
+        # A bare panel identifier such as ``Figure 1A`` is commonly embedded
+        # inside supplementary blot/transparency artwork.  It is not a full
+        # caption anchor unless the caption page itself carries an explicit
+        # previous-page direction marker.  Whole-figure isolated labels such
+        # as ``FIGURE 3`` remain eligible.
+        and (
+            _BARE_FIGURE_PANEL_LABEL.fullmatch(item.text or "") is None
+            or _caption_has_previous_page_marker(page, item)
+        )
         # Native extractors may split an inline citation such as
         # ``... shown in Figure 2.`` into a standalone text element.  A
         # non-zero line position is strong evidence that the label is embedded

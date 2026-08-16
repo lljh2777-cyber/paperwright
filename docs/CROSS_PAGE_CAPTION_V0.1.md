@@ -74,4 +74,8 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   这批样本降为 0，旧 seed set 仍为 TP=10、FP=0、FN=0、TN=6。详见
   [独立出版社 Holdout v0.1](HOLDOUT_V0.1.md)；
 - holdout 未包含真实跨页正例，且修正规则已经看过这些失败，因此它现在只能作为回归集。
-  尚未建立人工 gold，不能把结果描述成模型质量或总体泛化验收。
+  后续 marker-selected 挑战集补入 7 个出版社显式正例，当前规则全部召回，并用 1 个
+  `Figure 1A` 裸面板标签负例补强锚点过滤；详见
+  [跨页 Caption 挑战集 v0.2](CAPTION_CHALLENGE_V0.2.md)；
+- 挑战集按显式正例标记富集且已经参与修正，尚未建立人工 gold，不能把结果描述成模型
+  质量、自然 prevalence 或总体泛化验收。
