@@ -11,7 +11,7 @@
 | L1 文本判断 | `text_review.py`, `tools/run_text_review.py` | 只判断格式整理与 join-blocks，写 `text-review.json` |
 | L2 视觉判断 | `visual_relations.py`, `cross_page_caption.py`, `layout_models.py`, `layout_review.py`, `layout_writer.py`, `tools/run_visual_review.py` | 页内候选关系 + 相邻页 caption-of，确定性编译/投影 |
 | L3 程序合成 | `synthesize.py`, `tools/run_text_synthesize.py` | 受限 DSL + 守恒校验 + 重放溯源 |
-| 路由/编排 | `hybrid.py`, `issue_routing.py`, `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | Hybrid run 状态机 + 局部 issue 路由；后两者为过渡执行适配层 |
+| 路由/编排 | `hybrid.py`, `issue_routing.py`, `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | Hybrid v0.2 五阶段状态机 + 局部 issue 路由；后两者为过渡执行适配层 |
 | Bridge 兼容观测 | `llm_cost.py` | 保留旧 bridge usage/估算报告；不进入 Hybrid 路由、预算或 run contract |
 
 核心原则：
@@ -70,8 +70,10 @@ skills/               4 个可分发 Agent skills
 - 新路由信号在 `issue_routing.py` 中表达，必须定位到 page + bbox/element/candidate/block，
   并只用 PhysicalDocument、LayoutTask、LayoutRiskAssessment、ArticleModel 或验证结果；
 - 不再增加新的页级单标签语义；`routing.py` 只维护兼容行为；
-- provider 接入 HybridPipeline resolver；`tools/run_routing_plan.py` 当前是仓库默认的
-  过渡 resolver，不能成为新的产品契约。
+- provider 接入 HybridPipeline resolver；v0.2 的 resolver 每次只接收
+  `layout/projection/text` 之一，核心在返回后验证并绑定阶段产物；
+  `tools/run_routing_plan.py` 是默认过渡适配器，不能成为新的产品契约。详见
+  [Hybrid run v0.2](HYBRID_RUN_V0.2.md)。
 
 ## 6. 如何跑测试与验证
 
@@ -132,11 +134,11 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 - 确定性路由 + 自动编排 + L1→L3 降级
 - issue-level routing、布局后精确 L1 发现与 Completeness 回流
 - 候选关系式视觉协议与确定性 FinalLayout 编译
-- 唯一 `paperwright hybrid` 入口、三阶段 run contract、ROI 暂停/恢复和最终包复核
+- 唯一 `paperwright hybrid` 入口、五阶段 run contract、ROI 暂停/恢复和逐阶段产物复核
 - 跨页 Figure/Table–caption issue、paired-page review、显式拒绝与 ArticleModel/Reader 投影
 
 未完成：
 
 - L3 操作集扩展与规则回填
-- 唯一 HybridPipeline/run contract，消除脚本级编排分叉
+- 把默认过渡 resolver 的阶段实现逐步迁入核心包，消除脚本级编排分叉
 - 跨页 Figure-caption binding

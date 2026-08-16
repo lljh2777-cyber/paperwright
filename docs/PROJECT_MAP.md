@@ -4,7 +4,7 @@ Read the actual source before editing; this map only routes investigation.
 
 | Area | Primary modules | Primary tests |
 |---|---|---|
-| CLI and orchestration | `src/paperwright/cli.py`, `api.py`, `hybrid.py`, `batch.py` | `test_cli.py`, `test_hybrid_pipeline.py`, `test_paths_api.py`, `test_phase5_alpha.py` |
+| CLI and orchestration | `src/paperwright/cli.py`, `api.py`, `hybrid.py`, `batch.py` | `test_cli.py`, `test_hybrid_pipeline.py`, `test_routing_plan.py`, `test_paths_api.py`, `test_phase5_alpha.py` |
 | Physical model and PDFium | `models.py`, `backends/base.py`, `backends/pdfium.py` | `test_models.py`, `test_pdfium_degenerate.py`, `test_mvp_pipeline.py` |
 | Direct reconstruction | `text_reconstruction.py`, `figures.py`, `region_render.py`, `content_render.py`, `writer.py` | `test_text_reconstruction.py`, `test_phase3_figures.py`, `test_phase4_region_render.py`, `test_content_render.py` |
 | Hybrid candidate generation | `layout_roi.py`, `layout_candidates.py`, `layout_candidate_features.py`, `raster_layout.py`, `layout_risk.py`, `layout_export.py` | `test_layout_stage_a.py`, `test_layout_stage_b.py`, `test_layout_risk.py`, `test_raster_layout.py` |

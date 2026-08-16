@@ -49,7 +49,11 @@ paperwright hybrid input.pdf output-dir --content-roi-json confirmed-roi.json
 ```
 
 运行契约只记录阶段、哈希、下一动作和失败，不进行价格、成本或预算限制。详见
-[Hybrid run contract](HYBRID_RUN_V0.1.md)。
+[Hybrid run contract](HYBRID_RUN_V0.2.md)。
+
+v0.2 将运行拆成 `evidence/layout/projection/text/verification`。某阶段失败后使用同一命令
+和 `--resume` 重试；已完成阶段的产物会先做哈希复核并被跳过。若前序产物被人工改动，
+恢复会阻断，而不是悄悄接受漂移。
 
 ## 4. 兼容规则入口
 

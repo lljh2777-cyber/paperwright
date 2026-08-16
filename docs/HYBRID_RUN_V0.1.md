@@ -1,5 +1,8 @@
 # HybridPipeline 与 run contract v0.1
 
+> 历史契约，当前实现已升级到 [run contract v0.2](HYBRID_RUN_V0.2.md)。v0.1 的
+> 三阶段运行不能直接冒充 v0.2 恢复。
+
 `paperwright-hybrid-run-v0.1` 是 PaperWright 唯一 Hybrid 产品入口的运行契约。它解决
 “准备、桥脚本、应用和文本返修各自启动后，无法判断一篇论文跑到哪里”的问题；它不是
 模型费用或 token 预算系统。

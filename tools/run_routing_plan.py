@@ -5,7 +5,8 @@ Inputs:
 - review_dir prepared by `paperwright layout-prepare` (contains routing.json)
 - input_pdf and an output directory
 
-The orchestrator:
+The compatibility orchestrator can run all work at once or one Hybrid v0.2
+checkpoint at a time. It:
 1. fills L0-routed pages with a deterministic body+caption fallback layout;
 2. sends L2-routed pages to tools/run_visual_review.py;
 3. stops immediately on any HUMAN_REVIEW page and asks for human completion;
@@ -19,6 +20,7 @@ token budget from the bridges' usage reports.
 
 Usage:
     PYTHONPATH=src python tools/run_routing_plan.py input.pdf review-dir out-dir
+    PYTHONPATH=src python tools/run_routing_plan.py input.pdf review-dir out-dir --stage layout
     PYTHONPATH=src python tools/run_routing_plan.py input.pdf review-dir out-dir --token-budget 200000 --dry-run
 """
 
@@ -32,6 +34,7 @@ import subprocess
 import sys
 
 from paperwright.auto_layout import build_l0_final_layout
+from paperwright.hybrid import verify_hybrid_package
 from paperwright.layout_models import LayoutTask, FinalLayout
 from paperwright.layout_review import validate_layout_review
 from paperwright.issue_routing import (
@@ -48,6 +51,7 @@ from paperwright.routing import (
     ROUTE_L2_VISUAL_MODEL,
     ROUTE_L3_PROGRAM_SYNTHESIS,
 )
+from paperwright.manifest import sha256_file
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -196,6 +200,25 @@ def _fill_l0_pages(
         _log(f"{page_dir.name}: L0 规则兜底布局已写")
 
 
+def _validate_final_layouts(review_dir: Path) -> None:
+    page_dirs = sorted(review_dir.glob("page-*"))
+    if not page_dirs:
+        raise SystemExit("review dir 不含页面任务")
+    for page_dir in page_dirs:
+        layout_path = page_dir / "final-layout.json"
+        task_path = page_dir / "layout-task.json"
+        if not layout_path.is_file() or not task_path.is_file():
+            raise SystemExit(f"缺少布局产物: {page_dir.name}")
+        task = LayoutTask.from_dict(
+            json.loads(task_path.read_text(encoding="utf-8"))
+        )
+        layout = FinalLayout.from_dict(
+            json.loads(layout_path.read_text(encoding="utf-8"))
+        )
+        validate_layout_review(layout, task)
+    _log("全部 final-layout.json 校验通过")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("input_pdf", type=Path)
@@ -207,6 +230,18 @@ def main() -> int:
     ap.add_argument("--extraction-profile", default=None)
     ap.add_argument("--token-budget", type=int, default=None)
     ap.add_argument("--text-task", type=Path, default=None)
+    ap.add_argument(
+        "--stage",
+        choices=("all", "layout", "projection", "text"),
+        default="all",
+        help="只执行一个可恢复检查点；all 保留旧的一次性行为",
+    )
+    ap.add_argument(
+        "--resolution-plan",
+        type=Path,
+        default=None,
+        help="投影阶段写入、文本阶段读取的精确 issue plan",
+    )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -240,7 +275,7 @@ def main() -> int:
         f"L0={len(l0_pages)} L1={len(l1_pages)} L2={len(l2_pages)} "
         f"L3={len(l3_pages)} HUMAN={len(human_pages)}"
     )
-    if human_pages:
+    if human_pages and args.stage in {"all", "layout"}:
         raise SystemExit(
             f"HUMAN_REVIEW 页面需要人工完成 final-layout，停止执行: {human_pages}"
         )
@@ -248,166 +283,182 @@ def main() -> int:
         _log("L3 页面在布局阶段先走 L2；文本阶段再考虑 L3。")
         l2_pages = sorted(set(l2_pages) | set(l3_pages))
 
-    # Visual stage
+    # Layout checkpoint: deterministic L0, local visual issues, validation,
+    # and adjacent-page caption relations. Completed outputs are immutable and
+    # are hash-bound by HybridPipeline before the projection checkpoint starts.
     if args.dry_run:
         print("visual-pages", ",".join(str(p) for p in l2_pages))
         print("l0-pages", ",".join(str(p) for p in l0_pages))
         print("l1-pages", ",".join(str(p) for p in l1_pages))
         return 0
 
-    _fill_l0_pages(review_dir, sorted(set(l0_pages) | set(l1_pages)))
-    if l2_pages:
-        pages_arg = ",".join(str(page) for page in l2_pages)
+    if args.stage in {"all", "layout"}:
+        _fill_l0_pages(review_dir, sorted(set(l0_pages) | set(l1_pages)))
+        if l2_pages:
+            pages_arg = ",".join(str(page) for page in l2_pages)
+            _run(
+                _cmd_python(
+                    str(ROOT / "tools" / "run_visual_review.py"),
+                    str(review_dir),
+                    "--pages",
+                    pages_arg,
+                    "--protocol",
+                    "auto",
+                    *(
+                        [
+                            "--issue-routing",
+                            str(review_dir / "issue-routing.json"),
+                        ]
+                        if issue_routing is not None
+                        else []
+                    ),
+                ),
+                label=f"视觉桥 pages={pages_arg}",
+            )
+            _check_budget(
+                _usage_tokens(review_dir / "visual-review-cost.json"),
+                args.token_budget,
+            )
+        _validate_final_layouts(review_dir)
         _run(
             _cmd_python(
-                str(ROOT / "tools" / "run_visual_review.py"),
+                str(ROOT / "tools" / "run_cross_page_caption_review.py"),
                 str(review_dir),
-                "--pages",
-                pages_arg,
-                "--protocol",
-                "auto",
-                *(
-                    [
-                        "--issue-routing",
-                        str(review_dir / "issue-routing.json"),
-                    ]
-                    if issue_routing is not None
-                    else []
-                ),
             ),
-            label=f"视觉桥 pages={pages_arg}",
+            label="跨页 Figure/Table caption 关系复核",
         )
-        _check_budget(
-            _usage_tokens(review_dir / "visual-review-cost.json"),
-            args.token_budget,
-        )
+        if args.stage == "layout":
+            return 0
 
-    # Validate every final layout before layout-apply.
-    for page_dir in sorted(review_dir.glob("page-*")):
-        layout_path = page_dir / "final-layout.json"
-        task_path = page_dir / "layout-task.json"
-        if not layout_path.is_file() or not task_path.is_file():
-            raise SystemExit(f"缺少布局产物: {page_dir.name}")
-        task = LayoutTask.from_dict(
-            json.loads(task_path.read_text(encoding="utf-8"))
-        )
-        layout = FinalLayout.from_dict(
-            json.loads(layout_path.read_text(encoding="utf-8"))
-        )
-        validate_layout_review(layout, task)
-    _log("全部 final-layout.json 校验通过")
-
-    _run(
-        _cmd_python(
-            str(ROOT / "tools" / "run_cross_page_caption_review.py"),
-            str(review_dir),
-        ),
-        label="跨页 Figure/Table caption 关系复核",
-    )
-
-    layout_apply_argv = _cmd_python(
-        "-m",
-        "paperwright",
-        "layout-apply",
-        str(args.input_pdf),
-        str(review_dir),
-        str(args.output_dir),
-        "--evidence",
-        args.evidence,
-        "--references",
-        args.references,
-    )
-    if args.extraction_profile:
-        layout_apply_argv.extend(
-            ["--extraction-profile", args.extraction_profile]
-        )
-    _run(layout_apply_argv, label="layout-apply")
+    if args.stage == "projection":
+        _validate_final_layouts(review_dir)
 
     article_model = args.output_dir / "_paperwright" / "article-model.json"
     task_path = args.text_task or (args.output_dir / "text-task.json")
-    text_task_prepared = False
+    text_task_prepared = task_path.is_file()
     execution_issue_plan = issue_routing
-    resolution_path: Path | None = None
+    resolution_path = args.resolution_plan
 
-    # Paragraph boundaries only become trustworthy after layout projection.
-    # Discover exact validator-eligible pairs from ArticleModel/TextTask rather
-    # than guessing from raw PDF fragments during layout-prepare.
-    if issue_routing is not None and article_model.is_file():
-        _run(
-            _cmd_python(
+    if args.stage in {"all", "projection"}:
+        source_hash = sha256_file(args.input_pdf.expanduser().resolve())
+        if args.output_dir.exists():
+            verify_hybrid_package(args.output_dir, source_hash)
+            _log("已有投影包通过校验，复用 layout-apply 结果")
+        else:
+            layout_apply_argv = _cmd_python(
                 "-m",
                 "paperwright",
-                "text-prepare",
-                str(article_model),
-                str(task_path),
-            ),
-            label="text-prepare (局部 issue 发现)",
-        )
-        text_task_prepared = True
-        model_value = json.loads(article_model.read_text(encoding="utf-8"))
-        task_value = json.loads(task_path.read_text(encoding="utf-8"))
-        execution_issue_plan = refine_issue_routing_with_text_task(
-            issue_routing,
-            task_value,
-            model_value,
-        ).to_dict()
-
-    # Feed completeness findings into the same separate resolution plan. The
-    # published output package remains immutable.
-    if issue_routing is not None:
-        completeness_path = (
-            args.output_dir / "_paperwright" / "completeness-report.json"
-        )
-        if completeness_path.is_file():
-            completeness = json.loads(
-                completeness_path.read_text(encoding="utf-8")
+                "layout-apply",
+                str(args.input_pdf),
+                str(review_dir),
+                str(args.output_dir),
+                "--evidence",
+                args.evidence,
+                "--references",
+                args.references,
             )
-            execution_issue_plan = refine_issue_routing(
-                execution_issue_plan or issue_routing,
-                completeness,
+            if args.extraction_profile:
+                layout_apply_argv.extend(
+                    ["--extraction-profile", args.extraction_profile]
+                )
+            _run(layout_apply_argv, label="layout-apply")
+
+        # Paragraph boundaries only become trustworthy after projection.
+        if issue_routing is not None and article_model.is_file():
+            if not task_path.is_file():
+                _run(
+                    _cmd_python(
+                        "-m",
+                        "paperwright",
+                        "text-prepare",
+                        str(article_model),
+                        str(task_path),
+                    ),
+                    label="text-prepare (局部 issue 发现)",
+                )
+            text_task_prepared = True
+            model_value = json.loads(article_model.read_text(encoding="utf-8"))
+            task_value = json.loads(task_path.read_text(encoding="utf-8"))
+            execution_issue_plan = refine_issue_routing_with_text_task(
+                issue_routing,
+                task_value,
+                model_value,
             ).to_dict()
 
-        original_ids = {
-            item["issue_id"] for item in issue_routing["issues"]
-        }
-        added = [
-            item
-            for item in (execution_issue_plan or issue_routing)["issues"]
-            if item["issue_id"] not in original_ids
-        ]
-        if added:
-            resolution_path = args.output_dir.parent / (
-                f"{args.output_dir.name}.resolve-issues.json"
+        # Completeness findings join the same exact post-projection plan.
+        if issue_routing is not None:
+            completeness_path = (
+                args.output_dir / "_paperwright" / "completeness-report.json"
             )
-            if resolution_path.exists():
-                raise SystemExit(
-                    f"局部 resolution plan 已存在，拒绝覆盖: {resolution_path}"
+            if completeness_path.is_file():
+                completeness = json.loads(
+                    completeness_path.read_text(encoding="utf-8")
                 )
-            resolution_path.write_text(
-                json.dumps(
+                execution_issue_plan = refine_issue_routing(
+                    execution_issue_plan or issue_routing,
+                    completeness,
+                ).to_dict()
+
+            original_ids = {
+                item["issue_id"] for item in issue_routing["issues"]
+            }
+            added = [
+                item
+                for item in (execution_issue_plan or issue_routing)["issues"]
+                if item["issue_id"] not in original_ids
+            ]
+            if resolution_path is None and added:
+                resolution_path = args.output_dir.parent / (
+                    f"{args.output_dir.name}.resolve-issues.json"
+                )
+            if resolution_path is not None:
+                payload = json.dumps(
                     execution_issue_plan,
                     ensure_ascii=False,
                     sort_keys=True,
                     separators=(",", ":"),
+                ) + "\n"
+                if resolution_path.is_file():
+                    if resolution_path.read_text(encoding="utf-8") != payload:
+                        raise SystemExit(
+                            "已有 resolution plan 与当前投影证据不一致"
+                        )
+                    _log(f"已有 resolution plan 一致，复用: {resolution_path}")
+                else:
+                    resolution_path.parent.mkdir(parents=True, exist_ok=True)
+                    resolution_path.write_text(
+                        payload,
+                        encoding="utf-8",
+                        newline="\n",
+                    )
+                by_route: dict[str, int] = {}
+                for item in added:
+                    by_route[item["route"]] = by_route.get(item["route"], 0) + 1
+                _log(
+                    f"投影后精确 issue plan：新增 {len(added)} 个 "
+                    f"({by_route}): {resolution_path}"
                 )
-                + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
-            by_route: dict[str, int] = {}
-            for item in added:
-                by_route[item["route"]] = by_route.get(item["route"], 0) + 1
-            _log(
-                f"投影后发现 {len(added)} 个局部 issue "
-                f"({by_route}): {resolution_path}"
-            )
 
+        if args.stage == "projection":
+            return 0
+    else:
+        source_hash = sha256_file(args.input_pdf.expanduser().resolve())
+        verify_hybrid_package(args.output_dir, source_hash)
+        if resolution_path is not None:
+            if not resolution_path.is_file():
+                raise SystemExit(f"缺少 projection issue plan: {resolution_path}")
+            execution_issue_plan = json.loads(
+                resolution_path.read_text(encoding="utf-8")
+            )
+            validate_issue_routing(execution_issue_plan)
+
+    if execution_issue_plan is not None:
         l1_pages = _issue_page_group(
-            execution_issue_plan or issue_routing,
+            execution_issue_plan,
             ROUTE_L1_TEXT_MODEL,
         )
         l3_pages = _issue_page_group(
-            execution_issue_plan or issue_routing,
+            execution_issue_plan,
             ROUTE_L3_PROGRAM_SYNTHESIS,
         )
 
@@ -422,6 +473,10 @@ def main() -> int:
     reviewed_output = args.reviewed_output or (
         args.output_dir.parent / f"{args.output_dir.name}-text-reviewed"
     )
+    if reviewed_output.is_dir():
+        verify_hybrid_package(reviewed_output, source_hash)
+        _log("已有文本复核派生包通过校验，复用 text 结果")
+        return 0
     if not text_task_prepared:
         _run(
             _cmd_python(
@@ -437,29 +492,33 @@ def main() -> int:
     used_l1 = False
     if l1_pages:
         review_path = args.output_dir / "text-review.json"
-        l1_ok = _try_run(
-            _cmd_python(
-                str(ROOT / "tools" / "run_text_review.py"),
-                str(task_path),
-                str(review_path),
-                "--pages",
-                ",".join(str(page) for page in l1_pages),
-                *(
-                    [
-                        "--issue-routing",
-                        str(
-                            resolution_path
-                            or review_dir / "issue-routing.json"
-                        ),
-                        "--article-model",
-                        str(article_model),
-                    ]
-                    if issue_routing is not None
-                    else []
+        if review_path.is_file():
+            _log("已有 L1 review，先按 task 校验并尝试复用")
+            l1_ok = True
+        else:
+            l1_ok = _try_run(
+                _cmd_python(
+                    str(ROOT / "tools" / "run_text_review.py"),
+                    str(task_path),
+                    str(review_path),
+                    "--pages",
+                    ",".join(str(page) for page in l1_pages),
+                    *(
+                        [
+                            "--issue-routing",
+                            str(
+                                resolution_path
+                                or review_dir / "issue-routing.json"
+                            ),
+                            "--article-model",
+                            str(article_model),
+                        ]
+                        if issue_routing is not None
+                        else []
+                    ),
                 ),
-            ),
-            label=f"L1 文本桥 pages={','.join(str(p) for p in l1_pages)}",
-        )
+                label=f"L1 文本桥 pages={','.join(str(p) for p in l1_pages)}",
+            )
         _check_budget(
             _usage_tokens(review_path.with_name(review_path.stem + ".usage.json")),
             args.token_budget,
@@ -486,19 +545,22 @@ def main() -> int:
         review_path = args.output_dir / "text-review.l3.json"
         synthesis_run_path = args.output_dir / "synthesize-run.json"
         l3_pages = sorted(set(l3_pages) | set(l1_pages))
-        _run(
-            _cmd_python(
-                str(ROOT / "tools" / "run_text_synthesize.py"),
-                str(article_model),
-                str(task_path),
-                str(review_path),
-                "--pages",
-                ",".join(str(page) for page in l3_pages),
-                "--synthesis-run",
-                str(synthesis_run_path),
-            ),
-            label=f"L3 程序合成桥 pages={','.join(str(p) for p in l3_pages)}",
-        )
+        if review_path.is_file() and synthesis_run_path.is_file():
+            _log("已有 L3 review 与 synthesis run，先校验并尝试复用")
+        else:
+            _run(
+                _cmd_python(
+                    str(ROOT / "tools" / "run_text_synthesize.py"),
+                    str(article_model),
+                    str(task_path),
+                    str(review_path),
+                    "--pages",
+                    ",".join(str(page) for page in l3_pages),
+                    "--synthesis-run",
+                    str(synthesis_run_path),
+                ),
+                label=f"L3 程序合成桥 pages={','.join(str(p) for p in l3_pages)}",
+            )
         _check_budget(
             _usage_tokens(
                 synthesis_run_path.with_name("synthesize-cost.json")

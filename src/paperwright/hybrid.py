@@ -33,16 +33,19 @@ from .paths import validate_input_pdf
 from .text_package import validate_text_reviewed_package
 
 
-HYBRID_RUN_CONTRACT_VERSION = "paperwright-hybrid-run-v0.1"
+HYBRID_RUN_CONTRACT_VERSION = "paperwright-hybrid-run-v0.2"
 HYBRID_RUN_FILENAME = "run.json"
-HYBRID_STAGE_NAMES = ("evidence", "resolution", "verification")
+HYBRID_STAGE_NAMES = ("evidence", "layout", "projection", "text", "verification")
+HYBRID_RESOLVER_STAGE_NAMES = ("layout", "projection", "text")
 HYBRID_STAGE_STATES = {"pending", "running", "waiting", "completed", "failed"}
 HYBRID_RUN_STATES = {"running", "awaiting_input", "completed", "failed"}
 
 
 @dataclass(frozen=True)
 class HybridResolverRequest:
+    stage: str
     input_pdf: Path
+    run_dir: Path
     review_dir: Path
     output_dir: Path
     reviewed_output_dir: Path
@@ -154,6 +157,24 @@ def validate_hybrid_run(value: Mapping[str, Any]) -> None:
             or stage["attempts"] < 0
         ):
             raise ContractValidationError("hybrid stage 记录非法")
+    if current_stage is None:
+        if value["status"] != "completed":
+            raise ContractValidationError("非 completed hybrid run 缺少 current_stage")
+    else:
+        current_index = HYBRID_STAGE_NAMES.index(current_stage)
+        if any(stage["status"] != "completed" for stage in stages[:current_index]):
+            raise ContractValidationError("hybrid current_stage 之前存在未完成阶段")
+        if any(stage["status"] != "pending" for stage in stages[current_index + 1 :]):
+            raise ContractValidationError("hybrid current_stage 之后存在非 pending 阶段")
+        expected_current_states = {
+            "running": {"pending", "running"},
+            "awaiting_input": {"waiting"},
+            "failed": {"failed"},
+        }
+        if stages[current_index]["status"] not in expected_current_states.get(
+            value["status"], set()
+        ):
+            raise ContractValidationError("hybrid status 与 current_stage 状态不一致")
 
     artifacts = value["artifacts"]
     if not isinstance(artifacts, list):
@@ -205,10 +226,20 @@ def validate_hybrid_run(value: Mapping[str, Any]) -> None:
         raise ContractValidationError("hybrid result 非法")
     if value["status"] == "completed" and (current_stage is not None or result is None):
         raise ContractValidationError("completed hybrid run 缺少最终结果")
+    if value["status"] == "completed" and any(
+        stage["status"] != "completed" for stage in stages
+    ):
+        raise ContractValidationError("completed hybrid run 含未完成阶段")
     if value["status"] == "awaiting_input" and next_action is None:
         raise ContractValidationError("awaiting_input hybrid run 缺少下一动作")
     if value["status"] == "failed" and error is None:
         raise ContractValidationError("failed hybrid run 缺少错误")
+    if value["status"] != "awaiting_input" and next_action is not None:
+        raise ContractValidationError("非 awaiting_input hybrid run 不允许 next_action")
+    if value["status"] != "failed" and error is not None:
+        raise ContractValidationError("非 failed hybrid run 不允许 error")
+    if value["status"] != "completed" and result is not None:
+        raise ContractValidationError("未完成 hybrid run 不允许 result")
 
 
 def canonical_hybrid_run_json(value: Mapping[str, Any]) -> str:
@@ -279,7 +310,7 @@ def _verify_run_artifacts(state: Mapping[str, Any]) -> None:
             )
 
 
-def _verify_package(root: Path, source_sha256: str) -> dict[str, Any]:
+def verify_hybrid_package(root: Path, source_sha256: str) -> dict[str, Any]:
     manifest_path = root / "manifest.json"
     if not manifest_path.is_file():
         manifest_path = root / "_paperwright" / "manifest.json"
@@ -390,7 +421,7 @@ class HybridPipeline:
             _verify_run_artifacts(state)
             if state["status"] == "completed":
                 active = Path(state["result"]["active_output_dir"])
-                _verify_package(active, source_hash)
+                verify_hybrid_package(active, source_hash)
                 return HybridRunResult(run_root, state, active)
         else:
             if run_root.exists():
@@ -501,28 +532,38 @@ class HybridPipeline:
                         state, role=role, path=review_dir / relative
                     )
                 _set_stage(state, "evidence", "completed")
-                state["current_stage"] = "resolution"
+                state["current_stage"] = "layout"
                 _atomic_write_run(run_path, state)
 
-            resolution_stage = _stage(state, "resolution")
-            if resolution_stage["status"] != "completed":
+            for resolver_stage_name in HYBRID_RESOLVER_STAGE_NAMES:
+                resolver_stage = _stage(state, resolver_stage_name)
+                if resolver_stage["status"] == "completed":
+                    continue
                 if self.resolver is None:
-                    _set_stage(state, "resolution", "waiting")
+                    _set_stage(state, resolver_stage_name, "waiting")
                     state["status"] = "awaiting_input"
                     state["next_action"] = {
                         "kind": "provide_resolver",
-                        "message": "准备完成；提供 resolver 后以 --resume 继续",
+                        "message": (
+                            f"{resolver_stage_name} 检查点等待 resolver；"
+                            "提供后以 --resume 继续"
+                        ),
                         "path": str(review_dir / "issue-routing.json"),
                     }
                     state["error"] = None
                     _atomic_write_run(run_path, state)
                     return HybridRunResult(run_root, state, None)
-                if output.exists() or reviewed_output.exists():
+                if resolver_stage_name == "layout" and (
+                    output.exists() or reviewed_output.exists()
+                ):
                     raise OutputConflictError(
-                        "失败恢复时发现部分输出目录；为避免误判完成，请使用新的输出路径重新运行"
+                        "layout 检查点前不应存在投影输出目录"
                     )
                 _set_stage(
-                    state, "resolution", "running", increment_attempt=True
+                    state,
+                    resolver_stage_name,
+                    "running",
+                    increment_attempt=True,
                 )
                 state["status"] = "running"
                 state["next_action"] = None
@@ -530,7 +571,9 @@ class HybridPipeline:
                 _atomic_write_run(run_path, state)
                 self.resolver(
                     HybridResolverRequest(
+                        stage=resolver_stage_name,
                         input_pdf=source,
+                        run_dir=run_root,
                         review_dir=review_dir,
                         output_dir=output,
                         reviewed_output_dir=reviewed_output,
@@ -539,15 +582,84 @@ class HybridPipeline:
                         extraction_profile=extraction_profile,
                     )
                 )
-                _set_stage(state, "resolution", "completed")
-                state["current_stage"] = "verification"
+                if resolver_stage_name == "layout":
+                    layout_paths = sorted(review_dir.glob("page-*/final-layout.json"))
+                    page_dirs = sorted(review_dir.glob("page-*"))
+                    if len(layout_paths) != len(page_dirs):
+                        raise BackendExecutionError(
+                            "layout 检查点缺少一个或多个 final-layout.json"
+                        )
+                    for index, path in enumerate(layout_paths, start=1):
+                        _record_artifact(
+                            state,
+                            role=f"final_layout_{index:04d}",
+                            path=path,
+                        )
+                    for role, name in (
+                        ("cross_page_caption_task", "cross-page-caption-task.json"),
+                        ("cross_page_caption_review", "cross-page-caption-review.json"),
+                        ("cross_page_caption_usage", "cross-page-caption-usage.json"),
+                    ):
+                        candidate = review_dir / name
+                        if candidate.is_file():
+                            _record_artifact(state, role=role, path=candidate)
+                elif resolver_stage_name == "projection":
+                    manifest = verify_hybrid_package(output, source_hash)
+                    manifest_path = output / "manifest.json"
+                    if not manifest_path.is_file():
+                        manifest_path = output / "_paperwright" / "manifest.json"
+                    _record_artifact(
+                        state, role="projected_manifest", path=manifest_path
+                    )
+                    for role, path in (
+                        (
+                            "article_model",
+                            output / "_paperwright" / "article-model.json",
+                        ),
+                        (
+                            "projected_completeness_report",
+                            output / "_paperwright" / "completeness-report.json",
+                        ),
+                        ("text_task", output / "text-task.json"),
+                        (
+                            "resolution_plan",
+                            run_root / "resolve-issues.json",
+                        ),
+                    ):
+                        if path.is_file():
+                            _record_artifact(state, role=role, path=path)
+                    if manifest["source_sha256"] != source_hash:
+                        raise BackendExecutionError(
+                            "projection manifest 与输入 PDF 不一致"
+                        )
+                else:
+                    active = reviewed_output if reviewed_output.is_dir() else output
+                    manifest = verify_hybrid_package(active, source_hash)
+                    if active == reviewed_output:
+                        manifest_path = reviewed_output / "manifest.json"
+                        if not manifest_path.is_file():
+                            manifest_path = (
+                                reviewed_output / "_paperwright" / "manifest.json"
+                            )
+                        _record_artifact(
+                            state,
+                            role="text_reviewed_manifest",
+                            path=manifest_path,
+                        )
+                    if manifest["source_sha256"] != source_hash:
+                        raise BackendExecutionError(
+                            "text manifest 与输入 PDF 不一致"
+                        )
+                _set_stage(state, resolver_stage_name, "completed")
+                stage_index = HYBRID_STAGE_NAMES.index(resolver_stage_name)
+                state["current_stage"] = HYBRID_STAGE_NAMES[stage_index + 1]
                 _atomic_write_run(run_path, state)
 
             _set_stage(state, "verification", "running", increment_attempt=True)
             state["status"] = "running"
             _atomic_write_run(run_path, state)
             active_output = reviewed_output if reviewed_output.is_dir() else output
-            manifest = _verify_package(active_output, source_hash)
+            manifest = verify_hybrid_package(active_output, source_hash)
             manifest_path = active_output / "manifest.json"
             if not manifest_path.is_file():
                 manifest_path = active_output / "_paperwright" / "manifest.json"

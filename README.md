@@ -173,7 +173,7 @@ paperwright hybrid input.pdf output-dir \
 
 `output-dir.paperwright-run/run.json` 记录阶段、输入/产物哈希、未决动作和失败信息；
 不承担 token 预算或费用计算。完整契约见
-[HybridPipeline 与 run contract v0.1](docs/HYBRID_RUN_V0.1.md)。
+[HybridPipeline 与 run contract v0.2](docs/HYBRID_RUN_V0.2.md)。
 
 ## 旧规则入口（兼容）
 

@@ -21,11 +21,13 @@
 8. Visual Candidate Relations：模型只分组/分类/排序/绑定，bbox 由候选并集确定性生成。
 9. ArticleModel、Reader、manifest、evidence 和 SHA-256 绑定。
 10. HybridPipeline/run contract：唯一 `paperwright hybrid` 入口、ROI 安全暂停/恢复、
-    三阶段状态与最终文档包哈希复核。
+    五阶段状态与最终文档包哈希复核。
 11. 跨页 Figure/Table–caption：跨页 issue scope、成对页面关系任务、显式接受/拒绝和
     ArticleModel/Reader `caption-of` 投影。
 12. Caption–visual 关系标注集：哈希绑定的外部数据契约、silver/gold 分级、16 个真实
     相邻页 seed 样本和确定性校验工具。
+13. Hybrid run v0.2：把 resolver 拆成 evidence/layout/projection/text/verification，完成
+    阶段逐产物哈希绑定；失败恢复跳过已完成阶段，投影包和文本派生包只在完整校验后复用。
 
 ## 当前主链
 
@@ -51,7 +53,7 @@ PDF
 - A06 issue routing：32 页均以 L0 为基础，仅 7 页需要视觉关系判断。
 - A06 visual relations：6 个 Figure 页均有 caption + visual 候选，第 28 页保留 24 个复杂
   候选；真实第 8 页任务已通过关系编译与最终布局校验。
-- Hybrid run v0.1 在真实论文 *Attention Is All You Need*（15 页）完成离线 evidence
+- Hybrid run v0.1 在真实论文 *Attention Is All You Need*（15 页）完成过历史离线 evidence
   检查点：发现 15 个 L2 局部 issue（覆盖 14 页），15 页关系任务共保留 160 个候选；
   `run.json` 正确停在 `confirm_content_roi`，且通过公开契约校验。该检查未调用模型。
 - Caption relation seed v0.1：9 篇、16 个真实相邻页样本，含 10 正例和 6 困难负例。
@@ -62,11 +64,11 @@ PDF
 
 - `routing.json` 的页级单标签语义；主语义已经是 `issue-routing.json`。
 - 旧 visual-direct 自由画框协议；仅在没有候选时回退。
-- `tools/run_routing_plan.py` 仍是 `HybridPipeline` 调用的过渡 resolver，内部阶段尚未全部
-  上移为细粒度原子检查点。
+- `tools/run_routing_plan.py` 仍是默认过渡 resolver；v0.2 已把它按 layout/projection/text
+  分阶段调用，但各阶段的具体执行实现尚未全部迁入核心包。
 - direct CLI/manifest 仍保留兼容，但不应继续增加新能力。
 
 ## 下一阶段
 
-扩展未参与调参的跨出版社 holdout，并由人工把稳定样本从 silver 晋升为 gold；同时把
-过渡 resolver 内部的布局、投影与文本阶段上移为细粒度可恢复检查点。
+引入未参与调参的新论文，建立跨出版社 holdout；由人工复核稳定样本后，才能从 silver
+晋升为 gold。不能继续用当前参与规则校准的 9 篇论文报告泛化性能。
