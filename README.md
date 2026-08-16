@@ -221,6 +221,8 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 锚点、结构标签和审阅来源，不把 PDF、页面图或正文提交到仓库；`silver` 与人工确认的
 `gold` 严格区分。详见
 [Caption–visual 关系标注集 v0.1](docs/CAPTION_RELATION_DATASET_V0.1.md)。
+首个跨 PLOS、eLife、BMC、Frontiers、Scientific Reports 和 MDPI 的独立基线及规则修正
+记录见 [独立出版社 Holdout v0.1](docs/HOLDOUT_V0.1.md)。
 
 ## 页眉页脚剔除（--furniture）
 

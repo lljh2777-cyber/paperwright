@@ -16,12 +16,12 @@
 
 触发条件保持保守：
 
-- 第 N+1 页存在显式 Figure caption；优先接受顶部 caption，也接受前页视觉占主导且
-  后页没有本地视觉对象时的底部 caption；
+- 第 N+1 页存在行首显式 Figure caption；普通前页视觉证据只触发顶部 caption，前页
+  视觉占主导或有显式方向标记时才接受页中/页底 caption；
 - 第 N 页存在靠近页底、面积足够的视觉候选，或带“caption/legend on next page”显式
   标记，或页面由极少原生文本与非空 raster evidence 构成；
 - 后页的 `◀` / “continued from previous page”标记可作为方向证据；
-- 后页已有同类型本地视觉对象时不生成跨页关系候选；
+- 后页已有同类型本地视觉对象时不生成跨页关系候选，除非存在显式跨页方向标记；
 - 只考虑相邻页，不扫描任意远距离页面。
 
 ### 2. FinalLayout 后关系审查
@@ -70,5 +70,8 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   保持不变；
 - 当前仅覆盖“前页视觉 → 后页顶部 caption”，不覆盖跨两页以上、caption 本身跨页、
   或视觉对象在后一页而 caption 在前一页的情形；
-- 尚未建立未参与调参的 holdout 和人工 gold，因此不能把 seed-set 满分描述成模型质量
-  或泛化验收。
+- 首个独立出版社 holdout 在 `cf71d02` 上冻结后发现 17 个跨页假阳性；结构规则修正后
+  这批样本降为 0，旧 seed set 仍为 TP=10、FP=0、FN=0、TN=6。详见
+  [独立出版社 Holdout v0.1](HOLDOUT_V0.1.md)；
+- holdout 未包含真实跨页正例，且修正规则已经看过这些失败，因此它现在只能作为回归集。
+  尚未建立人工 gold，不能把结果描述成模型质量或总体泛化验收。

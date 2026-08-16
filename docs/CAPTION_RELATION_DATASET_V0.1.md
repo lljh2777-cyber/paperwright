@@ -71,5 +71,7 @@ PYTHONPATH=src python tools/validate_relation_dataset.py \
 LayoutTask 重放 issue routing：TP=10、FP=0、FN=0、TN=6。
 
 seed 样本直接参与了规则修正，所以 precision/recall=1.0 只是内部 calibration sanity
-check，不是 holdout 结果。下一步应增加未参与调参的出版社/版式 holdout，并让人工独立
-复核后再晋升 gold。
+check，不是 holdout 结果。首个未参与调参的 6 出版体系 holdout 已在 `cf71d02` 上冻结，
+并用于发现和修正 17 个跨页假阳性；它不含真实跨页正例，修正后也已转为回归集。详见
+[独立出版社 Holdout v0.1](HOLDOUT_V0.1.md)。下一步仍需另建含正例的独立 holdout，并
+让人工独立复核后再晋升 gold。

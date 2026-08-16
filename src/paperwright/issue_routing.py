@@ -141,6 +141,17 @@ def _caption_text_elements(page: Page) -> tuple[Element, ...]:
         item
         for item in _usable_text_elements(page)
         if _FIGURE_CAPTION.match(item.text or "")
+        # Native extractors may split an inline citation such as
+        # ``... shown in Figure 2.`` into a standalone text element.  A
+        # non-zero line position is strong evidence that the label is embedded
+        # in prose, not the start of a caption.  An explicit previous-page
+        # marker overrides it; missing metadata remains conservative for other
+        # extraction backends.
+        and (
+            type(item.metadata.get("line_position")) is not int
+            or item.metadata["line_position"] == 0
+            or _caption_has_previous_page_marker(page, item)
+        )
     )
 
 
@@ -470,19 +481,13 @@ def plan_issue_routing(
                 previous_page,
                 previous_task,
             )
-            cross_page_captions = tuple(
-                caption
-                for caption in captions
-                if (
-                    caption.bbox.y / page.height <= 0.30
-                    or not current_visuals
-                )
-            )
-            for caption in cross_page_captions[:4]:
+            for caption in captions[:4]:
                 explicit_previous_marker = _caption_has_previous_page_marker(
                     page,
                     caption,
                 )
+                normalized_y = caption.bbox.y / page.height
+                top_page_anchor = normalized_y <= 0.18
                 has_previous_visual_evidence = bool(previous_visuals) or any(
                     (
                         explicit_next_marker,
@@ -492,14 +497,26 @@ def plan_issue_routing(
                 )
                 if not has_previous_visual_evidence:
                     continue
+                # Missing current-page visual candidates do not by themselves
+                # make a mid-page caption cross-page.  Real publishers often
+                # encode plots as drawings that the coarse candidate pass can
+                # miss.  Away from the page top, require an explicit direction
+                # marker or a genuinely visual-dominant previous page.
+                if not any(
+                    (
+                        top_page_anchor,
+                        explicit_next_marker,
+                        explicit_previous_marker,
+                        previous_visual_dominant,
+                    )
+                ):
+                    continue
                 if (
                     current_visuals
                     and not explicit_next_marker
                     and not explicit_previous_marker
-                    and not previous_visual_dominant
                 ):
                     continue
-                normalized_y = caption.bbox.y / page.height
                 evidence_signals = [
                     f"visual_page_index:{page_index - 1}",
                     f"caption_page_index:{page_index}",

@@ -19,6 +19,7 @@ from paperwright.cross_page_caption import (
 )
 from paperwright.exceptions import ContractValidationError
 from paperwright.issue_routing import (
+    ISSUE_CAPTION_VISUAL_BINDING,
     ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING,
     plan_issue_routing,
 )
@@ -315,6 +316,236 @@ class CrossPageCaptionTests(unittest.TestCase):
         ]
         self.assertEqual(len(issues), 1)
         self.assertIn("previous_page_visual_dominant", issues[0]["signals"])
+
+    def test_issue_routing_ignores_inline_figure_reference_fragment(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        inline_reference = Element(
+            "inline-reference",
+            "text",
+            1,
+            BBox(35, 8, 20, 8),
+            provenance,
+            text="Figure 4B",
+            metadata={"line_group": 2, "line_position": 1},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (inline_reference,)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+                metadata={"raster_evidence": {"region_count": 1}},
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        self.assertFalse(
+            any(
+                item["kind"]
+                in {
+                    ISSUE_CAPTION_VISUAL_BINDING,
+                    ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING,
+                }
+                for item in issues
+            )
+        )
+
+    def test_issue_routing_keeps_arrow_prefixed_split_caption(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        arrow = Element(
+            "arrow",
+            "text",
+            1,
+            BBox(3, 6, 5, 8),
+            provenance,
+            text="◀",
+            metadata={"line_group": 0, "line_position": 0},
+        )
+        caption = Element(
+            "caption",
+            "text",
+            1,
+            BBox(10, 6, 30, 8),
+            provenance,
+            text="Fig. 5",
+            metadata={"line_group": 0, "line_position": 1},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (arrow, caption)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        cross_page = [
+            item
+            for item in issues
+            if item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+        ]
+        self.assertEqual(len(cross_page), 1)
+        self.assertIn(
+            "caption_page_explicit_previous_page_marker",
+            cross_page[0]["signals"],
+        )
+
+    def test_issue_routing_needs_directional_evidence_below_page_top(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        local_caption = Element(
+            "local-caption",
+            "text",
+            1,
+            BBox(10, 27, 80, 8),
+            provenance,
+            text="Figure 1. Local plot",
+            metadata={"line_group": 3, "line_position": 0},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (local_caption,)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        self.assertFalse(
+            any(
+                item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+                for item in issues
+            )
+        )
+
+    def test_issue_routing_prefers_current_visual_over_dominant_previous_page(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        caption = Element(
+            "caption",
+            "text",
+            1,
+            BBox(10, 8, 80, 8),
+            provenance,
+            text="Figure 2. Current-page result",
+            metadata={"line_group": 1, "line_position": 0},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (caption,)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+                metadata={"raster_evidence": {"region_count": 1}},
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.55, 0.9, 0.4),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        self.assertFalse(
+            any(
+                item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+                for item in issues
+            )
+        )
 
     def test_layout_writer_projects_reviewed_cross_page_relation(self):
         provenance = Provenance("fixture", "native", "fixture")
