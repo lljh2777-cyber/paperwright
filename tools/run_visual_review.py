@@ -28,9 +28,20 @@ import sys
 from pathlib import Path
 
 from paperwright.exceptions import ContractValidationError
+from paperwright.issue_routing import validate_issue_routing
 from paperwright.layout_models import FinalLayout, LayoutTask
 from paperwright.llm_cost import CostReport, canonical_cost_report_json
 from paperwright.layout_review import validate_layout_review
+from paperwright.visual_relations import (
+    VISUAL_RELATION_OVERLAY_FILENAME,
+    VISUAL_RELATION_PROMPT_VERSION,
+    VISUAL_RELATION_REVIEW_FILENAME,
+    VISUAL_RELATION_REVIEW_VERSION,
+    VISUAL_RELATION_TASK_FILENAME,
+    canonical_visual_relation_review_json,
+    compile_visual_relation_review,
+    validate_visual_relation_review,
+)
 
 MODEL = os.environ.get("PW_VISUAL_MODEL", "qwen3.7-plus")
 DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -98,8 +109,26 @@ def _data_url(path: Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def _prompt(task: LayoutTask) -> str:
+def _prompt(task: LayoutTask, issues: list[dict] | None = None) -> str:
     roi = task.metadata.get("analysis_roi")
+    issue_context = ""
+    if issues:
+        compact = [
+            {
+                "issue_id": item["issue_id"],
+                "kind": item["kind"],
+                "reason": item["reason"],
+                "signals": item["signals"],
+                "scope": item["scope"],
+            }
+            for item in issues
+        ]
+        issue_context = (
+            "\nLocalized issues selected by deterministic routing. Resolve "
+            "these explicitly while still returning a complete valid page layout:\n"
+            + json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+            + "\n"
+        )
     return f"""You are reviewing ONE page image of a scientific paper for PaperWright's hybrid layout pipeline.
 
 Page index: {task.page.page_index}
@@ -107,6 +136,7 @@ Page size: {task.page.width:.1f} x {task.page.height:.1f} PDF points.
 Coordinates: normalized to the full page, top-left origin, y down, values 0-1.
 Confirmed Content ROI (all non-exclude regions must stay inside):
 {json.dumps(roi, ensure_ascii=False)}
+{issue_context}
 
 Return ONLY a JSON object (no markdown fences, no prose) in exactly this shape:
 {{
@@ -141,6 +171,112 @@ Rules:
   when the page clearly has multiple columns/blocks).
 - Prefer at most 14 regions; merge same-role fragments into one region. Keep the
   JSON compact with no extra prose so it fits in the response limit."""
+
+
+def _relation_prompt(
+    task: LayoutTask,
+    issues: list[dict] | None = None,
+) -> str:
+    selected_features = {
+        "high_confidence_caption_kind",
+        "starts_with_figure",
+        "starts_with_table",
+        "raster_region_count",
+        "image_count",
+        "drawing_count",
+        "panel_label_count",
+        "peripheral_hint",
+        "furniture_reason",
+        "cross_page_caption_anchor",
+    }
+    candidates = [
+        {
+            "candidate_id": item.candidate_id,
+            "bbox": item.bbox.to_dict(),
+            "element_kinds": list(item.element_kinds),
+            "features": {
+                key: value
+                for key, value in item.features.items()
+                if key in selected_features and value not in {None, False, 0, ""}
+            },
+        }
+        for item in task.candidates
+    ]
+    compact_issues = [
+        {
+            "issue_id": item["issue_id"],
+            "kind": item["kind"],
+            "reason": item["reason"],
+            "scope": item["scope"],
+        }
+        for item in (issues or [])
+    ]
+    has_cross_page_caption = any(
+        item.get("kind") == "cross_page_caption_visual_binding"
+        and item.get("page_index") == task.page.page_index
+        for item in (issues or [])
+    )
+    cross_page_rule = (
+        "A caption marked cross_page_caption_anchor may use parent_group_id null; "
+        "a later paired-page review will bind it."
+        if has_cross_page_caption
+        else "Every explicit Figure/Table caption must name a same-page visual parent."
+    )
+    return f"""You are resolving candidate relationships on ONE scientific-paper page.
+
+The overlay labels deterministic candidate boxes. Do NOT draw or modify any bbox.
+Group candidates that form one logical region, classify each group, order non-exclude
+groups, and bind every caption group to its Figure/Table group via parent_group_id.
+
+Page index: {task.page.page_index}
+Candidates:
+{json.dumps(candidates, ensure_ascii=False, separators=(",", ":"))}
+Localized issues:
+{json.dumps(compact_issues, ensure_ascii=False, separators=(",", ":"))}
+
+Return ONLY this JSON shape:
+{{
+  "groups": [
+    {{
+      "group_id": "g1",
+      "candidate_ids": ["C001"],
+      "content_class": "text|visual|exclude|unknown",
+      "role": "body|heading|figure|table|caption|footnote|header|footer|margin|equation|other|unknown",
+      "order": 1,
+      "parent_group_id": null,
+      "confidence": 0.9
+    }}
+  ],
+  "discarded_candidate_ids": [],
+  "warnings": []
+}}
+
+Rules:
+- Account for EVERY candidate exactly once: in one group or discarded.
+- A group bbox will be computed as the exact union of its candidate boxes.
+- Never output bbox, OCR text, Markdown, source element IDs, or new candidates.
+- Figure panels, axes and legends that belong together should share one figure group.
+- Explicit Figure/Table captions must be caption groups. {cross_page_rule}
+- Only page furniture or extraction noise may be discarded; keep uncertain content as unknown.
+- Exclude groups use role header/footer/margin and order null.
+- Other groups use consecutive order 1..N in scientific reading order.
+- Use only candidate IDs shown above and keep the response compact."""
+
+
+def _relation_review(task: LayoutTask, data: dict, model: str) -> dict:
+    review = {
+        "contract_version": VISUAL_RELATION_REVIEW_VERSION,
+        "source_sha256": task.source_sha256,
+        "page": task.page.to_dict(),
+        "task_sha256": task.deterministic_sha256(),
+        "reviewer": model,
+        "prompt_version": VISUAL_RELATION_PROMPT_VERSION,
+        "groups": data.get("groups"),
+        "discarded_candidate_ids": data.get("discarded_candidate_ids", []),
+        "warnings": data.get("warnings", []),
+    }
+    validate_visual_relation_review(review, task)
+    return review
 
 
 def _strip_fences(code: str) -> str:
@@ -344,7 +480,12 @@ def _ensure_caption_regions(
 
 
 def _generate_layout(
-    client, task: LayoutTask, image_path: Path, model: str, cost_report: CostReport
+    client,
+    task: LayoutTask,
+    image_path: Path,
+    model: str,
+    cost_report: CostReport,
+    issues: list[dict] | None = None,
 ) -> dict:
     image_url = _data_url(image_path)
     resp = client.chat.completions.create(
@@ -353,7 +494,7 @@ def _generate_layout(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": _prompt(task)},
+                    {"type": "text", "text": _prompt(task, issues)},
                     {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }
@@ -376,30 +517,108 @@ def _generate_layout(
     return _regions_to_layout(task, data["regions"], model)
 
 
+def _generate_relation_layout(
+    client,
+    relation_task: LayoutTask,
+    final_task: LayoutTask,
+    image_path: Path,
+    model: str,
+    cost_report: CostReport,
+    issues: list[dict] | None = None,
+) -> tuple[dict, dict]:
+    image_url = _data_url(image_path)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": _relation_prompt(relation_task, issues),
+                    },
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            }
+        ],
+        temperature=0,
+        max_tokens=3072,
+        extra_body={"enable_thinking": False},
+    )
+    cost_report.record(
+        bridge=f"paperwright-visual-relations/{model}",
+        model=model,
+        step=f"page-{relation_task.page.page_index + 1}",
+        usage=getattr(resp, "usage", None),
+    )
+    data = json.loads(
+        _strip_fences(resp.choices[0].message.content or "")
+    )
+    review = _relation_review(relation_task, data, model)
+    layout = compile_visual_relation_review(
+        review,
+        relation_task=relation_task,
+        final_task=final_task,
+    )
+    return layout, review
+
+
 def _review_page(
     client,
     page_dir: Path,
     model: str,
     physical_document: dict,
     cost_report: CostReport,
+    issues: list[dict] | None = None,
     *,
+    protocol: str = "auto",
     attempts: int = MAX_ATTEMPTS,
-) -> dict:
+) -> tuple[dict, dict | None]:
     task = LayoutTask.from_dict(
         json.loads((page_dir / "layout-task.json").read_text(encoding="utf-8"))
     )
-    image_path = page_dir / task.preview_filename
+    relation_path = page_dir / VISUAL_RELATION_TASK_FILENAME
+    relation_task = None
+    if protocol != "regions" and relation_path.is_file():
+        relation_task = LayoutTask.from_dict(
+            json.loads(relation_path.read_text(encoding="utf-8"))
+        )
+    if protocol == "relations" and relation_task is None:
+        raise SystemExit(
+            f"{page_dir.name}: 缺少 {VISUAL_RELATION_TASK_FILENAME}"
+        )
+    image_path = page_dir / (
+        VISUAL_RELATION_OVERLAY_FILENAME
+        if relation_task is not None
+        else task.preview_filename
+    )
     if not image_path.is_file():
         raise SystemExit(f"缺少页面预览: {image_path}")
     last_error = None
     for _ in range(attempts):
         try:
-            layout = _generate_layout(
-                client, task, image_path, model, cost_report
-            )
-            layout = _ensure_caption_regions(task, layout, physical_document)
+            relation_review = None
+            if relation_task is not None:
+                layout, relation_review = _generate_relation_layout(
+                    client,
+                    relation_task,
+                    task,
+                    image_path,
+                    model,
+                    cost_report,
+                    issues,
+                )
+            else:
+                layout = _generate_layout(
+                    client, task, image_path, model, cost_report, issues
+                )
+                layout = _ensure_caption_regions(
+                    task,
+                    layout,
+                    physical_document,
+                )
             validate_layout_review(FinalLayout.from_dict(layout), task)
-            return layout
+            return layout, relation_review
         except (ValueError, KeyError, json.JSONDecodeError, ContractValidationError) as exc:
             last_error = exc
             print(f"  校验失败: {exc}", file=sys.stderr)
@@ -413,7 +632,19 @@ def main() -> int:
     default_model = MODEL
     ap.add_argument("review_dir", type=Path)
     ap.add_argument("--pages", help="只处理指定页，如 1-3 或 1,5,9")
+    ap.add_argument(
+        "--issue-routing",
+        type=Path,
+        default=None,
+        help="可选 issue-routing.json；只向模型展开当前页的局部问题证据",
+    )
     ap.add_argument("--model", default=default_model, help=f"模型 ID（默认 {default_model}）")
+    ap.add_argument(
+        "--protocol",
+        choices=("auto", "relations", "regions"),
+        default="auto",
+        help="auto 优先候选关系协议；regions 强制使用旧画框协议",
+    )
     ap.add_argument("--dry-run", action="store_true", help="只打印将要处理的页面")
     args = ap.parse_args()
 
@@ -436,7 +667,17 @@ def main() -> int:
 
     if args.dry_run:
         for path in page_dirs:
-            print(path.name)
+            has_relations = (path / VISUAL_RELATION_TASK_FILENAME).is_file()
+            if args.protocol == "relations" and not has_relations:
+                raise SystemExit(
+                    f"{path.name}: 缺少 {VISUAL_RELATION_TASK_FILENAME}"
+                )
+            selected_protocol = (
+                "relations"
+                if args.protocol != "regions" and has_relations
+                else "regions"
+            )
+            print(path.name, selected_protocol)
         return 0
 
     cost_path = review_dir / "visual-review-cost.json"
@@ -448,6 +689,21 @@ def main() -> int:
     if not physical_path.is_file():
         raise SystemExit(f"缺少物理文档缓存: {physical_path}")
     physical_document = json.loads(physical_path.read_text(encoding="utf-8"))
+    issues_by_page: dict[int, list[dict]] = {}
+    if args.issue_routing is not None:
+        issue_value = json.loads(
+            args.issue_routing.expanduser().resolve().read_text(encoding="utf-8")
+        )
+        validate_issue_routing(issue_value)
+        if issue_value["source_sha256"] != physical_document["source_sha256"]:
+            raise SystemExit("issue-routing.json 与物理文档 source hash 不一致")
+        for issue in issue_value["issues"]:
+            if issue["status"] == "open" and issue["route"] == "L2_VISUAL_MODEL":
+                issues_by_page.setdefault(issue["page_index"], []).append(issue)
+                for related_page in issue["scope"].get(
+                    "related_page_indices", ()
+                ):
+                    issues_by_page.setdefault(related_page, []).append(issue)
     print(f"视觉复核: {len(page_dirs)} 页, model={MODEL}, base_url={base_url}", file=sys.stderr)
     cost_report = CostReport()
     for path in page_dirs:
@@ -456,9 +712,36 @@ def main() -> int:
             print(f"{path.name}: final-layout.json 已存在，跳过", file=sys.stderr)
             continue
         print(f"{path.name}: 视觉复核中", file=sys.stderr)
-        layout = _review_page(
-            client, path, args.model, physical_document, cost_report
+        layout, relation_review = _review_page(
+            client,
+            path,
+            args.model,
+            physical_document,
+            cost_report,
+            issues=issues_by_page.get(int(path.name.split("-")[1]) - 1),
+            protocol=args.protocol,
         )
+        if relation_review is not None:
+            relation_output = path / VISUAL_RELATION_REVIEW_FILENAME
+            if relation_output.exists():
+                raise SystemExit(
+                    f"relation review 已存在，拒绝覆盖: {relation_output}"
+                )
+            relation_task = LayoutTask.from_dict(
+                json.loads(
+                    (path / VISUAL_RELATION_TASK_FILENAME).read_text(
+                        encoding="utf-8"
+                    )
+                )
+            )
+            relation_output.write_text(
+                canonical_visual_relation_review_json(
+                    relation_review,
+                    task=relation_task,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
         output.write_text(
             json.dumps(layout, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             + "\n",

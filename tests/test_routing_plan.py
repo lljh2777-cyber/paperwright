@@ -85,8 +85,30 @@ class RoutingPlanToolTests(unittest.TestCase):
             self.assertTrue(
                 all(page["route"] == "L0_RULE" for page in routing["pages"])
             )
+            issue_routing = json.loads(
+                (review_dir / "issue-routing.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(issue_routing["mode"], "issue-first")
+            self.assertTrue(
+                all(
+                    page["base_route"] == "L0_RULE"
+                    for page in issue_routing["pages"]
+                )
+            )
             for page_dir in sorted(review_dir.glob("page-*")):
                 self.assertTrue((page_dir / "final-layout.json").is_file())
+            self.assertTrue(
+                (review_dir / "cross-page-caption-task.json").is_file()
+            )
+            cross_review = json.loads(
+                (review_dir / "cross-page-caption-review.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(cross_review["bindings"], [])
+            self.assertTrue(
+                (review_dir / "cross-page-caption-usage.json").is_file()
+            )
 
     def test_dry_run_prints_plan_without_writing(self):
         with tempfile.TemporaryDirectory() as temp_dir:

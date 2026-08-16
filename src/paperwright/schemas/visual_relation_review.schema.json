@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/visual_relation_review.schema.json",
+  "title": "PaperWright Visual Candidate Relation Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "source_sha256", "page", "task_sha256", "reviewer", "prompt_version", "groups", "discarded_candidate_ids", "warnings"],
+  "properties": {
+    "contract_version": {"const": "paperwright-visual-relation-review-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "page": {"type": "object"},
+    "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "prompt_version": {"const": "paperwright-visual-relations-prompt-v0.1"},
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group_id", "candidate_ids", "content_class", "role", "order", "parent_group_id", "confidence"],
+        "properties": {
+          "group_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"},
+          "candidate_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "content_class": {"enum": ["exclude", "text", "visual", "unknown"]},
+          "role": {"enum": ["heading", "body", "figure", "table", "caption", "footnote", "header", "footer", "margin", "equation", "other", "unknown"]},
+          "order": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 1}]},
+          "parent_group_id": {"anyOf": [{"type": "null"}, {"type": "string", "minLength": 1}]},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "discarded_candidate_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}

@@ -228,6 +228,8 @@ class LayoutStageCTests(unittest.TestCase):
                         "content-roi.png",
                         "overlay.png",
                         "review-instructions.md",
+                        "visual-relation-task.json",
+                        "candidate-overlay.png",
                     },
                 )
                 with Image.open(page_root / "overlay.png") as image:

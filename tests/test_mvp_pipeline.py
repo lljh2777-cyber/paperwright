@@ -38,7 +38,13 @@ class MVPPipelineTests(unittest.TestCase):
         output = result.output_dir
         self.assertEqual(
             set(path.name for path in output.iterdir()),
-            {"article.md", "images", "manifest.json", "physical_document.json"},
+            {
+                "_paperwright",
+                "article.md",
+                "images",
+                "manifest.json",
+                "physical_document.json",
+            },
         )
         manifest = json.loads(
             (output / "manifest.json").read_text(encoding="utf-8")

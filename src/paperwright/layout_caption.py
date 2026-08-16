@@ -56,6 +56,8 @@ def bind_caption_regions(
     layouts: Sequence[FinalLayout],
     *,
     caption_text: CaptionTextResolver,
+    reviewed_bindings: Sequence[CaptionBinding] = (),
+    rejected_caption_keys: frozenset[tuple[int, str]] = frozenset(),
 ) -> tuple[
     dict[tuple[int, str], CaptionBinding],
     dict[tuple[int, str], CaptionBinding],
@@ -79,7 +81,35 @@ def bind_caption_regions(
 
     by_caption: dict[tuple[int, str], CaptionBinding] = {}
     by_visual: dict[tuple[int, str], CaptionBinding] = {}
+    known_caption_keys = {
+        (page, region.region_id) for page, region, _ in captions
+    }
+    known_visual_keys = {
+        (page, region.region_id) for page, region in visuals
+    }
+    for binding in reviewed_bindings:
+        caption_key = (
+            binding.caption_page_index,
+            binding.caption_region_id,
+        )
+        visual_key = (
+            binding.visual_page_index,
+            binding.visual_region_id,
+        )
+        if (
+            caption_key not in known_caption_keys
+            or visual_key not in known_visual_keys
+            or caption_key in by_caption
+            or visual_key in by_visual
+            or caption_key in rejected_caption_keys
+        ):
+            raise ValueError("reviewed cross-page caption binding 与布局不一致")
+        by_caption[caption_key] = binding
+        by_visual[visual_key] = binding
     for caption_page, caption, text in captions:
+        caption_key = (caption_page, caption.region_id)
+        if caption_key in by_caption or caption_key in rejected_caption_keys:
+            continue
         prefix_kind = _caption_prefix_kind(text)
         candidates: list[tuple[float, int, LayoutRegion, str]] = []
         for visual_page, visual in visuals:
@@ -173,6 +203,11 @@ def bind_caption_regions(
         "unbound_caption_count": len(unbound_captions),
         "unbound_visual_count": len(unbound_visuals),
         "unbound_visuals_are_informational": True,
+        "reviewed_cross_page_binding_count": sum(
+            item.method == "reviewed_cross_page_relation"
+            for item in by_caption.values()
+        ),
+        "reviewed_cross_page_rejection_count": len(rejected_caption_keys),
         "bindings": [
             item.to_dict()
             for item in sorted(

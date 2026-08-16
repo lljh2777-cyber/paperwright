@@ -1,6 +1,6 @@
 # paperwright
 
-paperwright 是一个本地、可追溯、非生成式 AI 的科研 PDF 重建工具。当前版本为
+paperwright 是一个本地优先、可追溯的 Hybrid 科研 PDF 重建工具。当前版本为
 `0.9.0a0` 源码 Alpha。
 
 > **包名与命令**：发布到 PyPI 的发行包名为 **`paperwright`**（`pip install
@@ -8,11 +8,8 @@ paperwright 是一个本地、可追溯、非生成式 AI 的科研 PDF 重建�
 > 同一个官方项目，安装 `paperwright` 后即可使用 `paperwright` 命令。
 
 ```text
-PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
-                       └→ reviewed layout → article-model.json
-                                             ├→ article.md
-                                             ├→ reader.json
-                                             └→ manifest.json
+PDF → evidence → issue routing → L0 + 局部 L1/L2/L3 → validation
+    → article-model.json → article.md + reader.json + assets + manifest.json
 ```
 
 ## 当前能力
@@ -27,10 +24,11 @@ PDF → PhysicalDocument ─→ direct article.md + images/ + manifest.json
 - Content ROI、布局候选、结构化复核和最终布局校验；
 - `fast`、`standard`、`forensic` 三种布局提取配置；
 - 自包含证据包、输出质量报告和无正文训练数据导出；
+- 页面完整性门禁：无文字非空页自动保留整页图，孤立 caption/疑似漏图显式降级；
 - 面向阅读器的稳定 Markdown 锚点、Figure/图注关系和 `reader.json`；
 - 作为 Markdown、Reader 和后续文本复核统一来源的 `article-model.json`；
-- 完全本地运行，不调用 LLM、外部 API 或云 OCR；可选的人工/视觉混合复核
-  （`layout-review`）按需接入视觉模型，**只做版面判断、不转写正文**（产品定位见
+- 确定性内核完全本地运行；Hybrid resolver 按问题接入文本/视觉模型，模型
+  **只做受限判断、不转写正文**（产品定位见
   [VISION](docs/VISION.md)）。
 
 region-render 默认关闭，只能显式启用。PDFBox 目前仅保留接口，选择后会明确
@@ -157,7 +155,27 @@ paperwright --help
 两种方式都会根据 `pyproject.toml` 自动安装
 `pypdfium2==5.11.0` 和 `Pillow==12.2.0`，无需提前手动安装。
 
-## 转换单篇 PDF
+## 转换单篇科研论文（推荐）
+
+```bash
+paperwright hybrid input.pdf output-dir
+```
+
+若命令返回 `awaiting_input`，按 `next_action.path` 检查 Content ROI，复制为单独的
+确认文件后恢复：
+
+```bash
+cp output-dir.paperwright-run/layout-proposal/content-roi.json confirmed-roi.json
+# 将 confirmed-roi.json 的 review_status 改为 confirmed，并填写 reviewer
+paperwright hybrid input.pdf output-dir \
+  --resume --content-roi-json confirmed-roi.json
+```
+
+`output-dir.paperwright-run/run.json` 记录阶段、输入/产物哈希、未决动作和失败信息；
+不承担 token 预算或费用计算。完整契约见
+[HybridPipeline 与 run contract v0.1](docs/HYBRID_RUN_V0.1.md)。
+
+## 旧规则入口（兼容）
 
 ```bash
 paperwright convert input.pdf output-dir
@@ -176,15 +194,28 @@ output-dir/
 ├── article.md
 ├── physical_document.json
 ├── manifest.json
+├── _paperwright/
+│   └── completeness-report.json
 └── images/
 ```
 
 输出目录必须尚不存在，paperwright 不会覆盖已有数据。
 
-混合布局准备阶段还会生成 `routing.json`，确定性建议每页走 L0 规则 /
-L1 文本模型 / L2 视觉模型 / 人工复核，供 Agent 决定调用哪个桥；也可直接
+Hybrid evidence 阶段会生成 `issue-routing.json`：所有页面以 L0 为基础，只把明确的
+Figure-caption 绑定、复杂几何、段落续接或证据缺失问题升级到 L1/L2/L3/人工。
+旧 `routing.json` 与下列脚本继续作为迁移期兼容产物；新用户应使用 `paperwright hybrid`：
 `PYTHONPATH=src python tools/run_routing_plan.py input.pdf review-dir out-dir`
-自动执行整个路由计划（支持 `--token-budget` 超限停止）。
+自动执行问题级路由计划。详见
+[Issue-level Routing v0.1](docs/ISSUE_ROUTING_V0.1.md)。
+
+L2 默认优先使用候选关系协议：模型只分组候选、判断角色/顺序并建立 caption-of 关系，
+最终 bbox 由程序取候选并集生成；无候选时才回退旧画框协议。详见
+[Visual Candidate Relations v0.1](docs/VISUAL_RELATIONS_V0.1.md)。当前整体状态见
+[CURRENT_STATUS](docs/CURRENT_STATUS.md)。
+
+相邻页的 Figure/Table–caption 关系使用独立的 paired-page task：同一个 issue 会把
+视觉页和 caption 页一起送入 L2，接受或拒绝结果进入 ArticleModel/Reader，并覆盖旧
+几何猜测。详见 [跨页 caption 关系 v0.1](docs/CROSS_PAGE_CAPTION_V0.1.md)。
 
 ## 页眉页脚剔除（--furniture）
 

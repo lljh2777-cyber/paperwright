@@ -9,10 +9,10 @@
 |---|---|---|
 | L0 确定性内核 | `backends/pdfium.py`, `models.py`, `figures.py`, `content_render.py`, `region_render.py`, `writer.py` | PDFium 提取、Figure/Table/Equation 图片化、Markdown/manifest 写出 |
 | L1 文本判断 | `text_review.py`, `tools/run_text_review.py` | 只判断格式整理与 join-blocks，写 `text-review.json` |
-| L2 视觉判断 | `layout_models.py`, `layout_review.py`, `layout_writer.py`, `tools/run_visual_review.py` | 只判断版面几何/角色，写 `final-layout.json` |
+| L2 视觉判断 | `visual_relations.py`, `cross_page_caption.py`, `layout_models.py`, `layout_review.py`, `layout_writer.py`, `tools/run_visual_review.py` | 页内候选关系 + 相邻页 caption-of，确定性编译/投影 |
 | L3 程序合成 | `synthesize.py`, `tools/run_text_synthesize.py` | 受限 DSL + 守恒校验 + 重放溯源 |
-| 路由/编排 | `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | 决定每页走哪层并自动执行 |
-| 度量 | `llm_cost.py` | 记录 bridge token/成本，核心不依赖 LLM SDK |
+| 路由/编排 | `hybrid.py`, `issue_routing.py`, `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | Hybrid run 状态机 + 局部 issue 路由；后两者为过渡执行适配层 |
+| Bridge 兼容观测 | `llm_cost.py` | 保留旧 bridge usage/估算报告；不进入 Hybrid 路由、预算或 run contract |
 
 核心原则：
 - 校验器是唯一真值源；模型产物全部过 `validate-*`
@@ -24,6 +24,7 @@
 ```text
 src/paperwright/      核心包（确定性逻辑）
   schemas/            JSON Schema（随包发布）
+  hybrid.py           唯一 HybridPipeline API 与 run contract
 tools/                仓库工具 + 可选模型桥
   run_text_review.py  L1 桥
   run_text_synthesize.py  L3 桥
@@ -66,9 +67,11 @@ skills/               4 个可分发 Agent skills
 
 - 桥工具放 `tools/`，薄封装模型调用；
 - 确定性逻辑放 `src/paperwright/`；
-- 路由信号在 `routing.py` 中表达，必须只用 PhysicalDocument/LayoutTask/
-  LayoutRiskAssessment 的确定性字段；
-- 编排器在 `tools/run_routing_plan.py` 中接线。
+- 新路由信号在 `issue_routing.py` 中表达，必须定位到 page + bbox/element/candidate/block，
+  并只用 PhysicalDocument、LayoutTask、LayoutRiskAssessment、ArticleModel 或验证结果；
+- 不再增加新的页级单标签语义；`routing.py` 只维护兼容行为；
+- provider 接入 HybridPipeline resolver；`tools/run_routing_plan.py` 当前是仓库默认的
+  过渡 resolver，不能成为新的产品契约。
 
 ## 6. 如何跑测试与验证
 
@@ -94,6 +97,15 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 
 完整清单见 [VALIDATION](VALIDATION.md)。
 
+页面级投影守恒、无文字页整页兜底及 manifest 哈希绑定见
+[Completeness Gate v0.1](COMPLETENESS_GATE_V0.1.md)。
+局部问题契约、两阶段发现和桥接适配见
+[Issue-level Routing v0.1](ISSUE_ROUTING_V0.1.md)。
+候选关系审查与最终布局编译见
+[Visual Candidate Relations v0.1](VISUAL_RELATIONS_V0.1.md)。
+跨页 scope、paired-page review 与 Reader 投影见
+[跨页 caption 关系 v0.1](CROSS_PAGE_CAPTION_V0.1.md)。
+
 ## 7. 仓库政策
 
 - 禁止提交 PDF、渲染产物、真实论文输出、二进制、凭据；
@@ -114,12 +126,15 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 - L0 内核、L1/L2/L3 桥
 - L3 落盘溯源与 manifest v0.11
 - 表格/公式图片化第一版
-- token/成本计量
+- 旧 bridge usage/成本报告兼容层（非 Hybrid 核心策略）
 - 确定性路由 + 自动编排 + L1→L3 降级
+- issue-level routing、布局后精确 L1 发现与 Completeness 回流
+- 候选关系式视觉协议与确定性 FinalLayout 编译
+- 唯一 `paperwright hybrid` 入口、三阶段 run contract、ROI 暂停/恢复和最终包复核
+- 跨页 Figure/Table–caption issue、paired-page review、显式拒绝与 ArticleModel/Reader 投影
 
 未完成：
 
-- `run.json` 聚合 per-step token/成本
-- 预算上限产品化到 CLI 配置
 - L3 操作集扩展与规则回填
-- 真实论文回归校准路由阈值
+- 唯一 HybridPipeline/run contract，消除脚本级编排分叉
+- 跨页 Figure-caption binding

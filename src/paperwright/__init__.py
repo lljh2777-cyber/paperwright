@@ -6,6 +6,7 @@ __version__ = "0.9.0a0"
 
 from .api import ConversionResult, PaperWright
 from .config import PaperWrightConfig
+from .hybrid import HybridPipeline, HybridRunResult
 from .models import BBox, Element, Page, PhysicalDocument, Provenance
 
 __all__ = [
@@ -14,6 +15,8 @@ __all__ = [
     "Page",
     "PaperWright",
     "PaperWrightConfig",
+    "HybridPipeline",
+    "HybridRunResult",
     "ConversionResult",
     "PhysicalDocument",
     "Provenance",

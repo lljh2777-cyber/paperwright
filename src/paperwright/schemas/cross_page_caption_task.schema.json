@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/cross_page_caption_task.schema.json",
+  "title": "PaperWright Cross-page Caption Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "source_sha256", "page_count", "layout_hashes", "pairs"],
+  "properties": {
+    "contract_version": {"const": "paperwright-cross-page-caption-task-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "page_count": {"type": "integer", "minimum": 1},
+    "layout_hashes": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["page_index", "final_layout_sha256"],
+        "properties": {
+          "page_index": {"type": "integer", "minimum": 0},
+          "final_layout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["pair_id", "caption", "visual_candidates", "signals"],
+        "properties": {
+          "pair_id": {"type": "string", "minLength": 1},
+          "caption": {
+            "type": "object", "additionalProperties": false,
+            "required": ["caption_ref", "page_index", "region_id", "kind", "bbox", "text"],
+            "properties": {
+              "caption_ref": {"type": "string", "minLength": 1},
+              "page_index": {"type": "integer", "minimum": 1},
+              "region_id": {"type": "string", "minLength": 1},
+              "kind": {"enum": ["figure", "table"]},
+              "bbox": {"$ref": "#/$defs/bbox"},
+              "text": {"type": "string", "minLength": 1}
+            }
+          },
+          "visual_candidates": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["visual_ref", "page_index", "region_id", "role", "bbox", "score"],
+              "properties": {
+                "visual_ref": {"type": "string", "minLength": 1},
+                "page_index": {"type": "integer", "minimum": 0},
+                "region_id": {"type": "string", "minLength": 1},
+                "role": {"enum": ["figure", "table"]},
+                "bbox": {"$ref": "#/$defs/bbox"},
+                "score": {"type": "number"}
+              }
+            }
+          },
+          "signals": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

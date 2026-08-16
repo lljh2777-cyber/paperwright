@@ -1586,6 +1586,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "markdown_exclusions",
                     "manifest_inventory",
                     "native_object_diagnostics",
+                    "page_completeness",
                     "text_reconstruction",
                     "reader_index",
                     "article_model",
@@ -1664,6 +1665,7 @@ class LayoutStageDTests(unittest.TestCase):
                 },
                 {
                     "_paperwright/article-model.json",
+                    "_paperwright/completeness-report.json",
                     "_paperwright/manifest.json",
                     "_paperwright/reader.json",
                 },

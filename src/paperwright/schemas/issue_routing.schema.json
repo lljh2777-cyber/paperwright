@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/issue_routing.schema.json",
+  "title": "PaperWright Issue-level Routing Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "mode", "source_sha256", "page_count", "pages", "issues", "summary"],
+  "properties": {
+    "contract_version": {"const": "paperwright-issue-routing-v0.1"},
+    "mode": {"const": "issue-first"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "page_count": {"type": "integer", "minimum": 1},
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["page_index", "base_route", "issue_ids", "compatibility_route"],
+        "properties": {
+          "page_index": {"type": "integer", "minimum": 0},
+          "base_route": {"const": "L0_RULE"},
+          "issue_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "compatibility_route": {"enum": ["L0_RULE", "L1_TEXT_MODEL", "L2_VISUAL_MODEL", "L3_PROGRAM_SYNTHESIS", "HUMAN_REVIEW"]}
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue_id", "page_index", "kind", "stage", "route", "fallback_route", "severity", "reason", "signals", "scope", "status"],
+        "properties": {
+          "issue_id": {"type": "string", "minLength": 1},
+          "page_index": {"type": "integer", "minimum": 0},
+          "kind": {"enum": ["page_visual_preservation", "native_text_evidence_missing", "layout_geometry_ambiguity", "caption_visual_binding", "cross_page_caption_visual_binding", "paragraph_continuation"]},
+          "stage": {"enum": ["layout", "text", "projection"]},
+          "route": {"enum": ["L0_RULE", "L1_TEXT_MODEL", "L2_VISUAL_MODEL", "L3_PROGRAM_SYNTHESIS", "HUMAN_REVIEW"]},
+          "fallback_route": {"enum": ["L0_RULE", "L1_TEXT_MODEL", "L2_VISUAL_MODEL", "L3_PROGRAM_SYNTHESIS", "HUMAN_REVIEW"]},
+          "severity": {"enum": ["required", "suspicious"]},
+          "reason": {"type": "string", "minLength": 1},
+          "signals": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "bbox", "candidate_ids", "element_ids", "related_page_indices"],
+            "properties": {
+              "type": {"enum": ["page", "bbox", "elements", "candidates"]},
+              "bbox": {
+                "anyOf": [
+                  {"type": "null"},
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["x", "y", "width", "height"],
+                    "properties": {
+                      "x": {"type": "number", "minimum": 0, "maximum": 1},
+                      "y": {"type": "number", "minimum": 0, "maximum": 1},
+                      "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+                      "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+                    }
+                  }
+                ]
+              },
+              "candidate_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+              "element_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+              "related_page_indices": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}
+            }
+          },
+          "status": {"const": "open"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_count", "pages_with_issues", "pages_without_issues", "by_route", "by_kind"],
+      "properties": {
+        "issue_count": {"type": "integer", "minimum": 0},
+        "pages_with_issues": {"type": "integer", "minimum": 0},
+        "pages_without_issues": {"type": "integer", "minimum": 0},
+        "by_route": {"type": "object"},
+        "by_kind": {"type": "object"}
+      }
+    }
+  }
+}

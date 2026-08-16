@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/completeness.schema.json",
+  "title": "PaperWright Page Completeness Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_sha256",
+    "status",
+    "page_count",
+    "summary",
+    "pages",
+    "findings"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "paperwright-completeness-v0.1"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": ["pass", "warning", "fail"]
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted",
+        "suspicious",
+        "human_required",
+        "invalid",
+        "full_page_fallback"
+      ],
+      "properties": {
+        "accepted": {"type": "integer", "minimum": 0},
+        "suspicious": {"type": "integer", "minimum": 0},
+        "human_required": {"type": "integer", "minimum": 0},
+        "invalid": {"type": "integer", "minimum": 0},
+        "full_page_fallback": {"type": "integer", "minimum": 0}
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["page_index", "state", "reasons", "source", "projection"],
+        "properties": {
+          "page_index": {"type": "integer", "minimum": 0},
+          "state": {
+            "enum": ["accepted", "suspicious", "human_required", "invalid"]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "usable_text_element_count",
+              "image_element_count",
+              "vector_element_count",
+              "caption_like_count",
+              "blank"
+            ],
+            "properties": {
+              "usable_text_element_count": {"type": "integer", "minimum": 0},
+              "image_element_count": {"type": "integer", "minimum": 0},
+              "vector_element_count": {"type": "integer", "minimum": 0},
+              "caption_like_count": {"type": "integer", "minimum": 0},
+              "blank": {"type": "boolean"}
+            }
+          },
+          "projection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text_block_count",
+              "visual_asset_count",
+              "full_page_fallback",
+              "orphan_caption_count"
+            ],
+            "properties": {
+              "text_block_count": {"type": "integer", "minimum": 0},
+              "visual_asset_count": {"type": "integer", "minimum": 0},
+              "full_page_fallback": {"type": "boolean"},
+              "orphan_caption_count": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "page"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1},
+          "page": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

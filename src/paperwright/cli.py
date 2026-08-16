@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
+import subprocess
 import tempfile
 
 from . import __version__
@@ -23,10 +24,16 @@ from .article_model import (
 )
 from .config import load_config, with_cli_overrides
 from .exceptions import (
+    BackendExecutionError,
     BackendUnavailableError,
     ConfigurationError,
     OutputConflictError,
     PaperWrightError,
+)
+from .hybrid import (
+    HybridPipeline,
+    HybridResolverRequest,
+    validate_hybrid_run,
 )
 from .layout_models import FinalLayout, LayoutTask
 from .layout_dataset import export_layout_dataset
@@ -96,7 +103,7 @@ def _add_runtime_options(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="paperwright",
-        description="本地、确定性、非 AI 的 born-digital 科研 PDF 重建 Alpha",
+        description="面向 born-digital 科研论文的可追溯 Hybrid 重建 Alpha",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -146,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="默认从 _paperwright/article-model.json 推断文档包根目录",
     )
+
+    validate_hybrid_run_parser = commands.add_parser(
+        "validate-hybrid-run",
+        help="验证 Hybrid run.json 阶段与产物记录契约",
+    )
+    validate_hybrid_run_parser.add_argument("run_json", type=Path)
 
     text_prepare = commands.add_parser(
         "text-prepare",
@@ -317,6 +330,59 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         required=True,
         help="包含 layout-task.json 和 final-layout.json 的复核根目录；可重复",
+    )
+
+    hybrid = commands.add_parser(
+        "hybrid",
+        help="运行唯一 Hybrid 流水线；可在 ROI 确认后恢复",
+    )
+    hybrid.add_argument("input_pdf", type=Path)
+    hybrid.add_argument("output_dir", type=Path)
+    hybrid.add_argument(
+        "--run-dir",
+        type=Path,
+        help="持久运行目录；默认 OUTPUT_DIR.paperwright-run",
+    )
+    hybrid.add_argument(
+        "--reviewed-output",
+        type=Path,
+        help="存在 L1/L3 修改时的派生输出目录",
+    )
+    hybrid.add_argument(
+        "--content-roi-json",
+        type=Path,
+        help="已确认的 content-roi.json；省略时生成提案并安全暂停",
+    )
+    hybrid.add_argument(
+        "--resume",
+        action="store_true",
+        help="从现有 run.json 的安全检查点继续",
+    )
+    hybrid.add_argument(
+        "--defer-resolution",
+        action="store_true",
+        help="只准备证据并暂停，不调用仓库中的模型桥适配器",
+    )
+    hybrid.add_argument("--config", type=Path)
+    hybrid.add_argument(
+        "--backend", choices=("pdfium", "pdfbox"), default=None
+    )
+    hybrid.add_argument("--workspace-root", type=Path)
+    hybrid.add_argument("--preview-scale", type=float, default=1.5)
+    hybrid.add_argument(
+        "--extraction-profile",
+        choices=("fast", "standard", "forensic"),
+        default="standard",
+    )
+    hybrid.add_argument(
+        "--evidence",
+        choices=("minimal", "standard", "full"),
+        default="standard",
+    )
+    hybrid.add_argument(
+        "--references",
+        choices=("keep", "omit", "separate"),
+        default="keep",
     )
 
     convert = commands.add_parser("convert", help="转换单个 born-digital PDF")
@@ -700,6 +766,24 @@ def _validate_text_package(package_root: Path) -> int:
     return 0
 
 
+def _validate_hybrid_run_cli(path: Path) -> int:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    validate_hybrid_run(value)
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "run_status": value["status"],
+                "run_id": value["run_id"],
+                "current_stage": value["current_stage"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _configuration(args: argparse.Namespace, *, batch: bool):
     base = load_config(args.config)
     pages = getattr(args, "region_render_page", None)
@@ -869,6 +953,89 @@ def _export_layout_dataset(args: argparse.Namespace) -> int:
     return 0
 
 
+def _repository_hybrid_resolver(request: HybridResolverRequest) -> None:
+    source_root = Path(__file__).resolve().parents[2]
+    candidates = (
+        source_root / "tools" / "run_routing_plan.py",
+        Path(sys.prefix) / "share" / "paperwright" / "tools" / "run_routing_plan.py",
+    )
+    adapter = next((path for path in candidates if path.is_file()), None)
+    if adapter is None:
+        raise BackendExecutionError(
+            "当前安装不含 Hybrid resolver 适配器；请使用 --defer-resolution "
+            "并向 Python API 提供 resolver"
+        )
+    resolver_root = adapter.parent.parent
+    environment = os.environ.copy()
+    current = environment.get("PYTHONPATH")
+    package_source = source_root / "src"
+    environment["PYTHONPATH"] = str(package_source) + (
+        os.pathsep + current if current else ""
+    )
+    process = subprocess.run(
+        [
+            sys.executable,
+            str(adapter),
+            str(request.input_pdf),
+            str(request.review_dir),
+            str(request.output_dir),
+            "--reviewed-output",
+            str(request.reviewed_output_dir),
+            "--evidence",
+            request.evidence_level,
+            "--references",
+            request.references_mode,
+            "--extraction-profile",
+            request.extraction_profile,
+        ],
+        cwd=resolver_root,
+        env=environment,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+    )
+    if process.returncode != 0:
+        diagnostic = (process.stderr or process.stdout).strip()
+        if len(diagnostic) > 4000:
+            diagnostic = diagnostic[-4000:]
+        raise BackendExecutionError(
+            f"Hybrid resolver 失败 (exit {process.returncode}): {diagnostic}"
+        )
+
+
+def _hybrid(args: argparse.Namespace) -> int:
+    config = _layout_configuration(args)
+    pipeline = HybridPipeline(
+        _product(config),
+        resolver=None if args.defer_resolution else _repository_hybrid_resolver,
+    )
+    result = pipeline.run(
+        args.input_pdf,
+        args.output_dir,
+        run_dir=args.run_dir,
+        reviewed_output_dir=args.reviewed_output,
+        content_roi_json=args.content_roi_json,
+        resume=args.resume,
+        preview_scale=args.preview_scale,
+        extraction_profile=args.extraction_profile,
+        evidence_level=args.evidence,
+        references_mode=args.references,
+    )
+    payload = {
+        "status": result.state["status"],
+        "run_contract": str(result.run_dir / "run.json"),
+        "current_stage": result.state["current_stage"],
+        "active_output_dir": (
+            str(result.active_output_dir)
+            if result.active_output_dir is not None
+            else None
+        ),
+        "next_action": result.state["next_action"],
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def _batch(args: argparse.Namespace) -> int:
     config = _configuration(args, batch=True)
     if args.input_dir is not None:
@@ -943,6 +1110,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.article_model_json,
                 args.package_root,
             )
+        if args.command == "validate-hybrid-run":
+            return _validate_hybrid_run_cli(args.run_json)
         if args.command == "text-prepare":
             return _text_prepare(args.article_model_json, args.task_json)
         if args.command == "validate-text-task":
@@ -977,6 +1146,8 @@ def main(argv: list[str] | None = None) -> int:
             return _apply_layout(args)
         if args.command == "layout-export-dataset":
             return _export_layout_dataset(args)
+        if args.command == "hybrid":
+            return _hybrid(args)
         if args.command == "batch":
             return _batch(args)
         return _convert(args)

@@ -178,6 +178,76 @@ def create_born_digital_fixture(
     }
 
 
+def create_completeness_fixture(path: Path) -> dict[str, object]:
+    """Create text, vector-only, and truly blank pages for gate tests."""
+
+    title_page = b"\n".join(
+        [
+            b"BT /F1 22 Tf 60 730 Td (Completeness Gate Fixture) Tj ET",
+            b"BT /F1 11 Tf 60 690 Td (Native text must remain projected.) Tj ET",
+        ]
+    )
+    vector_page = b"\n".join(
+        [
+            b"0.1 0.4 0.8 rg 60 500 220 180 re f",
+            b"0.9 0.3 0.1 rg 320 500 220 180 re f",
+            b"0.2 0.7 0.3 rg 60 260 480 180 re f",
+            b"0 0 0 RG 3 w 60 220 m 540 220 l S",
+        ]
+    )
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>",
+        3: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 6 0 R >> >> /Contents 7 0 R >>"
+        ),
+        4: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << >> /Contents 8 0 R >>"
+        ),
+        5: (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << >> /Contents 9 0 R >>"
+        ),
+        6: (
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
+            b"/Encoding /WinAnsiEncoding >>"
+        ),
+        7: _stream(title_page),
+        8: _stream(vector_page),
+        9: _stream(b""),
+        10: b"<< /Title (Completeness Gate Fixture) >>",
+    }
+    payload = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = {0: 0}
+    for number in range(1, 11):
+        offsets[number] = len(payload)
+        payload.extend(f"{number} 0 obj\n".encode())
+        payload.extend(objects[number])
+        payload.extend(b"\nendobj\n")
+    xref = len(payload)
+    payload.extend(b"xref\n0 11\n0000000000 65535 f \n")
+    for number in range(1, 11):
+        payload.extend(f"{offsets[number]:010d} 00000 n \n".encode())
+    identifier = hashlib.md5(bytes(payload), usedforsecurity=False).hexdigest()
+    payload.extend(
+        (
+            "trailer\n"
+            f"<< /Size 11 /Root 1 0 R /Info 10 0 R "
+            f"/ID [<{identifier}><{identifier}>] >>\n"
+            f"startxref\n{xref}\n%%EOF\n"
+        ).encode()
+    )
+    path.write_bytes(bytes(payload))
+    return {
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "size_bytes": len(payload),
+        "pages": 3,
+        "rights": "project-authored temporary fixture",
+    }
+
+
 def create_region_render_fixture(
     path: Path,
     *,

@@ -31,7 +31,9 @@ import os
 import sys
 from pathlib import Path
 
+from paperwright.article_model import validate_article_model
 from paperwright.exceptions import ContractValidationError
+from paperwright.issue_routing import validate_issue_routing
 from paperwright.llm_cost import CostReport, canonical_cost_report_json
 from paperwright.text_review import (
     canonical_text_review_json,
@@ -83,7 +85,11 @@ def _parse_pages(pages_arg: str | None) -> set[int] | None:
 
 
 def extract_candidates(
-    task: dict, pages: set[int] | None = None
+    task: dict,
+    pages: set[int] | None = None,
+    *,
+    issue_routing: dict | None = None,
+    article_model: dict | None = None,
 ) -> list[tuple[dict, dict]]:
     # Shared with the L3 synthesis kernel: candidates are exactly the pairs
     # that validate-text-review can accept, so the two bridges cannot drift.
@@ -91,13 +97,69 @@ def extract_candidates(
         (dict(previous), dict(current))
         for previous, current in join_candidates(task)
     ]
-    if pages is None:
+    if pages is not None:
+        candidates = [
+            (previous, current)
+            for previous, current in candidates
+            if previous["page"] + 1 in pages
+        ]
+    if issue_routing is None:
         return candidates
-    return [
-        (previous, current)
-        for previous, current in candidates
-        if previous["page"] + 1 in pages
-    ]
+    if article_model is None:
+        raise ValueError("issue routing candidate filter requires article model")
+    validate_issue_routing(issue_routing)
+    validate_article_model(article_model)
+    if (
+        issue_routing["source_sha256"] != task["source_sha256"]
+        or article_model["source_sha256"] != task["source_sha256"]
+    ):
+        raise ValueError("issue routing/text task/article model source mismatch")
+    issue_boxes: dict[int, list[dict]] = {}
+    issue_pairs: set[tuple[str, str]] = set()
+    for issue in issue_routing["issues"]:
+        if (
+            issue["status"] != "open"
+            or issue["route"] != "L1_TEXT_MODEL"
+            or issue["kind"] != "paragraph_continuation"
+        ):
+            continue
+        bbox = issue["scope"]["bbox"]
+        candidate_ids = issue["scope"]["candidate_ids"]
+        if len(candidate_ids) == 2:
+            issue_pairs.add((candidate_ids[0], candidate_ids[1]))
+        if bbox is not None:
+            issue_boxes.setdefault(issue["page_index"], []).append(bbox)
+    model_blocks = {item["id"]: item for item in article_model["blocks"]}
+
+    def intersects(first: dict, second: dict) -> bool:
+        return (
+            min(first["x"] + first["width"], second["x"] + second["width"])
+            > max(first["x"], second["x"])
+            and min(first["y"] + first["height"], second["y"] + second["height"])
+            > max(first["y"], second["y"])
+        )
+
+    localized: list[tuple[dict, dict]] = []
+    for previous, current in candidates:
+        if (previous["id"], current["id"]) in issue_pairs:
+            localized.append((previous, current))
+            continue
+        boxes = issue_boxes.get(current["page"], ())
+        model_block = model_blocks.get(current["id"])
+        if not boxes or model_block is None:
+            continue
+        spans = [
+            span
+            for span in model_block.get("source_spans", ())
+            if span["page_index"] == current["page"]
+        ]
+        if any(
+            intersects(span["bbox"], issue_box)
+            for span in spans
+            for issue_box in boxes
+        ):
+            localized.append((previous, current))
+    return localized
 
 
 def _snippet(text: str, tail: bool) -> str:
@@ -264,11 +326,30 @@ def main() -> int:
     ap.add_argument("review_json", type=Path)
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--pages", help="只处理指定页（1-based，如 2-5 或 1,3,9）")
+    ap.add_argument("--issue-routing", type=Path, default=None)
+    ap.add_argument("--article-model", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true", help="只列候选对，不调模型")
     args = ap.parse_args()
 
     task = json.loads(args.task_json.read_text(encoding="utf-8"))
-    candidates = extract_candidates(task, pages=_parse_pages(args.pages))
+    if (args.issue_routing is None) != (args.article_model is None):
+        raise SystemExit("--issue-routing 与 --article-model 必须同时提供")
+    issue_routing = (
+        json.loads(args.issue_routing.read_text(encoding="utf-8"))
+        if args.issue_routing is not None
+        else None
+    )
+    article_model = (
+        json.loads(args.article_model.read_text(encoding="utf-8"))
+        if args.article_model is not None
+        else None
+    )
+    candidates = extract_candidates(
+        task,
+        pages=_parse_pages(args.pages),
+        issue_routing=issue_routing,
+        article_model=article_model,
+    )
     print(f"候选对: {len(candidates)}", file=sys.stderr)
 
     if args.dry_run:

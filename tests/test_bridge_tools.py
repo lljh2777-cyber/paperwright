@@ -9,18 +9,26 @@ import tempfile
 import unittest
 from unittest import mock
 
+from PIL import Image
+
+from paperwright.layout_review import configure_layout_review_task
+from paperwright.llm_cost import CostReport
 from paperwright.synthesize import canonical_synthesis_run_json
+from paperwright.issue_routing import IssueRoutingPlan, RoutedIssue
 from paperwright.text_review import (
     build_text_task,
     canonical_text_review_json,
     validate_text_review,
 )
-from tests import test_text_review
+from tests import test_routing, test_text_review
+from tests.test_layout_stage_a import _task as _layout_task
+from paperwright.visual_relations import build_visual_relation_task
 
 
 ROOT = Path(__file__).resolve().parents[1]
 L1_TOOL = runpy.run_path(str(ROOT / "tools" / "run_text_review.py"))
 L3_TOOL = runpy.run_path(str(ROOT / "tools" / "run_text_synthesize.py"))
+VISUAL_TOOL = runpy.run_path(str(ROOT / "tools" / "run_visual_review.py"))
 # runpy returns a shallow copy of the module namespace; patch through the
 # function's live globals so main() sees the replacement.
 L1_GLOBALS = L1_TOOL["main"].__globals__
@@ -116,6 +124,39 @@ class L1BridgeToolTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     L1_TOOL["build_review"](task, candidates, decisions)
 
+    def test_issue_routing_filters_join_candidates_by_source_bbox(self):
+        model, task = self._task()
+        issue = RoutedIssue(
+            issue_id="issue-p0001-001",
+            page_index=0,
+            kind="paragraph_continuation",
+            stage="text",
+            route="L1_TEXT_MODEL",
+            fallback_route="L3_PROGRAM_SYNTHESIS",
+            severity="suspicious",
+            reason="localized fixture pair",
+            signals=("pair_index:1",),
+            scope={
+                "type": "elements",
+                "bbox": {"x": 0.1, "y": 0.35, "width": 0.4, "height": 0.02},
+                "candidate_ids": [],
+                "element_ids": ["fixture-current"],
+                "related_page_indices": [],
+            },
+        )
+        plan = IssueRoutingPlan(
+            source_sha256=task["source_sha256"],
+            page_count=1,
+            issues=(issue,),
+        ).to_dict()
+        candidates = L1_TOOL["extract_candidates"](
+            task,
+            issue_routing=plan,
+            article_model=model,
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0][1]["id"], "blk_76c2f57797f095503423692c")
+
     def test_main_uses_model_flag_writes_canonical_and_refuses_overwrite(self):
         model, task = self._task()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -178,6 +219,112 @@ class L1BridgeToolTests(unittest.TestCase):
                 sys.argv = old_argv
                 L1_GLOBALS["_load_client"] = original_load_client
             self.assertEqual(called, [])
+
+
+class VisualBridgeIssueContextTests(unittest.TestCase):
+    def test_prompt_expands_only_local_issue_evidence(self):
+        task = test_routing._task(
+            0,
+            "a" * 64,
+            metadata={
+                "analysis_roi": {
+                    "bbox": {
+                        "x": 0.05,
+                        "y": 0.05,
+                        "width": 0.9,
+                        "height": 0.9,
+                    }
+                }
+            },
+        )
+        issue = {
+            "issue_id": "issue-p0001-001",
+            "kind": "caption_visual_binding",
+            "reason": "caption lacks a visual candidate",
+            "signals": ["vector_count:42"],
+            "scope": {
+                "type": "candidates",
+                "bbox": {"x": 0.1, "y": 0.7, "width": 0.8, "height": 0.1},
+                "candidate_ids": ["C001"],
+                "element_ids": ["e-caption"],
+                "related_page_indices": [],
+            },
+        }
+        prompt = VISUAL_TOOL["_prompt"](task, [issue])
+        self.assertIn("issue-p0001-001", prompt)
+        self.assertIn("caption_visual_binding", prompt)
+        self.assertIn("vector_count:42", prompt)
+        self.assertIn("still returning a complete valid page layout", prompt)
+
+    def test_relation_protocol_compiles_groups_instead_of_model_boxes(self):
+        raw_task = _layout_task()
+        relation_task = build_visual_relation_task(raw_task)
+        final_task = configure_layout_review_task(raw_task, "visual-direct")
+        response_value = {
+            "groups": [
+                {
+                    "group_id": "body",
+                    "candidate_ids": ["C01"],
+                    "content_class": "text",
+                    "role": "body",
+                    "order": 1,
+                    "parent_group_id": None,
+                    "confidence": 0.9,
+                },
+                {
+                    "group_id": "figure",
+                    "candidate_ids": ["C03"],
+                    "content_class": "visual",
+                    "role": "figure",
+                    "order": 2,
+                    "parent_group_id": None,
+                    "confidence": 0.9,
+                },
+                {
+                    "group_id": "caption",
+                    "candidate_ids": ["C02"],
+                    "content_class": "text",
+                    "role": "caption",
+                    "order": 3,
+                    "parent_group_id": "figure",
+                    "confidence": 0.8,
+                },
+            ],
+            "discarded_candidate_ids": [],
+            "warnings": [],
+        }
+        completion = mock.Mock()
+        completion.choices = [
+            mock.Mock(
+                message=mock.Mock(
+                    content=json.dumps(response_value, ensure_ascii=False)
+                )
+            )
+        ]
+        completion.usage = None
+        client = mock.Mock()
+        client.chat.completions.create.return_value = completion
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "overlay.png"
+            Image.new("RGB", (40, 40), "white").save(image_path)
+            layout, review = VISUAL_TOOL["_generate_relation_layout"](
+                client,
+                relation_task,
+                final_task,
+                image_path,
+                "fixture-model",
+                CostReport(),
+            )
+        prompt = client.chat.completions.create.call_args.kwargs["messages"][0][
+            "content"
+        ][0]["text"]
+        self.assertIn("Do NOT draw or modify any bbox", prompt)
+        self.assertNotIn('"bbox"', json.dumps(response_value))
+        self.assertEqual(review["groups"][1]["candidate_ids"], ["C03"])
+        caption = next(
+            item for item in layout["regions"] if item["role"] == "caption"
+        )
+        self.assertEqual(caption["parent_region_id"], "r-figure")
 
 
 class L3BridgeToolTests(unittest.TestCase):

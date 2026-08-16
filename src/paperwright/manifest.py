@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .completeness import validate_completeness_manifest_record
 from .exceptions import ContractValidationError
 
 MANIFEST_VERSION = "paperwright-manifest-v0.4"
@@ -70,6 +71,7 @@ def build_manifest(
     text_review: dict[str, Any] | None = None,
     tables: list[dict[str, Any]] | None = None,
     equations: list[dict[str, Any]] | None = None,
+    completeness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "manifest_version": manifest_version,
@@ -107,6 +109,8 @@ def build_manifest(
         manifest["tables"] = tables
     if equations is not None:
         manifest["equations"] = equations
+    if completeness is not None:
+        manifest["completeness"] = completeness
     validate_manifest(manifest)
     return manifest
 
@@ -137,6 +141,7 @@ def validate_manifest(value: dict[str, Any]) -> None:
         "synthesis_run",
         "tables",
         "equations",
+        "completeness",
     }
     if not required.issubset(value) or set(value) - required - optional:
         raise ContractValidationError("manifest 顶层字段不完整或包含未知字段")
@@ -499,6 +504,14 @@ def validate_manifest(value: dict[str, Any]) -> None:
             raise ContractValidationError(
                 "manifest reader 与 outputs 清单不一致"
             )
+    if "completeness" in value:
+        completeness = value["completeness"]
+        if not isinstance(completeness, dict):
+            raise ContractValidationError("manifest completeness 必须是 object")
+        validate_completeness_manifest_record(
+            completeness,
+            outputs=value["outputs"],
+        )
     if "article_model" in value:
         by_path = {item["path"]: item for item in value["outputs"]}
         article_model = value["article_model"]

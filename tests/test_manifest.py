@@ -33,6 +33,12 @@ class ManifestTests(unittest.TestCase):
         root = Path(__file__).parents[1] / "src/paperwright/schemas"
         for name in (
             "manifest.schema.json",
+            "completeness.schema.json",
+            "cross_page_caption_review.schema.json",
+            "cross_page_caption_task.schema.json",
+            "hybrid_run.schema.json",
+            "issue_routing.schema.json",
+            "visual_relation_review.schema.json",
             "physical_document.schema.json",
             "article_model.schema.json",
             "reader.schema.json",

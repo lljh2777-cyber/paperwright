@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -28,6 +29,14 @@ from .content_render import (
     ContentRegionAnalysis,
     analyze_content_regions,
     to_region_render_request,
+)
+from .completeness import (
+    COMPLETENESS_REPORT_PATH,
+    build_completeness_report,
+    canonical_completeness_json,
+    completeness_manifest_record,
+    full_page_render_request,
+    page_requires_visual_fallback,
 )
 from .region_render import plan_region_renders
 from .text_reconstruction import (
@@ -740,6 +749,37 @@ def write_outputs(
             }
         )
 
+    projected_text_counts: Counter[int] = Counter()
+    if any(
+        item.kind == "text"
+        and bool((item.text or "").strip())
+        and not item.metadata.get("markdown_excluded_reason")
+        for item in document.pages[0].elements
+    ):
+        projected_text_counts[0] = 1
+    projected_visual_counts: Counter[int] = Counter(
+        item["page"] - 1
+        for item in (*figure_records, *table_records, *equation_records)
+    )
+    fallback_pages: set[int] = set()
+    unresolved_pages: dict[int, str] = {}
+    bound_caption_ids = {
+        record["caption"]["caption_id"]
+        for record in figure_records
+        if record["caption"]["status"] == "matched"
+        and record["caption"]["caption_id"] is not None
+    }
+    bound_caption_ids.update(
+        record["caption"]["caption_id"]
+        for record in table_records
+        if record["caption"] is not None
+    )
+    orphan_caption_counts: Counter[int] = Counter(
+        caption.page_index
+        for caption in analysis.caption_candidates
+        if caption.caption_id not in bound_caption_ids
+    )
+
     lines = [f"# {title}", ""]
     emitted_figures: set[str] = set()
     matched_by_caption_element: dict[str, str] = {}
@@ -795,6 +835,77 @@ def write_outputs(
     for page in document.pages:
         page_marker_indexes[page.page_index] = len(lines)
         lines.extend([f"<!-- page: {page.page_index + 1} -->", ""])
+        if page_requires_visual_fallback(
+            page,
+            projected_text_count=projected_text_counts[page.page_index],
+            projected_visual_count=projected_visual_counts[page.page_index],
+        ):
+            if source is None or region_renderer is None:
+                unresolved_pages[page.page_index] = (
+                    "native_text_missing_renderer_unavailable"
+                )
+                lines.extend(
+                    [
+                        "> [!WARNING] 本页没有可用文字层，且整页视觉兜底不可用。",
+                        "",
+                    ]
+                )
+            else:
+                try:
+                    rendered = region_renderer.render_region(
+                        source,
+                        full_page_render_request(page),
+                        expected_source_sha256=document.source_sha256,
+                    )
+                except Exception as exc:
+                    unresolved_pages[page.page_index] = (
+                        "native_text_missing_full_page_render_failed:"
+                        f"{_region_render_failure_reason(exc)}"
+                    )
+                    lines.extend(
+                        [
+                            "> [!WARNING] 本页没有可用文字层，整页视觉兜底失败；需要人工复核。",
+                            "",
+                        ]
+                    )
+                else:
+                    filename = f"page-{page.page_index + 1:03d}-fallback.png"
+                    relative = f"images/{filename}"
+                    fallback_path = root / relative
+                    fallback_path.write_bytes(rendered.data)
+                    fallback_pages.add(page.page_index)
+                    projected_visual_counts[page.page_index] += 1
+                    image_records.append(
+                        {
+                            "element_id": (
+                                f"fallback:page-{page.page_index + 1:04d}"
+                            ),
+                            "kind": "page_fallback",
+                            "path": relative,
+                            "page": page.page_index + 1,
+                            "bbox": rendered.bbox.to_dict(),
+                            "placement": "full-page-completeness-fallback",
+                            "markdown_referenced": True,
+                            "width_px": rendered.width_px,
+                            "height_px": rendered.height_px,
+                            "size_bytes": len(rendered.data),
+                            "sha256": rendered.sha256,
+                            "renderer_version": rendered.renderer_version,
+                            "source_pdf_sha256": rendered.source_sha256,
+                            "fallback_reason": (
+                                "native_text_missing_full_page_fallback"
+                            ),
+                        }
+                    )
+                    lines.extend(
+                        [
+                            "<!-- completeness-fallback: full-page; "
+                            f"page: {page.page_index + 1}; ocr: false -->",
+                            f"![Full page fallback from page "
+                            f"{page.page_index + 1}]({relative})",
+                            "",
+                        ]
+                    )
         page_degraded = _table_degradation(page.elements)
         if page_degraded:
             warning = {
@@ -847,6 +958,7 @@ def write_outputs(
             ):
                 continue
             if text:
+                projected_text_counts[page.page_index] += 1
                 markdown_text = _format_markdown_paragraph(
                     text,
                     element_ids,
@@ -926,7 +1038,23 @@ def write_outputs(
     article_path = root / "article.md"
     article_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
-    output_paths = [article_path, physical_path]
+    completeness_report = build_completeness_report(
+        document,
+        projected_text_counts=projected_text_counts,
+        projected_visual_counts=projected_visual_counts,
+        fallback_pages=tuple(sorted(fallback_pages)),
+        unresolved_pages=unresolved_pages,
+        orphan_caption_counts=orphan_caption_counts,
+    )
+    completeness_path = root / COMPLETENESS_REPORT_PATH
+    completeness_path.parent.mkdir(parents=True, exist_ok=True)
+    completeness_path.write_text(
+        canonical_completeness_json(completeness_report),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    output_paths = [article_path, physical_path, completeness_path]
     output_paths.extend(root / item["path"] for item in image_records)
     output_paths.extend(figure_asset_paths)
     output_paths.extend(content_asset_paths)
@@ -937,6 +1065,8 @@ def write_outputs(
             (
                 "markdown"
                 if path == article_path
+                else "completeness_report"
+                if path == completeness_path
                 else "physical_document"
                 if path == physical_path
                 else "image"
@@ -960,6 +1090,24 @@ def write_outputs(
     ]
     warnings = list(backend_warnings)
     warnings.extend(degraded)
+    for page_index in sorted(fallback_pages):
+        warnings.append(
+            {
+                "code": "full_page_completeness_fallback_rendered",
+                "page": page_index + 1,
+                "status": "warning",
+                "reason": "native text was unavailable; the source page was preserved as a deterministic image without OCR",
+            }
+        )
+    if completeness_report["status"] != "pass":
+        warnings.append(
+            {
+                "code": "quality_page_completeness_incomplete",
+                "check": "page_completeness",
+                "status": completeness_report["status"],
+                "count": len(completeness_report["findings"]),
+            }
+        )
     control_count = sum(
         _clean_text(element.text or "")[1]
         for page in document.pages
@@ -1013,7 +1161,13 @@ def write_outputs(
         backend_version=document.backend_version,
         contract_version=document.contract_version,
         page_count=len(document.pages),
-        status="success_with_degradation" if warnings else "success",
+        status=(
+            "failed"
+            if completeness_report["status"] == "fail"
+            else "success_with_degradation"
+            if warnings
+            else "success"
+        ),
         outputs=outputs,
         warnings=warnings,
         elements=element_records,
@@ -1023,6 +1177,10 @@ def write_outputs(
         degraded=degraded,
         tables=table_records or None,
         equations=equation_records or None,
+        completeness=completeness_manifest_record(
+            completeness_report,
+            report_sha256=sha256_file(completeness_path),
+        ),
         physical_document={
             "path": "physical_document.json",
             "sha256": hashlib.sha256(

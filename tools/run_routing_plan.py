@@ -34,6 +34,12 @@ import sys
 from paperwright.auto_layout import build_l0_final_layout
 from paperwright.layout_models import LayoutTask, FinalLayout
 from paperwright.layout_review import validate_layout_review
+from paperwright.issue_routing import (
+    ISSUE_ROUTING_CONTRACT_VERSION,
+    refine_issue_routing,
+    refine_issue_routing_with_text_task,
+    validate_issue_routing,
+)
 from paperwright.routing import (
     ROUTING_CONTRACT_VERSION,
     ROUTE_HUMAN_REVIEW,
@@ -108,6 +114,35 @@ def _page_group(routing: dict, route: str) -> list[int]:
     )
 
 
+def _read_issue_routing(review_dir: Path) -> dict | None:
+    path = review_dir / "issue-routing.json"
+    if not path.is_file():
+        return None
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if value.get("contract_version") != ISSUE_ROUTING_CONTRACT_VERSION:
+        raise SystemExit("issue-routing.json 契约版本不支持")
+    try:
+        validate_issue_routing(value)
+    except Exception as exc:
+        raise SystemExit(f"issue-routing.json 校验失败: {exc}") from exc
+    return value
+
+
+def _issue_page_group(plan: dict, route: str) -> list[int]:
+    pages: set[int] = set()
+    for issue in plan["issues"]:
+        if issue["status"] != "open" or issue["route"] != route:
+            continue
+        pages.add(issue["page_index"] + 1)
+        pages.update(
+            page_index + 1
+            for page_index in issue["scope"].get(
+                "related_page_indices", ()
+            )
+        )
+    return sorted(pages)
+
+
 def _usage_tokens(report_path: Path) -> int:
     if not report_path.is_file():
         return 0
@@ -176,12 +211,29 @@ def main() -> int:
     args = ap.parse_args()
 
     review_dir = args.review_dir.expanduser().resolve()
-    routing = _read_routing(review_dir)
-    l0_pages = _page_group(routing, ROUTE_L0_RULE)
-    l1_pages = _page_group(routing, ROUTE_L1_TEXT_MODEL)
-    l2_pages = _page_group(routing, ROUTE_L2_VISUAL_MODEL)
-    l3_pages = _page_group(routing, ROUTE_L3_PROGRAM_SYNTHESIS)
-    human_pages = _page_group(routing, ROUTE_HUMAN_REVIEW)
+    issue_routing = _read_issue_routing(review_dir)
+    if issue_routing is not None:
+        all_pages = set(range(1, issue_routing["page_count"] + 1))
+        l1_pages = _issue_page_group(issue_routing, ROUTE_L1_TEXT_MODEL)
+        l2_pages = _issue_page_group(issue_routing, ROUTE_L2_VISUAL_MODEL)
+        l3_pages = _issue_page_group(
+            issue_routing,
+            ROUTE_L3_PROGRAM_SYNTHESIS,
+        )
+        human_pages = _issue_page_group(issue_routing, ROUTE_HUMAN_REVIEW)
+        l0_pages = sorted(all_pages - set(l2_pages) - set(human_pages))
+        _log(
+            "使用 issue-routing.json："
+            f"{issue_routing['summary']['issue_count']} 个局部 issue，"
+            "页面仅作为现有桥的兼容执行适配器"
+        )
+    else:
+        routing = _read_routing(review_dir)
+        l0_pages = _page_group(routing, ROUTE_L0_RULE)
+        l1_pages = _page_group(routing, ROUTE_L1_TEXT_MODEL)
+        l2_pages = _page_group(routing, ROUTE_L2_VISUAL_MODEL)
+        l3_pages = _page_group(routing, ROUTE_L3_PROGRAM_SYNTHESIS)
+        human_pages = _page_group(routing, ROUTE_HUMAN_REVIEW)
 
     _log(
         "路由计划: "
@@ -192,7 +244,7 @@ def main() -> int:
         raise SystemExit(
             f"HUMAN_REVIEW 页面需要人工完成 final-layout，停止执行: {human_pages}"
         )
-    if l3_pages:
+    if l3_pages and issue_routing is None:
         _log("L3 页面在布局阶段先走 L2；文本阶段再考虑 L3。")
         l2_pages = sorted(set(l2_pages) | set(l3_pages))
 
@@ -203,7 +255,7 @@ def main() -> int:
         print("l1-pages", ",".join(str(p) for p in l1_pages))
         return 0
 
-    _fill_l0_pages(review_dir, l0_pages + l1_pages)
+    _fill_l0_pages(review_dir, sorted(set(l0_pages) | set(l1_pages)))
     if l2_pages:
         pages_arg = ",".join(str(page) for page in l2_pages)
         _run(
@@ -212,6 +264,16 @@ def main() -> int:
                 str(review_dir),
                 "--pages",
                 pages_arg,
+                "--protocol",
+                "auto",
+                *(
+                    [
+                        "--issue-routing",
+                        str(review_dir / "issue-routing.json"),
+                    ]
+                    if issue_routing is not None
+                    else []
+                ),
             ),
             label=f"视觉桥 pages={pages_arg}",
         )
@@ -235,6 +297,14 @@ def main() -> int:
         validate_layout_review(layout, task)
     _log("全部 final-layout.json 校验通过")
 
+    _run(
+        _cmd_python(
+            str(ROOT / "tools" / "run_cross_page_caption_review.py"),
+            str(review_dir),
+        ),
+        label="跨页 Figure/Table caption 关系复核",
+    )
+
     layout_apply_argv = _cmd_python(
         "-m",
         "paperwright",
@@ -253,29 +323,116 @@ def main() -> int:
         )
     _run(layout_apply_argv, label="layout-apply")
 
+    article_model = args.output_dir / "_paperwright" / "article-model.json"
+    task_path = args.text_task or (args.output_dir / "text-task.json")
+    text_task_prepared = False
+    execution_issue_plan = issue_routing
+    resolution_path: Path | None = None
+
+    # Paragraph boundaries only become trustworthy after layout projection.
+    # Discover exact validator-eligible pairs from ArticleModel/TextTask rather
+    # than guessing from raw PDF fragments during layout-prepare.
+    if issue_routing is not None and article_model.is_file():
+        _run(
+            _cmd_python(
+                "-m",
+                "paperwright",
+                "text-prepare",
+                str(article_model),
+                str(task_path),
+            ),
+            label="text-prepare (局部 issue 发现)",
+        )
+        text_task_prepared = True
+        model_value = json.loads(article_model.read_text(encoding="utf-8"))
+        task_value = json.loads(task_path.read_text(encoding="utf-8"))
+        execution_issue_plan = refine_issue_routing_with_text_task(
+            issue_routing,
+            task_value,
+            model_value,
+        ).to_dict()
+
+    # Feed completeness findings into the same separate resolution plan. The
+    # published output package remains immutable.
+    if issue_routing is not None:
+        completeness_path = (
+            args.output_dir / "_paperwright" / "completeness-report.json"
+        )
+        if completeness_path.is_file():
+            completeness = json.loads(
+                completeness_path.read_text(encoding="utf-8")
+            )
+            execution_issue_plan = refine_issue_routing(
+                execution_issue_plan or issue_routing,
+                completeness,
+            ).to_dict()
+
+        original_ids = {
+            item["issue_id"] for item in issue_routing["issues"]
+        }
+        added = [
+            item
+            for item in (execution_issue_plan or issue_routing)["issues"]
+            if item["issue_id"] not in original_ids
+        ]
+        if added:
+            resolution_path = args.output_dir.parent / (
+                f"{args.output_dir.name}.resolve-issues.json"
+            )
+            if resolution_path.exists():
+                raise SystemExit(
+                    f"局部 resolution plan 已存在，拒绝覆盖: {resolution_path}"
+                )
+            resolution_path.write_text(
+                json.dumps(
+                    execution_issue_plan,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            by_route: dict[str, int] = {}
+            for item in added:
+                by_route[item["route"]] = by_route.get(item["route"], 0) + 1
+            _log(
+                f"投影后发现 {len(added)} 个局部 issue "
+                f"({by_route}): {resolution_path}"
+            )
+
+        l1_pages = _issue_page_group(
+            execution_issue_plan or issue_routing,
+            ROUTE_L1_TEXT_MODEL,
+        )
+        l3_pages = _issue_page_group(
+            execution_issue_plan or issue_routing,
+            ROUTE_L3_PROGRAM_SYNTHESIS,
+        )
+
     # Text stage
     text_pages = sorted(set(l1_pages) | set(l3_pages))
     if not text_pages:
         _log("无 L1/L3 页面，跳过文本模型阶段")
         return 0
 
-    article_model = (
-        args.output_dir / "_paperwright" / "article-model.json"
-    )
-    task_path = args.text_task or (args.output_dir / "text-task.json")
+    if not article_model.is_file():
+        raise SystemExit("文本 issue 已存在，但输出缺少 article-model.json")
     reviewed_output = args.reviewed_output or (
         args.output_dir.parent / f"{args.output_dir.name}-text-reviewed"
     )
-    _run(
-        _cmd_python(
-            "-m",
-            "paperwright",
-            "text-prepare",
-            str(article_model),
-            str(task_path),
-        ),
-        label="text-prepare",
-    )
+    if not text_task_prepared:
+        _run(
+            _cmd_python(
+                "-m",
+                "paperwright",
+                "text-prepare",
+                str(article_model),
+                str(task_path),
+            ),
+            label="text-prepare",
+        )
 
     used_l1 = False
     if l1_pages:
@@ -287,6 +444,19 @@ def main() -> int:
                 str(review_path),
                 "--pages",
                 ",".join(str(page) for page in l1_pages),
+                *(
+                    [
+                        "--issue-routing",
+                        str(
+                            resolution_path
+                            or review_dir / "issue-routing.json"
+                        ),
+                        "--article-model",
+                        str(article_model),
+                    ]
+                    if issue_routing is not None
+                    else []
+                ),
             ),
             label=f"L1 文本桥 pages={','.join(str(p) for p in l1_pages)}",
         )

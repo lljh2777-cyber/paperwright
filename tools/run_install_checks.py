@@ -105,17 +105,35 @@ def audit_wheel(path: Path) -> dict[str, object]:
         required = {
             "paperwright/schemas/article_model.schema.json",
             "paperwright/schemas/batch_summary.schema.json",
+            "paperwright/schemas/completeness.schema.json",
+            "paperwright/schemas/cross_page_caption_review.schema.json",
+            "paperwright/schemas/cross_page_caption_task.schema.json",
             "paperwright/schemas/final_layout.schema.json",
+            "paperwright/schemas/hybrid_run.schema.json",
+            "paperwright/schemas/issue_routing.schema.json",
             "paperwright/schemas/layout_task.schema.json",
             "paperwright/schemas/manifest.schema.json",
             "paperwright/schemas/physical_document.schema.json",
             "paperwright/schemas/reader.schema.json",
             "paperwright/schemas/text_review.schema.json",
             "paperwright/schemas/text_task.schema.json",
+            "paperwright/schemas/visual_relation_review.schema.json",
             "paperwright/schemas/synthesis_run.schema.json",
         }
         if not required.issubset(names):
             raise RuntimeError("wheel is missing package schemas")
+        required_tools = {
+            "share/paperwright/tools/run_cross_page_caption_review.py",
+            "share/paperwright/tools/run_routing_plan.py",
+            "share/paperwright/tools/run_text_review.py",
+            "share/paperwright/tools/run_text_synthesize.py",
+            "share/paperwright/tools/run_visual_review.py",
+        }
+        if any(
+            not any(name.endswith(relative) for name in names)
+            for relative in required_tools
+        ):
+            raise RuntimeError("wheel is missing Hybrid resolver tools")
         total_uncompressed = sum(item.file_size for item in archive.infolist())
     return {
         "member_count": len(names),

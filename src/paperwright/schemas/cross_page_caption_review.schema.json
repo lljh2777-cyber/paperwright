@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/cross_page_caption_review.schema.json",
+  "title": "PaperWright Cross-page Caption Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "source_sha256", "task_sha256", "reviewer", "prompt_version", "bindings", "rejected_caption_refs", "warnings"],
+  "properties": {
+    "contract_version": {"const": "paperwright-cross-page-caption-review-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "prompt_version": {"const": "paperwright-cross-page-caption-prompt-v0.1"},
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["caption_ref", "visual_ref", "confidence"],
+        "properties": {
+          "caption_ref": {"type": "string", "minLength": 1},
+          "visual_ref": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "rejected_caption_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}

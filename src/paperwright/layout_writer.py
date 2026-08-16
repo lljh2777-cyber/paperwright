@@ -19,6 +19,23 @@ from .article_model import (
     validate_article_model,
 )
 from .backends.base import ExtractedAsset
+from .completeness import (
+    COMPLETENESS_REPORT_PATH,
+    build_completeness_report,
+    canonical_completeness_json,
+    completeness_manifest_record,
+    full_page_render_request,
+    page_requires_visual_fallback,
+)
+from .cross_page_caption import (
+    CROSS_PAGE_CAPTION_REVIEW_FILENAME,
+    CROSS_PAGE_CAPTION_TASK_FILENAME,
+    CROSS_PAGE_CAPTION_USAGE_FILENAME,
+    build_cross_page_caption_task,
+    compile_cross_page_caption_review,
+    native_caption_text,
+    validate_cross_page_caption_review,
+)
 from .evidence import (
     build_run_record,
     build_source_record,
@@ -28,6 +45,7 @@ from .evidence import (
     write_json,
 )
 from .exceptions import ContractValidationError
+from .issue_routing import validate_issue_routing
 from .layout_caption import CaptionBinding, bind_caption_regions
 from .layout_continuation import (
     CrossPageParagraphBlock,
@@ -58,6 +76,12 @@ from .quality import (
     analyze_semantic_layout,
     analyze_title,
     analyze_word_spacing,
+)
+from .visual_relations import (
+    VISUAL_RELATION_OVERLAY_FILENAME,
+    VISUAL_RELATION_REVIEW_FILENAME,
+    VISUAL_RELATION_TASK_FILENAME,
+    validate_visual_relation_review,
 )
 from .references import (
     ReferenceParagraph,
@@ -658,6 +682,9 @@ def _ordered_text_elements(
 def _bind_caption_regions(
     document: PhysicalDocument,
     layouts: Sequence[FinalLayout],
+    *,
+    reviewed_bindings: Sequence[CaptionBinding] = (),
+    rejected_caption_keys: frozenset[tuple[int, str]] = frozenset(),
 ) -> tuple[
     dict[tuple[int, str], CaptionBinding],
     dict[tuple[int, str], CaptionBinding],
@@ -666,13 +693,19 @@ def _bind_caption_regions(
     return bind_caption_regions(
         document,
         layouts,
-        caption_text=lambda page, region: " ".join(
-            text
-            for _, text in _markdown_text_groups(
-                _ordered_text_elements(page, region)
-            )
-            if text
-        ),
+        caption_text=_caption_region_text,
+        reviewed_bindings=reviewed_bindings,
+        rejected_caption_keys=rejected_caption_keys,
+    )
+
+
+def _caption_region_text(page: Page, region: LayoutRegion) -> str:
+    return " ".join(
+        text
+        for _, text in _markdown_text_groups(
+            _ordered_text_elements(page, region)
+        )
+        if text
     )
 
 
@@ -756,8 +789,51 @@ def write_layout_outputs(
         )
     )
     _validate_materialized_semantics(document, materialized_layouts)
+    reviewed_cross_page_bindings: tuple[CaptionBinding, ...] = ()
+    rejected_cross_page_captions: frozenset[tuple[int, str]] = frozenset()
+    cross_page_task_source: Path | None = None
+    cross_page_review_source: Path | None = None
+    if review_root is not None:
+        cross_page_task_source = review_root / CROSS_PAGE_CAPTION_TASK_FILENAME
+        cross_page_review_source = review_root / CROSS_PAGE_CAPTION_REVIEW_FILENAME
+        if cross_page_task_source.is_file() != cross_page_review_source.is_file():
+            raise ContractValidationError(
+                "cross-page caption task/review 必须成对存在"
+            )
+        if cross_page_task_source.is_file():
+            recorded_cross_page_task = json.loads(
+                cross_page_task_source.read_text(encoding="utf-8")
+            )
+            expected_cross_page_task = build_cross_page_caption_task(
+                document,
+                materialized_layouts,
+                caption_text=native_caption_text,
+            )
+            if recorded_cross_page_task != expected_cross_page_task:
+                raise ContractValidationError(
+                    "cross-page caption task 与最终布局不一致"
+                )
+            cross_page_review = json.loads(
+                cross_page_review_source.read_text(encoding="utf-8")
+            )
+            validate_cross_page_caption_review(
+                cross_page_review,
+                recorded_cross_page_task,
+            )
+            (
+                reviewed_cross_page_bindings,
+                rejected_cross_page_captions,
+            ) = compile_cross_page_caption_review(
+                cross_page_review,
+                task=recorded_cross_page_task,
+            )
     caption_by_region, caption_by_visual, caption_binding_quality = (
-        _bind_caption_regions(document, materialized_layouts)
+        _bind_caption_regions(
+            document,
+            materialized_layouts,
+            reviewed_bindings=reviewed_cross_page_bindings,
+            rejected_caption_keys=rejected_cross_page_captions,
+        )
     )
     caption_text_by_visual: dict[tuple[int, str], str] = {}
     for binding in caption_by_visual.values():
@@ -836,6 +912,52 @@ def write_layout_outputs(
     image_records: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = list(backend_warnings)
     layout_output_paths: list[Path] = []
+    issue_routing_path: Path | None = None
+    if evidence_level in {"standard", "full"}:
+        assert review_root is not None
+        if (
+            cross_page_task_source is not None
+            and cross_page_review_source is not None
+            and cross_page_task_source.is_file()
+        ):
+            layout_dir.mkdir(parents=True, exist_ok=True)
+            cross_page_task_path = (
+                layout_dir / CROSS_PAGE_CAPTION_TASK_FILENAME
+            )
+            cross_page_review_path = (
+                layout_dir / CROSS_PAGE_CAPTION_REVIEW_FILENAME
+            )
+            shutil.copyfile(cross_page_task_source, cross_page_task_path)
+            shutil.copyfile(cross_page_review_source, cross_page_review_path)
+            layout_output_paths.extend(
+                (cross_page_task_path, cross_page_review_path)
+            )
+            cross_page_usage_source = (
+                review_root / CROSS_PAGE_CAPTION_USAGE_FILENAME
+            )
+            if cross_page_usage_source.is_file():
+                cross_page_usage_path = (
+                    layout_dir / CROSS_PAGE_CAPTION_USAGE_FILENAME
+                )
+                shutil.copyfile(
+                    cross_page_usage_source,
+                    cross_page_usage_path,
+                )
+                layout_output_paths.append(cross_page_usage_path)
+        source_issue_routing = review_root / "issue-routing.json"
+        if source_issue_routing.is_file():
+            issue_value = json.loads(
+                source_issue_routing.read_text(encoding="utf-8")
+            )
+            validate_issue_routing(issue_value)
+            if issue_value["source_sha256"] != document.source_sha256:
+                raise ContractValidationError(
+                    "issue routing 与 PhysicalDocument source hash 不一致"
+                )
+            layout_dir.mkdir(parents=True, exist_ok=True)
+            issue_routing_path = layout_dir / "issue-routing.json"
+            shutil.copyfile(source_issue_routing, issue_routing_path)
+            layout_output_paths.append(issue_routing_path)
     visual_paths: list[Path] = []
     provenance_pages: list[dict[str, Any]] = []
     quality_paragraphs: list[dict[str, Any]] = []
@@ -845,6 +967,29 @@ def write_layout_outputs(
     page_marker_indexes: dict[int, int] = {}
     visual_index = 0
     equation_index = 0
+    projected_text_counts: Counter[int] = Counter()
+    if any(
+        item.kind == "text"
+        and bool((item.text or "").strip())
+        and not item.metadata.get("markdown_excluded_reason")
+        for item in document.pages[0].elements
+    ):
+        projected_text_counts[0] = 1
+    projected_visual_counts: Counter[int] = Counter()
+    fallback_pages: set[int] = set()
+    unresolved_pages: dict[int, str] = {}
+    orphan_caption_counts: Counter[int] = Counter(
+        page.page_index
+        for page, materialized in zip(
+            document.pages,
+            materialized_layouts,
+            strict=True,
+        )
+        for region in materialized.regions
+        if region.content_class == "text"
+        and region.role == "caption"
+        and (page.page_index, region.region_id) not in caption_by_region
+    )
 
     for page, task, review, materialized in zip(
         document.pages,
@@ -874,6 +1019,64 @@ def write_layout_outputs(
             )
             shutil.copyfile(source_page_root / "overlay.png", overlay_path)
             layout_output_paths.append(overlay_path)
+            relation_review_source = (
+                source_page_root / VISUAL_RELATION_REVIEW_FILENAME
+            )
+            if relation_review_source.is_file():
+                relation_task_source = (
+                    source_page_root / VISUAL_RELATION_TASK_FILENAME
+                )
+                if not relation_task_source.is_file():
+                    raise ContractValidationError(
+                        "visual relation review 缺少绑定 task"
+                    )
+                relation_task = LayoutTask.from_dict(
+                    json.loads(
+                        relation_task_source.read_text(encoding="utf-8")
+                    )
+                )
+                if (
+                    relation_task.source_sha256 != document.source_sha256
+                    or relation_task.page.page_index != page.page_index
+                ):
+                    raise ContractValidationError(
+                        "visual relation task 与当前页面身份不一致"
+                    )
+                relation_review = json.loads(
+                    relation_review_source.read_text(encoding="utf-8")
+                )
+                validate_visual_relation_review(
+                    relation_review,
+                    relation_task,
+                )
+                relation_review_path = layout_dir / (
+                    f"page-{page.page_index + 1:04d}-"
+                    "visual-relation-review.json"
+                )
+                shutil.copyfile(
+                    relation_review_source,
+                    relation_review_path,
+                )
+                relation_overlay_path = layout_dir / (
+                    f"page-{page.page_index + 1:04d}-candidate-overlay.png"
+                )
+                shutil.copyfile(
+                    source_page_root / VISUAL_RELATION_OVERLAY_FILENAME,
+                    relation_overlay_path,
+                )
+                layout_output_paths.extend(
+                    (relation_review_path, relation_overlay_path)
+                )
+                if evidence_level == "full":
+                    relation_task_path = layout_dir / (
+                        f"page-{page.page_index + 1:04d}-"
+                        "visual-relation-task.json"
+                    )
+                    shutil.copyfile(
+                        relation_task_source,
+                        relation_task_path,
+                    )
+                    layout_output_paths.append(relation_task_path)
             if evidence_level == "full":
                 task_path = (
                     layout_dir
@@ -939,6 +1142,7 @@ def write_layout_outputs(
                     ),
                 }
                 image_records.append(image_record)
+                projected_visual_counts[page.page_index] += 1
                 image_alt = _image_alt_text(
                     region.role,
                     page.page_index + 1,
@@ -1021,6 +1225,9 @@ def write_layout_outputs(
                 text = paragraph.text
                 if not text:
                     continue
+                # Paragraphs routed to a separate references file or omitted
+                # by policy are still explicitly handled and traceable.
+                projected_text_counts[page.page_index] += 1
                 paragraph_key = (
                     page.page_index,
                     region.region_id,
@@ -1145,6 +1352,7 @@ def write_layout_outputs(
                                 "ocr_used": False,
                             }
                             image_records.append(image_record)
+                            projected_visual_counts[page.page_index] += 1
                             equation_record["asset"] = image_record
                             target_lines.extend(
                                 [
@@ -1306,6 +1514,105 @@ def write_layout_outputs(
                 }
             )
 
+        if page_requires_visual_fallback(
+            page,
+            projected_text_count=projected_text_counts[page.page_index],
+            projected_visual_count=projected_visual_counts[page.page_index],
+        ):
+            fallback_region_id = f"page-fallback-p{page.page_index + 1:04d}"
+            try:
+                rendered = region_renderer.render_region(
+                    source,
+                    full_page_render_request(page, scale=visual_scale),
+                    expected_source_sha256=document.source_sha256,
+                )
+            except Exception as exc:  # renderer failure becomes review work
+                unresolved_pages[page.page_index] = (
+                    "native_text_missing_full_page_render_failed:"
+                    f"{type(exc).__name__}"
+                )
+                warnings.append(
+                    {
+                        "code": "full_page_completeness_fallback_failed",
+                        "page": page.page_index + 1,
+                        "reason": type(exc).__name__,
+                    }
+                )
+            else:
+                filename = f"page-{page.page_index + 1:04d}-fallback.png"
+                image_path = images_dir / filename
+                image_path.write_bytes(rendered.data)
+                visual_paths.append(image_path)
+                relative = f"images/{filename}"
+                source_element_ids = tuple(
+                    item.element_id
+                    for item in page.elements
+                    if item.kind in {"image", "vector"}
+                )
+                image_record = {
+                    "region_id": fallback_region_id,
+                    "role": "figure",
+                    "kind": "page_fallback",
+                    "page": page.page_index + 1,
+                    "path": relative,
+                    "bbox": rendered.bbox.to_dict(),
+                    "width_px": rendered.width_px,
+                    "height_px": rendered.height_px,
+                    "size_bytes": len(rendered.data),
+                    "sha256": rendered.sha256,
+                    "renderer_version": rendered.renderer_version,
+                    "source_pdf_sha256": rendered.source_sha256,
+                    "ocr_used": False,
+                    "fallback_reason": (
+                        "native_text_missing_full_page_fallback"
+                    ),
+                    "caption_binding": None,
+                }
+                image_records.append(image_record)
+                projected_visual_counts[page.page_index] += 1
+                fallback_pages.add(page.page_index)
+                lines.extend(
+                    [
+                        _region_trace_comment(
+                            region_id=fallback_region_id,
+                            role="figure",
+                            page_number=page.page_index + 1,
+                            element_ids=source_element_ids,
+                        ),
+                        f"![Full page fallback from page "
+                        f"{page.page_index + 1}]({relative})",
+                        "",
+                    ]
+                )
+                page_regions.append(
+                    {
+                        "region_id": fallback_region_id,
+                        "role": "figure",
+                        "content_class": "visual",
+                        "bbox": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "width": 1.0,
+                            "height": 1.0,
+                        },
+                        "source_element_ids": list(source_element_ids),
+                        "execution": "render_full_page_fallback",
+                        "asset": image_record,
+                        "caption_binding": None,
+                    }
+                )
+                warnings.append(
+                    {
+                        "code": "full_page_completeness_fallback_rendered",
+                        "page": page.page_index + 1,
+                        "status": "warning",
+                        "reason": (
+                            "native text was unavailable; the source page "
+                            "was preserved as a deterministic image without OCR"
+                        ),
+                    }
+                )
+
         provenance_pages.append(
             {
                 "page_index": page.page_index,
@@ -1315,6 +1622,31 @@ def write_layout_outputs(
                 "prompt_version": materialized.prompt_version,
                 "regions": page_regions,
             }
+        )
+
+    completeness_report = build_completeness_report(
+        document,
+        projected_text_counts=projected_text_counts,
+        projected_visual_counts=projected_visual_counts,
+        fallback_pages=tuple(sorted(fallback_pages)),
+        unresolved_pages=unresolved_pages,
+        orphan_caption_counts=orphan_caption_counts,
+    )
+    completeness_path = root / COMPLETENESS_REPORT_PATH
+    completeness_path.write_text(
+        canonical_completeness_json(completeness_report),
+        encoding="utf-8",
+        newline="\n",
+    )
+    if completeness_report["status"] == "fail":
+        invalid_pages = [
+            item["page_index"] + 1
+            for item in completeness_report["pages"]
+            if item["state"] == "invalid"
+        ]
+        raise ContractValidationError(
+            "page completeness failure: native text was not projected on "
+            f"pages {invalid_pages}"
         )
 
     continuation_events = _merge_cross_page_paragraph_blocks(
@@ -1381,6 +1713,12 @@ def write_layout_outputs(
         "native_object_diagnostics": analyze_native_object_diagnostics(
             document
         ),
+        "page_completeness": {
+            "status": completeness_report["status"],
+            "contract_version": completeness_report["contract_version"],
+            **completeness_report["summary"],
+            "findings": completeness_report["findings"][:100],
+        },
         "text_reconstruction": {
             "status": "warning" if reconstruction_warnings else "pass",
             "version": TEXT_RECONSTRUCTION_VERSION,
@@ -1424,6 +1762,7 @@ def write_layout_outputs(
         "layout_element_uniqueness": "quality_duplicate_region_objects",
         "markdown_exclusions": "quality_markdown_exclusions_invalid",
         "native_object_diagnostics": "quality_unplaced_native_objects",
+        "page_completeness": "quality_page_completeness_incomplete",
         "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
         "reader_index": "reader_index_invalid",
         "article_model": "article_model_invalid",
@@ -1627,6 +1966,7 @@ def write_layout_outputs(
         article_path,
         article_model_path,
         reader_path,
+        completeness_path,
         *visual_paths,
     ]
     if references_path is not None:
@@ -1654,6 +1994,9 @@ def write_layout_outputs(
                     quality_checks["layout_element_uniqueness"]["status"]
                     == "pass"
                 ),
+                "page_completeness_valid": (
+                    quality_checks["page_completeness"]["status"] != "fail"
+                ),
                 "manifest_inventory_complete": True,
             }
         )
@@ -1671,6 +2014,8 @@ def write_layout_outputs(
             return "reader_index"
         if path == article_model_path:
             return "article_model"
+        if path == completeness_path:
+            return "completeness_report"
         if path == references_path:
             return "references_markdown"
         if path == physical_path:
@@ -1688,6 +2033,20 @@ def write_layout_outputs(
             return "layout_overlay"
         if name.endswith("-page.png"):
             return "page_preview"
+        if name.endswith("-visual-relation-review.json"):
+            return "visual_relation_review"
+        if name.endswith("-visual-relation-task.json"):
+            return "visual_relation_task"
+        if name.endswith("-candidate-overlay.png"):
+            return "visual_relation_overlay"
+        if name == CROSS_PAGE_CAPTION_TASK_FILENAME:
+            return "cross_page_caption_task"
+        if name == CROSS_PAGE_CAPTION_REVIEW_FILENAME:
+            return "cross_page_caption_review"
+        if name == CROSS_PAGE_CAPTION_USAGE_FILENAME:
+            return "provider_usage"
+        if name == "issue-routing.json":
+            return "issue_routing"
         if name.endswith("-content-roi.png"):
             return "content_roi_preview"
         if name == "content-roi.json":
@@ -1787,6 +2146,10 @@ def write_layout_outputs(
             "path": "_paperwright/article-model.json",
             "sha256": sha256_file(article_model_path),
         },
+        completeness=completeness_manifest_record(
+            completeness_report,
+            report_sha256=sha256_file(completeness_path),
+        ),
     )
     manifest_path = evidence_dir / "manifest.json"
     manifest_path.write_text(

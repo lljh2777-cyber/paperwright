@@ -18,7 +18,7 @@ from .backends.base import Backend, BackendRegistry, BackendResult
 from .config import PaperWrightConfig
 from .exceptions import BackendExecutionError
 from .layout_candidates import generate_layout_tasks, propose_content_rois
-from .layout_export import export_layout_task_bundle
+from .layout_export import export_layout_task_bundle, render_layout_overlay
 from .layout_models import FinalLayout, LayoutTask
 from .layout_review import (
     LAYOUT_REVIEW_MODES,
@@ -26,6 +26,7 @@ from .layout_review import (
     validate_layout_review,
 )
 from .layout_risk import assess_layout_risk
+from .issue_routing import plan_issue_routing
 from .routing import plan_routing
 from .layout_roi import (
     canonical_content_roi_json,
@@ -38,6 +39,11 @@ from .models import PhysicalDocument
 from .paths import validate_conversion_paths, validate_input_pdf
 from .raster_layout import analyze_page_raster
 from .writer import write_outputs
+from .visual_relations import (
+    VISUAL_RELATION_OVERLAY_FILENAME,
+    VISUAL_RELATION_TASK_FILENAME,
+    build_visual_relation_task,
+)
 
 
 @dataclass(frozen=True)
@@ -567,12 +573,32 @@ class PaperWright:
                 risk_assessment=risk_assessment,
                 mode="auto",
             )
+            issue_routing_plan = plan_issue_routing(
+                result.document,
+                tasks,
+                risk_assessment=risk_assessment,
+            )
+            issue_routing_value = issue_routing_plan.to_dict()
+            issues_by_page: dict[int, list[dict[str, Any]]] = {}
+            for issue in issue_routing_value["issues"]:
+                issues_by_page.setdefault(issue["page_index"], []).append(issue)
+                for related_page in issue["scope"].get(
+                    "related_page_indices", ()
+                ):
+                    issues_by_page.setdefault(related_page, []).append(issue)
+            relation_tasks = tuple(
+                build_visual_relation_task(
+                    task,
+                    issues=tuple(issues_by_page.get(task.page.page_index, ())),
+                )
+                for task in tasks
+            )
             tasks = tuple(
                 configure_layout_review_task(task, review_mode)
                 for task in tasks
             )
             pages: list[dict[str, Any]] = []
-            for task in tasks:
+            for task, relation_task in zip(tasks, relation_tasks, strict=True):
                 preview = preview_by_page.get(task.page.page_index)
                 if preview is None:
                     preview = render_preview(
@@ -589,6 +615,35 @@ class PaperWright:
                         3 if extraction_profile in {"fast", "standard"} else 9
                     ),
                 )
+                relation_record = None
+                if relation_task.candidates:
+                    relation_path = (
+                        temporary / page_dir / VISUAL_RELATION_TASK_FILENAME
+                    )
+                    relation_path.write_text(
+                        relation_task.canonical_json(),
+                        encoding="utf-8",
+                        newline="\n",
+                    )
+                    render_layout_overlay(preview, relation_task).save(
+                        temporary
+                        / page_dir
+                        / VISUAL_RELATION_OVERLAY_FILENAME,
+                        format="PNG",
+                        optimize=False,
+                        compress_level=(
+                            3
+                            if extraction_profile in {"fast", "standard"}
+                            else 9
+                        ),
+                    )
+                    relation_record = {
+                        "path": VISUAL_RELATION_TASK_FILENAME,
+                        "sha256": relation_task.deterministic_sha256(),
+                        "candidate_count": len(relation_task.candidates),
+                        "separator_count": len(relation_task.separators),
+                        "overlay": VISUAL_RELATION_OVERLAY_FILENAME,
+                    }
                 pages.append(
                     {
                         "page_index": task.page.page_index,
@@ -596,6 +651,7 @@ class PaperWright:
                         "task_sha256": task.deterministic_sha256(),
                         "candidate_count": len(task.candidates),
                         "separator_count": len(task.separators),
+                        "visual_relation_task": relation_record,
                     }
                 )
             (temporary / "content-roi.json").write_text(
@@ -617,12 +673,24 @@ class PaperWright:
                 encoding="utf-8",
                 newline="\n",
             )
+            issue_routing_path = temporary / "issue-routing.json"
+            issue_routing_path.write_text(
+                issue_routing_plan.canonical_json(),
+                encoding="utf-8",
+                newline="\n",
+            )
             index = {
                 "contract_version": "paperwright-layout-review-index-v0.1",
                 "routing": {
                     "path": "routing.json",
                     "contract_version": routing_plan.contract_version,
                     "page_summary": routing_plan.to_dict()["summary"],
+                },
+                "issue_routing": {
+                    "path": "issue-routing.json",
+                    "contract_version": issue_routing_plan.contract_version,
+                    "sha256": _sha256_file(issue_routing_path),
+                    "summary": issue_routing_plan.to_dict()["summary"],
                 },
                 "source_sha256": result.document.source_sha256,
                 "backend": result.document.backend,
@@ -741,6 +809,20 @@ class PaperWright:
             raise BackendExecutionError(
                 "unsupported effective review extraction profile"
             )
+        issue_routing_record = review_index.get("issue_routing")
+        if issue_routing_record is not None:
+            if not isinstance(issue_routing_record, dict):
+                raise BackendExecutionError("invalid issue routing index record")
+            issue_routing_path = _review_cache_path(
+                review_root,
+                issue_routing_record.get("path"),
+            )
+            if (
+                not issue_routing_path.is_file()
+                or _sha256_file(issue_routing_path)
+                != issue_routing_record.get("sha256")
+            ):
+                raise BackendExecutionError("issue routing hash mismatch")
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
         if not callable(getattr(backend, "render_region", None)):

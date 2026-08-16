@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/hybrid_run.schema.json",
+  "title": "PaperWright Hybrid Run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "run_id", "pipeline", "source", "destinations", "configuration", "status", "current_stage", "stages", "artifacts", "next_action", "error", "result"],
+  "properties": {
+    "contract_version": {"const": "paperwright-hybrid-run-v0.1"},
+    "run_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pipeline": {"const": "hybrid"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "destinations": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_dir", "review_dir", "output_dir", "reviewed_output_dir"],
+      "properties": {
+        "run_dir": {"type": "string", "minLength": 1},
+        "review_dir": {"type": "string", "minLength": 1},
+        "output_dir": {"type": "string", "minLength": 1},
+        "reviewed_output_dir": {"type": "string", "minLength": 1}
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["backend", "extraction_profile", "preview_scale", "layout_protocol", "evidence_level", "references_mode"],
+      "properties": {
+        "backend": {"enum": ["pdfium", "pdfbox"]},
+        "extraction_profile": {"enum": ["fast", "standard", "forensic"]},
+        "preview_scale": {"type": "number", "exclusiveMinimum": 0},
+        "layout_protocol": {"const": "candidate-relations-v0.1"},
+        "evidence_level": {"enum": ["minimal", "standard", "full"]},
+        "references_mode": {"enum": ["keep", "omit", "separate"]}
+      }
+    },
+    "status": {"enum": ["running", "awaiting_input", "completed", "failed"]},
+    "current_stage": {"type": ["string", "null"], "enum": ["evidence", "resolution", "verification", null]},
+    "stages": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "status", "attempts"],
+        "properties": {
+          "name": {"enum": ["evidence", "resolution", "verification"]},
+          "status": {"enum": ["pending", "running", "waiting", "completed", "failed"]},
+          "attempts": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "path", "sha256"],
+        "properties": {
+          "role": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "next_action": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "message", "path"],
+          "properties": {
+            "kind": {"enum": ["confirm_content_roi", "provide_resolver"]},
+            "message": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "error": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["stage", "type", "message"],
+          "properties": {
+            "stage": {"enum": ["evidence", "resolution", "verification"]},
+            "type": {"type": "string", "minLength": 1},
+            "message": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "result": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["active_output_dir", "manifest_version", "manifest_sha256"],
+          "properties": {
+            "active_output_dir": {"type": "string", "minLength": 1},
+            "manifest_version": {"type": "string", "minLength": 1},
+            "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -62,6 +62,32 @@
       "type": "array",
       "items": {"type": "object"}
     },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "status",
+        "report_path",
+        "report_sha256",
+        "accepted",
+        "suspicious",
+        "human_required",
+        "invalid",
+        "full_page_fallback"
+      ],
+      "properties": {
+        "contract_version": {"const": "paperwright-completeness-v0.1"},
+        "status": {"enum": ["pass", "warning", "fail"]},
+        "report_path": {"const": "_paperwright/completeness-report.json"},
+        "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "accepted": {"type": "integer", "minimum": 0},
+        "suspicious": {"type": "integer", "minimum": 0},
+        "human_required": {"type": "integer", "minimum": 0},
+        "invalid": {"type": "integer", "minimum": 0},
+        "full_page_fallback": {"type": "integer", "minimum": 0}
+      }
+    },
     "region_render_policy": {
       "type": "object",
       "additionalProperties": false,
