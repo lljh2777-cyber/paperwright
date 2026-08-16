@@ -67,7 +67,16 @@ _ROUTE_PRIORITY = {
     ROUTE_HUMAN_REVIEW: 4,
 }
 _FIGURE_CAPTION = re.compile(
-    r"^\s*fig(?:ure)?\.?\s+S?\d+[A-Za-z]?\s*(?:[|.:])",
+    r"^\s*fig(?:ure)?\.?\s+S?\d+[A-Za-z]?\s*(?:[|.:]|$)",
+    re.IGNORECASE,
+)
+_NEXT_PAGE_CAPTION_MARKER = re.compile(
+    r"(?:see|continued?\s+on)\s+(?:the\s+)?next\s+page.{0,40}(?:caption|legend)|"
+    r"(?:caption|legend).{0,40}(?:on|at)\s+(?:the\s+)?next\s+page",
+    re.IGNORECASE,
+)
+_PREVIOUS_PAGE_MARKER = re.compile(
+    r"(?:continued?\s+from\s+(?:the\s+)?previous\s+page|^[◀◁←])",
     re.IGNORECASE,
 )
 
@@ -163,6 +172,35 @@ def _cross_page_visual_candidates(task: LayoutTask) -> tuple[str, ...]:
         ):
             result.append(candidate.candidate_id)
     return tuple(result)
+
+
+def _has_text_marker(page: Page, pattern: re.Pattern[str]) -> bool:
+    return any(
+        pattern.search(" ".join((item.text or "").split())) is not None
+        for item in _usable_text_elements(page)
+    )
+
+
+def _caption_has_previous_page_marker(page: Page, caption: Element) -> bool:
+    for item in _usable_text_elements(page):
+        text = " ".join((item.text or "").split())
+        if _PREVIOUS_PAGE_MARKER.search(text) is None:
+            continue
+        if text.casefold().startswith(("continued", "continue")):
+            return True
+        same_line = abs(item.bbox.y - caption.bbox.y) / page.height <= 0.04
+        if same_line and item.bbox.x <= caption.bbox.x:
+            return True
+    return False
+
+
+def _visual_dominant_page(page: Page, task: LayoutTask) -> bool:
+    raster_count = _raster_region_count(task)
+    return (
+        raster_count is not None
+        and raster_count > 0
+        and len(_usable_text_elements(page)) <= 24
+    )
 
 
 @dataclass(frozen=True)
@@ -420,16 +458,65 @@ def plan_issue_routing(
                 )
 
         if page_index > 0:
+            previous_page = pages[page_index - 1]
             previous_task = task_by_page[page_index - 1]
             previous_visuals = _cross_page_visual_candidates(previous_task)
-            top_captions = tuple(
+            current_visuals = _cross_page_visual_candidates(task)
+            explicit_next_marker = _has_text_marker(
+                previous_page,
+                _NEXT_PAGE_CAPTION_MARKER,
+            )
+            previous_visual_dominant = _visual_dominant_page(
+                previous_page,
+                previous_task,
+            )
+            cross_page_captions = tuple(
                 caption
                 for caption in captions
-                if caption.bbox.y / page.height <= 0.30
+                if (
+                    caption.bbox.y / page.height <= 0.30
+                    or not current_visuals
+                )
             )
-            for caption in top_captions[:4]:
-                if not previous_visuals:
+            for caption in cross_page_captions[:4]:
+                explicit_previous_marker = _caption_has_previous_page_marker(
+                    page,
+                    caption,
+                )
+                has_previous_visual_evidence = bool(previous_visuals) or any(
+                    (
+                        explicit_next_marker,
+                        explicit_previous_marker,
+                        previous_visual_dominant,
+                    )
+                )
+                if not has_previous_visual_evidence:
                     continue
+                if (
+                    current_visuals
+                    and not explicit_next_marker
+                    and not explicit_previous_marker
+                    and not previous_visual_dominant
+                ):
+                    continue
+                normalized_y = caption.bbox.y / page.height
+                evidence_signals = [
+                    f"visual_page_index:{page_index - 1}",
+                    f"caption_page_index:{page_index}",
+                    f"caption_normalized_y:{normalized_y:.6f}",
+                    f"previous_page_visual_candidate_count:{len(previous_visuals)}",
+                    f"current_page_visual_candidate_count:{len(current_visuals)}",
+                ]
+                if explicit_next_marker:
+                    evidence_signals.append(
+                        "previous_page_explicit_next_caption_marker"
+                    )
+                if explicit_previous_marker:
+                    evidence_signals.append(
+                        "caption_page_explicit_previous_page_marker"
+                    )
+                if previous_visual_dominant:
+                    evidence_signals.append("previous_page_visual_dominant")
                 add(
                     page_index,
                     ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING,
@@ -437,12 +524,8 @@ def plan_issue_routing(
                     ROUTE_L2_VISUAL_MODEL,
                     ROUTE_HUMAN_REVIEW,
                     "suspicious",
-                    "top-of-page Figure caption may describe visual evidence on the previous page",
-                    (
-                        f"visual_page_index:{page_index - 1}",
-                        f"caption_page_index:{page_index}",
-                        f"previous_page_visual_candidate_count:{len(previous_visuals)}",
-                    ),
+                    "Figure caption on a page without local visual evidence may describe the previous page visual",
+                    evidence_signals,
                     _scope(
                         "elements",
                         bbox=_normalized_element_bbox(page, caption),

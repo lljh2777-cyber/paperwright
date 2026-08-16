@@ -137,6 +137,55 @@ class CrossPageCaptionTests(unittest.TestCase):
             "p0001:figure",
         )
 
+    def test_builds_bottom_caption_when_previous_visual_is_large(self):
+        bottom_caption = LayoutRegion(
+            "caption",
+            NormalizedBBox(0.05, 0.80, 0.9, 0.1),
+            "text",
+            "caption",
+            1,
+            source_element_ids=("caption",),
+        )
+        layouts = (self.layouts[0], FinalLayout(
+            source_sha256=SHA,
+            page=self.layouts[1].page,
+            regions=(bottom_caption,),
+        ))
+        task = build_cross_page_caption_task(
+            self.document,
+            layouts,
+            caption_text=_text,
+        )
+        self.assertEqual(len(task["pairs"]), 1)
+
+    def test_does_not_cross_bind_when_caption_page_has_local_visual(self):
+        local_figure = LayoutRegion(
+            "local-figure",
+            NormalizedBBox(0.05, 0.01, 0.9, 0.3),
+            "visual",
+            "figure",
+            1,
+        )
+        local_caption = LayoutRegion(
+            "caption",
+            self.layouts[1].regions[0].bbox,
+            "text",
+            "caption",
+            2,
+            source_element_ids=("caption",),
+        )
+        layouts = (self.layouts[0], FinalLayout(
+            source_sha256=SHA,
+            page=self.layouts[1].page,
+            regions=(local_figure, local_caption),
+        ))
+        task = build_cross_page_caption_task(
+            self.document,
+            layouts,
+            caption_text=_text,
+        )
+        self.assertEqual(task["pairs"], [])
+
     def test_review_compiles_to_explicit_binding_and_overrides_heuristic(self):
         review = self._review()
         bindings, rejected = compile_cross_page_caption_review(
@@ -221,6 +270,51 @@ class CrossPageCaptionTests(unittest.TestCase):
         self.assertEqual(issues[0]["scope"]["related_page_indices"], [0])
         self.assertIn(issues[0]["issue_id"], plan["pages"][0]["issue_ids"])
         self.assertIn(issues[0]["issue_id"], plan["pages"][1]["issue_ids"])
+
+    def test_issue_routing_recalls_bottom_isolated_label_after_visual_page(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        caption = Element(
+            "caption-bottom",
+            "text",
+            1,
+            BBox(10, 80, 80, 8),
+            provenance,
+            text="FIGURE 7",
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (caption,)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+                metadata={"raster_evidence": {"region_count": 1}},
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(),
+                metadata={"raster_evidence": {"region_count": 0}},
+            ),
+        )
+        plan = plan_issue_routing(document, tasks).to_dict()
+        issues = [
+            item for item in plan["issues"]
+            if item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+        ]
+        self.assertEqual(len(issues), 1)
+        self.assertIn("previous_page_visual_dominant", issues[0]["signals"])
 
     def test_layout_writer_projects_reviewed_cross_page_relation(self):
         provenance = Provenance("fixture", "native", "fixture")

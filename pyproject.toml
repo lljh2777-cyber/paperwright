@@ -43,4 +43,5 @@ paperwright = ["schemas/*.json"]
   "tools/run_text_review.py",
   "tools/run_text_synthesize.py",
   "tools/run_visual_review.py",
+  "tools/validate_relation_dataset.py",
 ]

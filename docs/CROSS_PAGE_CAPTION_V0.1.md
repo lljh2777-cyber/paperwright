@@ -16,8 +16,12 @@
 
 触发条件保持保守：
 
-- 第 N+1 页顶部 30% 内存在显式 Figure caption；
-- 第 N 页存在靠近页底、面积足够且有 image/vector/raster/drawing 证据的视觉候选；
+- 第 N+1 页存在显式 Figure caption；优先接受顶部 caption，也接受前页视觉占主导且
+  后页没有本地视觉对象时的底部 caption；
+- 第 N 页存在靠近页底、面积足够的视觉候选，或带“caption/legend on next page”显式
+  标记，或页面由极少原生文本与非空 raster evidence 构成；
+- 后页的 `◀` / “continued from previous page”标记可作为方向证据；
+- 后页已有同类型本地视觉对象时不生成跨页关系候选；
 - 只考虑相邻页，不扫描任意远距离页面。
 
 ### 2. FinalLayout 后关系审查
@@ -58,10 +62,13 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
 
 - 自生成跨页正例已覆盖：任务生成、非法 ref 拒绝、显式接受、显式拒绝、writer、
   ArticleModel 和 Reader 投影；
-- 对现有 16 份 review bundle、305 页做离线扫描，没有产生跨页 issue；这说明当前
-  阈值在该语料上没有新增误报，但语料中也没有经确认的跨页正例；
+- 建立了 9 篇论文、16 个相邻页样本的真实 `silver` seed set：10 个正例与 6 个困难
+  负例；正例覆盖顶部/底部 caption、独立标签和显式续页标记；
+- 用新鲜 standard evidence 对该 seed set 回放，当前规则得到 TP=10、FP=0、FN=0、
+  TN=6。该集合参与了规则修正，因此这是 calibration 结果，不是独立泛化指标；
 - *Attention Is All You Need* 15 页产生 0 个跨页 issue，原有 15 个局部 L2 issue
   保持不变；
 - 当前仅覆盖“前页视觉 → 后页顶部 caption”，不覆盖跨两页以上、caption 本身跨页、
   或视觉对象在后一页而 caption 在前一页的情形；
-- 尚未用外部视觉模型完成正例语义校准，因此不能把契约通过描述成模型质量验收。
+- 尚未建立未参与调参的 holdout 和人工 gold，因此不能把 seed-set 满分描述成模型质量
+  或泛化验收。

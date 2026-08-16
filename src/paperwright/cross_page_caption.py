@@ -28,7 +28,7 @@ CROSS_PAGE_CAPTION_USAGE_FILENAME = "cross-page-caption-usage.json"
 CaptionTextResolver = Callable[[Page, LayoutRegion], str]
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _LABEL = re.compile(
-    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?\s*(?:[|.:])",
+    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?\s*(?:[|.:]|$|\s)",
     re.IGNORECASE,
 )
 
@@ -106,6 +106,12 @@ def build_cross_page_caption_task(
         caption_page = document.pages[caption_page_index]
         caption_layout = layouts[caption_page_index]
         visual_layout = layouts[caption_page_index - 1]
+        local_visual_roles = {
+            region.role
+            for region in caption_layout.regions
+            if region.content_class == "visual"
+            and region.role in {"figure", "table"}
+        }
         visuals = tuple(
             region
             for region in visual_layout.regions
@@ -123,14 +129,14 @@ def build_cross_page_caption_task(
             for region in caption_layout.regions
             if region.content_class == "text"
             and region.role == "caption"
-            and region.bbox.y <= 0.30
-            and (region.order or 999) <= 3
         )
         ordinal = 0
         for caption in captions:
             text = caption_text(caption_page, caption).strip()
             caption_kind = _kind(text)
             if caption_kind is None:
+                continue
+            if caption_kind in local_visual_roles:
                 continue
             candidates: list[dict[str, Any]] = []
             for visual in visuals:
@@ -154,6 +160,16 @@ def build_cross_page_caption_task(
                     }
                 )
             if not candidates:
+                continue
+            top_anchor = (
+                caption.bbox.y <= 0.30 and (caption.order or 999) <= 3
+            )
+            strong_previous_page = any(
+                item["bbox"]["y"] + item["bbox"]["height"] >= 0.85
+                or item["bbox"]["width"] * item["bbox"]["height"] >= 0.55
+                for item in candidates
+            )
+            if not top_anchor and not strong_previous_page:
                 continue
             ordinal += 1
             candidates.sort(key=lambda item: (-item["score"], item["visual_ref"]))

@@ -217,6 +217,11 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 视觉页和 caption 页一起送入 L2，接受或拒绝结果进入 ArticleModel/Reader，并覆盖旧
 几何猜测。详见 [跨页 caption 关系 v0.1](docs/CROSS_PAGE_CAPTION_V0.1.md)。
 
+关系规则使用仓库外的真实论文标注集校准。标注契约只保存源文件/页面哈希、短 caption
+锚点、结构标签和审阅来源，不把 PDF、页面图或正文提交到仓库；`silver` 与人工确认的
+`gold` 严格区分。详见
+[Caption–visual 关系标注集 v0.1](docs/CAPTION_RELATION_DATASET_V0.1.md)。
+
 ## 页眉页脚剔除（--furniture）
 
 默认 `auto`：自动检测并剔除跨页重复的页眉、页脚和页码（出现在 ≥45% 页面、

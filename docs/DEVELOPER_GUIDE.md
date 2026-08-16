@@ -105,6 +105,8 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 [Visual Candidate Relations v0.1](VISUAL_RELATIONS_V0.1.md)。
 跨页 scope、paired-page review 与 Reader 投影见
 [跨页 caption 关系 v0.1](CROSS_PAGE_CAPTION_V0.1.md)。
+真实关系样本的哈希绑定、silver/gold 分级与校准边界见
+[Caption–visual 关系标注集 v0.1](CAPTION_RELATION_DATASET_V0.1.md)。
 
 ## 7. 仓库政策
 

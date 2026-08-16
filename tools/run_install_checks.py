@@ -106,6 +106,7 @@ def audit_wheel(path: Path) -> dict[str, object]:
             "paperwright/schemas/article_model.schema.json",
             "paperwright/schemas/batch_summary.schema.json",
             "paperwright/schemas/completeness.schema.json",
+            "paperwright/schemas/caption_relation_dataset.schema.json",
             "paperwright/schemas/cross_page_caption_review.schema.json",
             "paperwright/schemas/cross_page_caption_task.schema.json",
             "paperwright/schemas/final_layout.schema.json",
@@ -128,6 +129,7 @@ def audit_wheel(path: Path) -> dict[str, object]:
             "share/paperwright/tools/run_text_review.py",
             "share/paperwright/tools/run_text_synthesize.py",
             "share/paperwright/tools/run_visual_review.py",
+            "share/paperwright/tools/validate_relation_dataset.py",
         }
         if any(
             not any(name.endswith(relative) for name in names)

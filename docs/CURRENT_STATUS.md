@@ -24,6 +24,8 @@
     三阶段状态与最终文档包哈希复核。
 11. 跨页 Figure/Table–caption：跨页 issue scope、成对页面关系任务、显式接受/拒绝和
     ArticleModel/Reader `caption-of` 投影。
+12. Caption–visual 关系标注集：哈希绑定的外部数据契约、silver/gold 分级、16 个真实
+    相邻页 seed 样本和确定性校验工具。
 
 ## 当前主链
 
@@ -52,8 +54,9 @@ PDF
 - Hybrid run v0.1 在真实论文 *Attention Is All You Need*（15 页）完成离线 evidence
   检查点：发现 15 个 L2 局部 issue（覆盖 14 页），15 页关系任务共保留 160 个候选；
   `run.json` 正确停在 `confirm_content_roi`，且通过公开契约校验。该检查未调用模型。
-- 跨页 caption v0.1 对 16 份 review bundle、305 页离线扫描产生 0 个跨页 issue；未增加
-  已有语料误报，但语料也不含已确认正例。合成正例已通过 task/review/writer/Reader 全链。
+- Caption relation seed v0.1：9 篇、16 个真实相邻页样本，含 10 正例和 6 困难负例。
+  新鲜 standard evidence 校准得到 TP=10、FP=0、FN=0、TN=6；这是调参集结果，不是
+  holdout 泛化结论。合成正例仍覆盖 task/review/writer/Reader 全链。
 
 ## 仍是兼容层的部分
 
@@ -65,5 +68,5 @@ PDF
 
 ## 下一阶段
 
-建设关系判断标注集和真实跨页正例集；同时把过渡 resolver 内部的布局、投影与文本阶段
-上移为细粒度可恢复检查点。
+扩展未参与调参的跨出版社 holdout，并由人工把稳定样本从 silver 晋升为 gold；同时把
+过渡 resolver 内部的布局、投影与文本阶段上移为细粒度可恢复检查点。

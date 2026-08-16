@@ -73,6 +73,11 @@ anchor candidate，模型输出分组/角色/caption-of，程序确定性编译 
 关系任务。模型只能从前页已有 visual 中选择一个绑定，或显式拒绝；接受结果和拒绝结果
 都参与确定性回放。详见 [CROSS_PAGE_CAPTION_V0.1](CROSS_PAGE_CAPTION_V0.1.md)。
 
+真实 seed 校准后，跨页召回还识别三类强方向证据：前页显式写明 caption/legend 在下一
+页、后页 caption 邻近 `◀`/previous-page 标记、以及前页原生文字极少但 raster evidence
+非空。由此可覆盖 caption 位于后一页底部和标签被拆成独立元素的论文，同时用同页视觉
+困难负例抑制仅凭“caption 靠页顶”的误升级。
+
 路由只依据内容证据、结构风险和验证结果，不使用模型价格、token 预算或供应商身份。
 
 ## 5. A06 真实论文回归

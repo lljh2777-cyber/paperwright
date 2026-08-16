@@ -132,6 +132,11 @@ PYTHONPATH=src python tools/run_visual_review.py layout-review --pages 1-3
 `cross-page-caption-*.json`。详见
 [跨页 Figure/Table–caption 关系](CROSS_PAGE_CAPTION_V0.1.md)。
 
+开发或校准自定义关系规则时，可用
+`tools/validate_relation_dataset.py /path/to/dataset.json` 校验仓库外标注。模型辅助的
+`silver` 数据不能冒充人工 `gold`；详见
+[关系标注集契约](CAPTION_RELATION_DATASET_V0.1.md)。
+
 ### 5.6 应用布局
 
 ```bash

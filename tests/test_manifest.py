@@ -34,6 +34,7 @@ class ManifestTests(unittest.TestCase):
         for name in (
             "manifest.schema.json",
             "completeness.schema.json",
+            "caption_relation_dataset.schema.json",
             "cross_page_caption_review.schema.json",
             "cross_page_caption_task.schema.json",
             "hybrid_run.schema.json",
