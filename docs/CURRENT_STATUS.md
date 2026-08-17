@@ -47,6 +47,10 @@
 19. 随机 holdout v0.4 事前协议：固定基线 `6f322ec`，复用 v0.3 的 669 篇抽样框和候选
     顺序，从位置 13 开始，按标签无关的停止规则再纳入 12 篇合格论文；资格、评估流程、
     gold 转换条件和统计边界均在查看新页面前冻结。
+20. 随机 holdout v0.4 silver：按协议检查候选位置 13–37，冻结 12 篇/169 页/157 个相邻
+    页对。固定基线路由 0 个跨页候选，全页审计发现 9 个 silver 正例（4 篇论文），均为
+    多面板 Figure 跨两页、caption 页仍含后续面板；当前 TP=0、FP=0、FN=9、TN=148，
+    等待不显示 silver 结果的人工复核，尚未修改规则。
 
 ## 当前主链
 
@@ -86,6 +90,10 @@ PDF
   正例；100 个负例已人工复核并形成 gold，规则未因结果修改。它提供自然 prevalence 的
   初步上界，但不能估计候选 precision/recall，详见
   [RANDOM_HOLDOUT_V0.3](RANDOM_HOLDOUT_V0.3.md)。
+- Random holdout v0.4：事前冻结后新增 12 篇/169 页/157 个相邻页对；0 个路由候选下
+  发现 9 个 silver 漏召回，集中为“caption 页存在同一 Figure 后续面板”的系统失败族。
+  规则保持冻结并等待盲法人工签署，详见
+  [RANDOM_HOLDOUT_V0.4](RANDOM_HOLDOUT_V0.4.md)。
 
 ## 仍是兼容层的部分
 
@@ -97,7 +105,6 @@ PDF
 
 ## 下一阶段
 
-继续沿已经冻结的随机候选顺序扩大固定样本量；在出现自然正例前，precision/recall 必须
-保持“不可定义”，不能借用 marker-selected gold 挑战集补齐自然分布指标，也不能据当前
-零误报结果宣称总体泛化通过。当前执行协议见
-[RANDOM_HOLDOUT_V0.4_PROTOCOL](RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
+先完成 v0.4 的 12 文档盲法人工复核；在 gold 签署前不修改跨页规则。若 9 个 silver
+正例得到确认，再把 v0.4 明确转为开发/校准集，加入多页 Figure 面板连续性证据，并从
+候选位置 38 继续建立新的独立 holdout，不能在同一批上同时修正规则和宣称泛化通过。

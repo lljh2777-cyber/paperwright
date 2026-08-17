@@ -230,8 +230,11 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 首个不按出版社或正例标记选样的随机 holdout 冻结 8 篇/108 页/100 个相邻页对；其
 100 个负例已于 2026-08-17 完成人工签署。可重放抽样、零正例统计边界和 gold 记录见
 [随机跨页 Caption Holdout v0.3](docs/RANDOM_HOLDOUT_V0.3.md)。
-下一批已事前冻结为沿同一候选顺序再纳入 12 篇，不以标签或模型输出作为停止条件，见
-[随机跨页 Caption Holdout v0.4 协议](docs/RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
+下一批按事前协议沿同一候选顺序再纳入 12 篇/169 页；固定基线路由 0 个跨页候选，
+全页 silver 审计发现 9 个自然正例，均属于“多面板 Figure 跨页且 caption 页仍有后续
+面板”的漏召回族，当前等待盲法人工复核。见
+[随机跨页 Caption Holdout v0.4](docs/RANDOM_HOLDOUT_V0.4.md)及其
+[事前协议](docs/RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
 
 ## 页眉页脚剔除（--furniture）
 
