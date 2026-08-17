@@ -85,7 +85,7 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   给出 pair-level prevalence 的 0%–3.62% 双侧 95% 区间，precision/recall 均不可定义；详见
   [RANDOM_HOLDOUT_V0.3](RANDOM_HOLDOUT_V0.3.md)。
 - 事前注册的随机 holdout v0.4 沿同一候选顺序新增 12 篇、157 个相邻页对。固定基线
-  预测 0 个跨页候选，全页 silver 审计发现 9 个正例，全部是“上一页含早期面板、caption
+  预测 0 个跨页候选；人工 gold 最终确认 10 个正例，全部是“上一页含早期面板、caption
   页含后续面板及显式 caption”的多页 Figure。它暴露出“本页已有同类视觉就抑制跨页”的
-  系统漏召回；当前等待 silver 具体位置遮蔽的人工签署，尚未用来修改规则，详见
+  系统漏召回；gold 签署前未修改规则，冻结基线 TP=0、FP=0、FN=10、TN=147，详见
   [RANDOM_HOLDOUT_V0.4](RANDOM_HOLDOUT_V0.4.md)。
