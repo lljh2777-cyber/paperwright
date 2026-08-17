@@ -81,6 +81,6 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   显式正例标记富集且已经参与修正，不能把结果描述成模型质量、自然 prevalence 或总体
   泛化验收；
 - 随机 holdout v0.3 通过固定 PMC OA 抽样框和随机种子冻结 8 篇、100 个相邻页对，当前
-  silver 审计为 0 个路由正例和 0 个真实正例。该结果只能给出 pair-level prevalence 的
-  0%–3.62% 双侧 95% 区间，precision/recall 均不可定义；详见
+  路由正例和真实正例均为 0；100 个负例随后全部完成人工签署并形成 gold。该结果只能
+  给出 pair-level prevalence 的 0%–3.62% 双侧 95% 区间，precision/recall 均不可定义；详见
   [RANDOM_HOLDOUT_V0.3](RANDOM_HOLDOUT_V0.3.md)。

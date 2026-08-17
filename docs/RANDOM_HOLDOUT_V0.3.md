@@ -50,7 +50,7 @@ PMC 在 2026 年 8 月移除了旧 FTP/Cloud legacy 文件。本轮先通过 OA 
 
 `standard` evidence 共产生 58 个局部问题：40 个复杂几何、18 个同页 caption–visual、
 0 个跨页 caption–visual。所有页面 contact sheet、显式 next-page 标记搜索和宽松页顶
-caption 审计均未发现真实跨页关系，因此当前 silver 裁决为：
+caption 审计均未发现真实跨页关系，因此初始 silver 裁决为：
 
 | 指标 | 结果 |
 |---|---:|
@@ -64,12 +64,14 @@ caption 审计均未发现真实跨页关系，因此当前 silver 裁决为：
 零预测正例使 precision 不可定义，零真实正例使 recall 不可定义。TN=100 只能说明这批
 负例上没有误报，不能写成“准确率 100%”或“路由已经通过总体泛化验收”。
 
+2026-08-17，Liao Li 查看全部 8 张全页 contact sheet，逐文档结果均为 `none`，与 silver
+结果 8/8 一致，对应 100/100 个相邻页标签一致且无 uncertain。原 silver 文件保留为审计
+输入，人工结果另存为 `pair-audit-gold-v0.3.json`，并以 SHA-256 绑定复核表和 gold 文件。
+
 ## 当前边界与下一步
 
-- 本轮未改规则，也未把结果回填到实现，因此在人工签署前仍保持独立 holdout 身份；
-- 当前标签是 AI 页面证据复核得到的 `silver`，仓库外 `HUMAN_REVIEW.md` 将 100 个页对
-  压缩成 8 张全页 contact sheet 供人工逐文档确认；
-- 人工确认后才能固定为 gold negative holdout；
+- 本轮未改规则，也未把结果回填到实现，因此仍保持独立 holdout 身份；
+- 100 个相邻页标签已经人工签署，当前是固定的 gold negative holdout；
 - 即使转为 gold，本批仍无法估计 precision/recall。下一轮应继续使用已冻结的候选顺序，
   在不调参前提下扩大固定样本量，而不是再次按正例标记挑选论文。
 
