@@ -15,10 +15,11 @@ from typing import Any, Mapping, Sequence
 
 from .exceptions import ContractValidationError
 from .completeness import validate_completeness_report
-from .layout_models import LayoutTask, NormalizedBBox
+from .layout_models import LayoutCandidate, LayoutTask, NormalizedBBox
 from .layout_risk import LayoutRiskAssessment
 from .article_model import validate_article_model
 from .models import Element, Page, PhysicalDocument
+from .text_reconstruction import join_line_elements
 from .text_review import join_candidates, validate_text_task
 from .routing import (
     ROUTE_HUMAN_REVIEW,
@@ -66,8 +67,9 @@ _ROUTE_PRIORITY = {
     ROUTE_L2_VISUAL_MODEL: 3,
     ROUTE_HUMAN_REVIEW: 4,
 }
-_FIGURE_CAPTION = re.compile(
-    r"^\s*fig(?:ure)?\.?\s+S?\d+[A-Za-z]?\s*(?:[|.:]|$)",
+_SCIENTIFIC_CAPTION = re.compile(
+    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
+    r"(?P<number>S?\d+)[A-Za-z]?\s*(?:[|.:]|$|\s)",
     re.IGNORECASE,
 )
 _BARE_FIGURE_PANEL_LABEL = re.compile(
@@ -83,6 +85,13 @@ _PREVIOUS_PAGE_MARKER = re.compile(
     r"(?:continued?\s+from\s+(?:the\s+)?previous\s+page|^[◀◁←])",
     re.IGNORECASE,
 )
+_CONTINUATION_CAPTION = re.compile(
+    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
+    r"(?P<number>S?\d+)[A-Za-z]?\s*[.:]?\s*"
+    r"(?:cont\s*\.?|continued)\s*$",
+    re.IGNORECASE,
+)
+_DIRECTION_PREFIX = re.compile(r"^[◀◁←]\s*")
 
 
 def _canonical_json(value: Mapping[str, Any]) -> str:
@@ -140,30 +149,105 @@ def _union_normalized_bboxes(
     }
 
 
-def _caption_text_elements(page: Page) -> tuple[Element, ...]:
-    return tuple(
-        item
-        for item in _usable_text_elements(page)
-        if _FIGURE_CAPTION.match(item.text or "")
+@dataclass(frozen=True)
+class _CaptionAnchor:
+    element: Element
+    text: str
+    kind: str
+    number: str
+    normalized_y: float
+    direct_element_anchor: bool
+
+
+def _caption_anchors(page: Page) -> tuple[_CaptionAnchor, ...]:
+    """Return caption starts reconstructed from native same-line fragments."""
+
+    grouped: dict[tuple[str, int | str], list[Element]] = {}
+    for item in _usable_text_elements(page):
+        line_group = item.metadata.get("line_group")
+        key: tuple[str, int | str] = (
+            ("line_group", line_group)
+            if isinstance(line_group, int)
+            else ("element", item.element_id)
+        )
+        grouped.setdefault(key, []).append(item)
+    anchors: list[_CaptionAnchor] = []
+    for elements in grouped.values():
+        ordered = sorted(
+            elements,
+            key=lambda item: (
+                item.bbox.x,
+                item.bbox.y,
+                item.metadata.get("native_order", 0),
+                item.element_id,
+            ),
+        )
+        reconstructed = join_line_elements(ordered).text.strip()
+        match_text = _DIRECTION_PREFIX.sub("", reconstructed).lstrip()
+        match = _SCIENTIFIC_CAPTION.match(match_text)
+        if match is None:
+            continue
+        direct_anchor = next(
+            (
+                item
+                for item in ordered
+                if _SCIENTIFIC_CAPTION.match(item.text or "") is not None
+            ),
+            None,
+        )
+        anchor = direct_anchor or next(
+            (
+                item
+                for item in ordered
+                if re.match(r"^\s*(?:fig|table)", item.text or "", re.IGNORECASE)
+            ),
+            ordered[0],
+        )
         # A bare panel identifier such as ``Figure 1A`` is commonly embedded
         # inside supplementary blot/transparency artwork.  It is not a full
         # caption anchor unless the caption page itself carries an explicit
         # previous-page direction marker.  Whole-figure isolated labels such
         # as ``FIGURE 3`` remain eligible.
-        and (
-            _BARE_FIGURE_PANEL_LABEL.fullmatch(item.text or "") is None
-            or _caption_has_previous_page_marker(page, item)
-        )
+        if (
+            _BARE_FIGURE_PANEL_LABEL.fullmatch(match_text) is not None
+            and not _caption_has_previous_page_marker(page, anchor)
+        ):
+            continue
         # Native extractors may split an inline citation such as
         # ``... shown in Figure 2.`` into a standalone text element.  A
         # non-zero line position is strong evidence that the label is embedded
         # in prose, not the start of a caption.  An explicit previous-page
         # marker overrides it; missing metadata remains conservative for other
         # extraction backends.
-        and (
-            type(item.metadata.get("line_position")) is not int
-            or item.metadata["line_position"] == 0
-            or _caption_has_previous_page_marker(page, item)
+        if (
+            type(anchor.metadata.get("line_position")) is int
+            and anchor.metadata["line_position"] != 0
+            and not _caption_has_previous_page_marker(page, anchor)
+        ):
+            continue
+        kind = (
+            "table"
+            if match.group("kind").casefold().startswith("table")
+            else "figure"
+        )
+        anchors.append(
+            _CaptionAnchor(
+                element=anchor,
+                text=match_text,
+                kind=kind,
+                number=match.group("number").casefold(),
+                normalized_y=min(item.bbox.y for item in ordered) / page.height,
+                direct_element_anchor=direct_anchor is not None,
+            )
+        )
+    return tuple(
+        sorted(
+            anchors,
+            key=lambda item: (
+                item.normalized_y,
+                item.element.bbox.x,
+                item.element.element_id,
+            ),
         )
     )
 
@@ -177,25 +261,90 @@ def _normalized_element_bbox(page: Page, element: Element) -> dict[str, float]:
     }
 
 
-def _cross_page_visual_candidates(task: LayoutTask) -> tuple[str, ...]:
-    result: list[str] = []
+def _likely_visual_candidate(candidate: LayoutCandidate) -> bool:
+    features = candidate.features
+    return (
+        "raster" in candidate.element_kinds
+        or "image" in candidate.element_kinds
+        or int(features.get("image_count") or 0) > 0
+        or int(features.get("drawing_count") or 0) >= 4
+        or float(features.get("drawing_coverage") or 0.0) >= 0.12
+        or int(features.get("panel_label_count") or 0) >= 2
+    )
+
+
+def _cross_page_visual_candidates(
+    task: LayoutTask,
+) -> tuple[LayoutCandidate, ...]:
+    result: list[LayoutCandidate] = []
     for candidate in task.candidates:
-        features = candidate.features
-        likely_visual = (
-            "raster" in candidate.element_kinds
-            or "image" in candidate.element_kinds
-            or int(features.get("image_count") or 0) > 0
-            or int(features.get("drawing_count") or 0) >= 4
-            or float(features.get("drawing_coverage") or 0.0) >= 0.12
-            or int(features.get("panel_label_count") or 0) >= 2
-        )
         if (
-            likely_visual
+            _likely_visual_candidate(candidate)
             and candidate.bbox.bottom >= 0.68
             and candidate.bbox.width * candidate.bbox.height >= 0.06
         ):
-            result.append(candidate.candidate_id)
+            result.append(candidate)
     return tuple(result)
+
+
+def _panel_continuity_visual_candidates(
+    previous_page: Page,
+    previous_task: LayoutTask,
+    current_task: LayoutTask,
+    caption: _CaptionAnchor,
+) -> tuple[LayoutCandidate, ...]:
+    """Find previous-page visuals in a conservative multi-page panel chain.
+
+    The next page must start with a raster visual fragment immediately above
+    the caption.  A large previous-page raster visual must reach the lower
+    page, and it must not already be terminated by a local caption.  Explicit
+    ``Figure N. Cont.`` labels and a new visual beginning after an earlier
+    caption are the two auditable overrides.
+    """
+
+    current_fragments = tuple(
+        candidate
+        for candidate in current_task.candidates
+        if "raster" in candidate.element_kinds
+        and candidate.bbox.y <= 0.12
+        and candidate.bbox.width * candidate.bbox.height >= 0.025
+        and -0.02
+        <= caption.normalized_y - candidate.bbox.bottom
+        <= 0.05
+    )
+    if not current_fragments:
+        return ()
+    previous_visuals = tuple(
+        candidate
+        for candidate in previous_task.candidates
+        if "raster" in candidate.element_kinds
+        and candidate.bbox.bottom >= 0.68
+        and candidate.bbox.width * candidate.bbox.height >= 0.15
+        and float(
+            candidate.features.get("raster_residual_coverage_max", 1.0)
+        )
+        >= 0.05
+    )
+    if not previous_visuals:
+        return ()
+    previous_captions = tuple(
+        item
+        for item in _caption_anchors(previous_page)
+        if item.kind == caption.kind
+    )
+    matching_continuation = any(
+        (match := _CONTINUATION_CAPTION.fullmatch(item.text)) is not None
+        and match.group("number").casefold() == caption.number
+        for item in previous_captions
+    )
+    if not previous_captions or matching_continuation:
+        return previous_visuals
+    latest_caption_y = max(item.normalized_y for item in previous_captions)
+    return tuple(
+        candidate
+        for candidate in previous_visuals
+        if candidate.bbox.y >= latest_caption_y + 0.08
+    )
 
 
 def _has_text_marker(page: Page, pattern: re.Pattern[str]) -> bool:
@@ -459,9 +608,11 @@ def plan_issue_routing(
         # Figure presence alone is deterministic; deciding which visual it
         # describes is semantic geometry. Tables stay in the deterministic
         # same-page table renderer and may still feed back through completeness.
-        captions = _caption_text_elements(page)
+        captions = _caption_anchors(page)
         if captions and (nontext_count > 0 or (raster_count or 0) > 0):
             for caption in captions[:8]:
+                if caption.kind != "figure" or not caption.direct_element_anchor:
+                    continue
                 add(
                     page_index,
                     ISSUE_CAPTION_VISUAL_BINDING,
@@ -476,8 +627,8 @@ def plan_issue_routing(
                     ),
                     _scope(
                         "elements",
-                        bbox=_normalized_element_bbox(page, caption),
-                        element_ids=(caption.element_id,),
+                        bbox=_normalized_element_bbox(page, caption.element),
+                        element_ids=(caption.element.element_id,),
                     ),
                 )
 
@@ -495,17 +646,38 @@ def plan_issue_routing(
                 previous_task,
             )
             for caption in captions[:4]:
+                # Table candidates need semantic region roles from the final
+                # layouts; coarse issue-routing candidates cannot distinguish
+                # a previous-page Figure from a Table safely.
+                if caption.kind != "figure":
+                    continue
                 explicit_previous_marker = _caption_has_previous_page_marker(
                     page,
-                    caption,
+                    caption.element,
                 )
-                normalized_y = caption.bbox.y / page.height
+                normalized_y = caption.normalized_y
                 top_page_anchor = normalized_y <= 0.18
+                panel_continuity_visuals = (
+                    _panel_continuity_visual_candidates(
+                        previous_page,
+                        previous_task,
+                        task,
+                        caption,
+                    )
+                    if caption.kind == "figure"
+                    else ()
+                )
+                if (
+                    not caption.direct_element_anchor
+                    and not panel_continuity_visuals
+                ):
+                    continue
                 has_previous_visual_evidence = bool(previous_visuals) or any(
                     (
                         explicit_next_marker,
                         explicit_previous_marker,
                         previous_visual_dominant,
+                        bool(panel_continuity_visuals),
                     )
                 )
                 if not has_previous_visual_evidence:
@@ -521,6 +693,7 @@ def plan_issue_routing(
                         explicit_next_marker,
                         explicit_previous_marker,
                         previous_visual_dominant,
+                        bool(panel_continuity_visuals),
                     )
                 ):
                     continue
@@ -528,6 +701,7 @@ def plan_issue_routing(
                     current_visuals
                     and not explicit_next_marker
                     and not explicit_previous_marker
+                    and not panel_continuity_visuals
                 ):
                     continue
                 evidence_signals = [
@@ -547,6 +721,16 @@ def plan_issue_routing(
                     )
                 if previous_visual_dominant:
                     evidence_signals.append("previous_page_visual_dominant")
+                if panel_continuity_visuals:
+                    evidence_signals.extend(
+                        (
+                            "cross_page_panel_continuity",
+                            (
+                                "panel_continuity_previous_visual_count:"
+                                f"{len(panel_continuity_visuals)}"
+                            ),
+                        )
+                    )
                 add(
                     page_index,
                     ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING,
@@ -554,13 +738,18 @@ def plan_issue_routing(
                     ROUTE_L2_VISUAL_MODEL,
                     ROUTE_HUMAN_REVIEW,
                     "suspicious",
-                    "Figure caption on a page without local visual evidence may describe the previous page visual",
+                    "scientific caption may describe an adjacent previous-page visual",
                     evidence_signals,
                     _scope(
                         "elements",
-                        bbox=_normalized_element_bbox(page, caption),
-                        candidate_ids=previous_visuals[:32],
-                        element_ids=(caption.element_id,),
+                        bbox=_normalized_element_bbox(page, caption.element),
+                        candidate_ids=[
+                            item.candidate_id
+                            for item in (
+                                panel_continuity_visuals or previous_visuals
+                            )[:32]
+                        ],
+                        element_ids=(caption.element.element_id,),
                         related_page_indices=(page_index - 1,),
                     ),
                 )

@@ -106,6 +106,9 @@ def _prompt(task: dict[str, Any]) -> str:
 The supplied images are complete adjacent PDF pages. Geometry and native caption text are
 read-only evidence. For every caption_ref, either select exactly one listed visual_ref or
 reject it. Do not transcribe, rewrite, summarize, invent text, draw boxes, or create refs.
+When signals include cross_page_panel_continuity, the caption page intentionally contains
+later panels above the caption. Do not reject merely because those local panels exist;
+decide whether the previous-page candidate and the later panels form the same Figure.
 
 Return JSON only:
 {{"bindings":[{{"caption_ref":"p0002:r-caption","visual_ref":"p0001:r-figure","confidence":0.9}}],"rejected_caption_refs":[],"warnings":[]}}

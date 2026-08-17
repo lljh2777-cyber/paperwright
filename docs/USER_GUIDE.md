@@ -131,8 +131,9 @@ PYTHONPATH=src python tools/run_visual_review.py layout-review --pages 1-3
 `visual-relation-review.json`。详见
 [Visual Candidate Relations v0.1](VISUAL_RELATIONS_V0.1.md)。
 
-页面布局完成后，编排器还会对“前一页视觉对象 + 后一页顶部 caption”生成 paired-page
-关系任务。模型只能选择列出的 visual ref 或拒绝；结果见 review 根目录的
+页面布局完成后，编排器还会对“前一页视觉对象 + 后一页 caption”生成 paired-page
+关系任务；多页面板 Figure 的 caption 可以位于后续面板下方。模型只能选择列出的
+visual ref 或拒绝；结果见 review 根目录的
 `cross-page-caption-*.json`。详见
 [跨页 Figure/Table–caption 关系](CROSS_PAGE_CAPTION_V0.1.md)。
 

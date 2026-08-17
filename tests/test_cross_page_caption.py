@@ -187,6 +187,141 @@ class CrossPageCaptionTests(unittest.TestCase):
         )
         self.assertEqual(task["pairs"], [])
 
+    def test_panel_continuity_overrides_page_local_visual_suppression(self):
+        local_figure = LayoutRegion(
+            "local-figure",
+            NormalizedBBox(0.05, 0.05, 0.9, 0.2),
+            "visual",
+            "figure",
+            1,
+        )
+        local_caption = LayoutRegion(
+            "caption",
+            NormalizedBBox(0.05, 0.27, 0.9, 0.1),
+            "text",
+            "caption",
+            2,
+            source_element_ids=("caption",),
+        )
+        layouts = (
+            self.layouts[0],
+            FinalLayout(
+                source_sha256=SHA,
+                page=self.layouts[1].page,
+                regions=(local_figure, local_caption),
+            ),
+        )
+        task = build_cross_page_caption_task(
+            self.document,
+            layouts,
+            caption_text=_text,
+        )
+        self.assertEqual(len(task["pairs"]), 1)
+        self.assertIn(
+            "cross_page_panel_continuity",
+            task["pairs"][0]["signals"],
+        )
+
+    def test_previous_local_caption_terminates_panel_continuity(self):
+        previous_caption = LayoutRegion(
+            "previous-caption",
+            NormalizedBBox(0.05, 0.82, 0.9, 0.08),
+            "text",
+            "caption",
+            2,
+        )
+        current_figure = LayoutRegion(
+            "local-figure",
+            NormalizedBBox(0.05, 0.05, 0.9, 0.2),
+            "visual",
+            "figure",
+            1,
+        )
+        current_caption = LayoutRegion(
+            "caption",
+            NormalizedBBox(0.05, 0.27, 0.9, 0.1),
+            "text",
+            "caption",
+            2,
+            source_element_ids=("caption",),
+        )
+        layouts = (
+            FinalLayout(
+                source_sha256=SHA,
+                page=self.layouts[0].page,
+                regions=(self.layouts[0].regions[0], previous_caption),
+            ),
+            FinalLayout(
+                source_sha256=SHA,
+                page=self.layouts[1].page,
+                regions=(current_figure, current_caption),
+            ),
+        )
+
+        def caption_text(_page: Page, region: LayoutRegion) -> str:
+            if region.region_id == "previous-caption":
+                return "Figure 6. Previous-page local figure"
+            return "Figure 7. Current-page local figure"
+
+        task = build_cross_page_caption_task(
+            self.document,
+            layouts,
+            caption_text=caption_text,
+        )
+        self.assertEqual(task["pairs"], [])
+
+    def test_explicit_continuation_label_keeps_panel_chain_open(self):
+        previous_caption = LayoutRegion(
+            "previous-caption",
+            NormalizedBBox(0.05, 0.82, 0.9, 0.08),
+            "text",
+            "caption",
+            2,
+        )
+        current_figure = LayoutRegion(
+            "local-figure",
+            NormalizedBBox(0.05, 0.05, 0.9, 0.2),
+            "visual",
+            "figure",
+            1,
+        )
+        current_caption = LayoutRegion(
+            "caption",
+            NormalizedBBox(0.05, 0.27, 0.9, 0.1),
+            "text",
+            "caption",
+            2,
+            source_element_ids=("caption",),
+        )
+        layouts = (
+            FinalLayout(
+                source_sha256=SHA,
+                page=self.layouts[0].page,
+                regions=(self.layouts[0].regions[0], previous_caption),
+            ),
+            FinalLayout(
+                source_sha256=SHA,
+                page=self.layouts[1].page,
+                regions=(current_figure, current_caption),
+            ),
+        )
+
+        def caption_text(_page: Page, region: LayoutRegion) -> str:
+            if region.region_id == "previous-caption":
+                return "Figure 7. Cont."
+            return "Figure 7. Continued panels"
+
+        task = build_cross_page_caption_task(
+            self.document,
+            layouts,
+            caption_text=caption_text,
+        )
+        self.assertEqual(len(task["pairs"]), 1)
+        self.assertIn(
+            "cross_page_panel_continuity",
+            task["pairs"][0]["signals"],
+        )
+
     def test_review_compiles_to_explicit_binding_and_overrides_heuristic(self):
         review = self._review()
         bindings, rejected = compile_cross_page_caption_review(
@@ -271,6 +406,110 @@ class CrossPageCaptionTests(unittest.TestCase):
         self.assertEqual(issues[0]["scope"]["related_page_indices"], [0])
         self.assertIn(issues[0]["issue_id"], plan["pages"][0]["issue_ids"])
         self.assertIn(issues[0]["issue_id"], plan["pages"][1]["issue_ids"])
+
+    def test_issue_routing_reconstructs_split_caption_for_panel_chain(self):
+        provenance = Provenance("fixture", "native", "fixture")
+        caption_prefix = Element(
+            "caption-prefix",
+            "text",
+            1,
+            BBox(10, 27, 20, 8),
+            provenance,
+            text="Figure",
+            metadata={"line_group": 1, "line_position": 0},
+        )
+        caption_suffix = Element(
+            "caption-suffix",
+            "text",
+            1,
+            BBox(31, 27, 55, 8),
+            provenance,
+            text="7. Continued panels",
+            metadata={"line_group": 1, "line_position": 1},
+        )
+        document = PhysicalDocument(
+            SHA,
+            "fixture",
+            "1",
+            (
+                Page(0, 100, 100, 0, ()),
+                Page(1, 100, 100, 0, (caption_prefix, caption_suffix)),
+            ),
+        )
+        tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[0]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.08, 0.9, 0.84),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+            ),
+            LayoutTask(
+                source_sha256=SHA,
+                page=LayoutPage.from_page(document.pages[1]),
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.05, 0.9, 0.2),
+                        element_kinds=("raster",),
+                        features={"raster_evidence": True},
+                    ),
+                ),
+                metadata={"raster_evidence": {"region_count": 1}},
+            ),
+        )
+        issues = plan_issue_routing(document, tasks).to_dict()["issues"]
+        cross_page = [
+            item
+            for item in issues
+            if item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+        ]
+        self.assertEqual(len(cross_page), 1)
+        self.assertIn(
+            "cross_page_panel_continuity",
+            cross_page[0]["signals"],
+        )
+        self.assertEqual(cross_page[0]["scope"]["candidate_ids"], ["C001"])
+
+        low_residual_tasks = (
+            LayoutTask(
+                source_sha256=SHA,
+                page=tasks[0].page,
+                candidate_generator_version="fixture",
+                feature_schema_version="fixture",
+                candidates=(
+                    LayoutCandidate(
+                        "C001",
+                        NormalizedBBox(0.05, 0.08, 0.9, 0.84),
+                        element_kinds=("raster",),
+                        features={
+                            "raster_evidence": True,
+                            "raster_residual_coverage_max": 0.02,
+                        },
+                    ),
+                ),
+            ),
+            tasks[1],
+        )
+        low_residual_issues = plan_issue_routing(
+            document,
+            low_residual_tasks,
+        ).to_dict()["issues"]
+        self.assertFalse(
+            any(
+                item["kind"] == ISSUE_CROSS_PAGE_CAPTION_VISUAL_BINDING
+                for item in low_residual_issues
+            )
+        )
 
     def test_issue_routing_recalls_bottom_isolated_label_after_visual_page(self):
         provenance = Provenance("fixture", "native", "fixture")

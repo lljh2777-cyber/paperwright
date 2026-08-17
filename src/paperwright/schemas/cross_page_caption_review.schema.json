@@ -10,7 +10,7 @@
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "reviewer": {"type": "string", "minLength": 1},
-    "prompt_version": {"const": "paperwright-cross-page-caption-prompt-v0.1"},
+    "prompt_version": {"const": "paperwright-cross-page-caption-prompt-v0.2"},
     "bindings": {
       "type": "array",
       "items": {

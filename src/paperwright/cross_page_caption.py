@@ -20,7 +20,7 @@ from .models import Page, PhysicalDocument
 
 CROSS_PAGE_CAPTION_TASK_VERSION = "paperwright-cross-page-caption-task-v0.1"
 CROSS_PAGE_CAPTION_REVIEW_VERSION = "paperwright-cross-page-caption-review-v0.1"
-CROSS_PAGE_CAPTION_PROMPT_VERSION = "paperwright-cross-page-caption-prompt-v0.1"
+CROSS_PAGE_CAPTION_PROMPT_VERSION = "paperwright-cross-page-caption-prompt-v0.2"
 CROSS_PAGE_CAPTION_TASK_FILENAME = "cross-page-caption-task.json"
 CROSS_PAGE_CAPTION_REVIEW_FILENAME = "cross-page-caption-review.json"
 CROSS_PAGE_CAPTION_USAGE_FILENAME = "cross-page-caption-usage.json"
@@ -28,7 +28,14 @@ CROSS_PAGE_CAPTION_USAGE_FILENAME = "cross-page-caption-usage.json"
 CaptionTextResolver = Callable[[Page, LayoutRegion], str]
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _LABEL = re.compile(
-    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+S?\d+[A-Za-z]?\s*(?:[|.:]|$|\s)",
+    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
+    r"(?P<number>S?\d+)[A-Za-z]?\s*(?:[|.:]|$|\s)",
+    re.IGNORECASE,
+)
+_CONTINUATION_LABEL = re.compile(
+    r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
+    r"(?P<number>S?\d+)[A-Za-z]?\s*[.:]?\s*"
+    r"(?:cont\s*\.?|continued)\s*$",
     re.IGNORECASE,
 )
 
@@ -57,6 +64,76 @@ def _kind(text: str) -> str | None:
     if match is None:
         return None
     return "table" if match.group("kind").casefold().startswith("table") else "figure"
+
+
+def _caption_key(text: str) -> tuple[str, str] | None:
+    match = _LABEL.match(text)
+    if match is None:
+        return None
+    kind = (
+        "table"
+        if match.group("kind").casefold().startswith("table")
+        else "figure"
+    )
+    return kind, match.group("number").casefold()
+
+
+def _panel_continuity_visuals(
+    *,
+    caption: LayoutRegion,
+    caption_text_value: str,
+    caption_kind: str,
+    current_visuals: Sequence[LayoutRegion],
+    previous_visuals: Sequence[LayoutRegion],
+    previous_page: Page,
+    previous_captions: Sequence[LayoutRegion],
+    caption_text: CaptionTextResolver,
+) -> tuple[LayoutRegion, ...]:
+    """Return previous regions participating in a multi-page panel chain."""
+
+    if caption_kind != "figure":
+        return ()
+    top_fragments = tuple(
+        region
+        for region in current_visuals
+        if region.role == caption_kind
+        and region.bbox.y <= 0.12
+        and region.bbox.width * region.bbox.height >= 0.025
+        and -0.02 <= caption.bbox.y - region.bbox.bottom <= 0.05
+    )
+    if not top_fragments:
+        return ()
+    large_previous = tuple(
+        region
+        for region in previous_visuals
+        if region.role == caption_kind
+        and region.bbox.bottom >= 0.68
+        and region.bbox.width * region.bbox.height >= 0.15
+    )
+    if not large_previous:
+        return ()
+    current_key = _caption_key(caption_text_value)
+    relevant_previous: list[tuple[LayoutRegion, str]] = []
+    for region in previous_captions:
+        text = caption_text(previous_page, region).strip()
+        if _kind(text) == caption_kind:
+            relevant_previous.append((region, text))
+    matching_continuation = any(
+        (match := _CONTINUATION_LABEL.fullmatch(text)) is not None
+        and current_key is not None
+        and match.group("number").casefold() == current_key[1]
+        for _, text in relevant_previous
+    )
+    if not relevant_previous or matching_continuation:
+        return large_previous
+    latest_caption_bottom = max(
+        region.bbox.bottom for region, _ in relevant_previous
+    )
+    return tuple(
+        region
+        for region in large_previous
+        if region.bbox.y >= latest_caption_bottom + 0.01
+    )
 
 
 def native_caption_text(page: Page, region: LayoutRegion) -> str:
@@ -106,12 +183,12 @@ def build_cross_page_caption_task(
         caption_page = document.pages[caption_page_index]
         caption_layout = layouts[caption_page_index]
         visual_layout = layouts[caption_page_index - 1]
-        local_visual_roles = {
-            region.role
+        local_visuals = tuple(
+            region
             for region in caption_layout.regions
             if region.content_class == "visual"
             and region.role in {"figure", "table"}
-        }
+        )
         visuals = tuple(
             region
             for region in visual_layout.regions
@@ -124,6 +201,11 @@ def build_cross_page_caption_task(
         )
         if not visuals:
             continue
+        previous_captions = tuple(
+            region
+            for region in visual_layout.regions
+            if region.content_class == "text" and region.role == "caption"
+        )
         captions = tuple(
             region
             for region in caption_layout.regions
@@ -136,10 +218,23 @@ def build_cross_page_caption_task(
             caption_kind = _kind(text)
             if caption_kind is None:
                 continue
-            if caption_kind in local_visual_roles:
+            panel_continuity_visuals = _panel_continuity_visuals(
+                caption=caption,
+                caption_text_value=text,
+                caption_kind=caption_kind,
+                current_visuals=local_visuals,
+                previous_visuals=visuals,
+                previous_page=document.pages[caption_page_index - 1],
+                previous_captions=previous_captions,
+                caption_text=caption_text,
+            )
+            if (
+                any(region.role == caption_kind for region in local_visuals)
+                and not panel_continuity_visuals
+            ):
                 continue
             candidates: list[dict[str, Any]] = []
-            for visual in visuals:
+            for visual in panel_continuity_visuals or visuals:
                 if visual.role != caption_kind:
                     continue
                 area = visual.bbox.width * visual.bbox.height
@@ -169,7 +264,11 @@ def build_cross_page_caption_task(
                 or item["bbox"]["width"] * item["bbox"]["height"] >= 0.55
                 for item in candidates
             )
-            if not top_anchor and not strong_previous_page:
+            if (
+                not top_anchor
+                and not strong_previous_page
+                and not panel_continuity_visuals
+            ):
                 continue
             ordinal += 1
             candidates.sort(key=lambda item: (-item["score"], item["visual_ref"]))
@@ -190,8 +289,17 @@ def build_cross_page_caption_task(
                     "visual_candidates": candidates,
                     "signals": [
                         "adjacent_pages",
-                        "caption_at_next_page_top",
                         "visual_at_previous_page_bottom_or_large",
+                        *(
+                            ["caption_at_next_page_top"]
+                            if top_anchor
+                            else []
+                        ),
+                        *(
+                            ["cross_page_panel_continuity"]
+                            if panel_continuity_visuals
+                            else []
+                        ),
                     ],
                 }
             )

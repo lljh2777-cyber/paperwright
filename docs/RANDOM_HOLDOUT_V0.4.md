@@ -5,7 +5,7 @@
 - 事前协议提交：`31ca9c7`
 - 固定代码基线：`6f322ecb4debb8df086fd1414e711f7104ca5118`
 - 当前标签层级：gold；Liao Li 于 2026-08-17 完成全部 12 篇人工复核
-- 规则状态：冻结后未修改
+- 规则状态：gold 签署前未修改；签署后已明确转为开发/校准集并完成第一轮修正
 
 本轮继续使用 v0.3 已冻结的 669 篇 PMC OA 抽样框和候选顺序，从位置 13 开始，按事前
 规定走到 12 篇合格论文后停止。停止规则、资格条件、评估流程和统计边界在查看候选页面前
@@ -82,16 +82,29 @@ A–F 面板，第 15 页含余下面板并首次出现显式 caption，符合�
 100,000 次按文档重采样的 percentile bootstrap；累计 pair prevalence 的 cluster 区间为
 0.42%–7.89%。
 
-## 当前解释与下一步
+## 独立结果与校准修正的边界
 
 这是独立 holdout 上经人工签署的漏召回证据，说明 v0.3 的 100 个全负页对不足以验证规则。
 人工评审时已知聚合 silver 正例数，但具体文档和页对位置被遮蔽，因此应称为
 silver-location-masked review，而不是完全盲审。规则在 gold 冻结前始终未修改，本表是
 冻结基线的独立结果。
 
-下一步把 v0.4 **明确重新归类为开发/校准集**，设计“跨页面板连续性”证据，而不是删除
-本地视觉抑制；同时保持旧困难负例回归。修正完成后，从候选位置 38 继续建立新的、未见
-标签 holdout，不能再用 v0.4 宣称修正规则的独立泛化表现。
+gold 冻结后，v0.4 已**明确重新归类为开发/校准集**。新增规则没有删除本地视觉抑制，
+而是只在以下证据同时成立时生成 `cross_page_panel_continuity` 候选：前页大型 raster
+Figure 延伸到页底，后页页顶存在紧邻 caption 的后续视觉片段，且前页视觉没有被本页
+caption 终止。显式 `Figure N. Cont.`，以及前一 caption 之后开始的新视觉，可以覆盖
+“前页已有 caption”的一般反证；低非文字残余覆盖的整页装饰会被拒绝。
+
+同页原生文字碎片先由已有确定性重建器拼成 caption 首行，解决 `Figure` 与编号被拆成
+多个 PDF text object 的问题。规则只负责生成局部 L2 候选，最终是否属于同一 Figure 仍由
+paired-page 视觉判断决定；prompt 已升级到 v0.2，明确说明 caption 页允许存在后续面板。
+
+在 v0.4 开发/校准回放上，新路由为 TP=10、FP=0、FN=0、TN=147。旧 v0.3 的 100 个
+gold 负页对仍为 0 个候选；marker-selected challenge 保持 TP=7、FP=0、FN=0、TN=1。
+这些均是已见数据上的回归/校准结果，不是新的泛化结论。
+
+下一步从候选位置 38 继续建立新的、未见标签 holdout。v0.4 只保留冻结基线的独立结论，
+不能再用来宣称修正规则的独立泛化表现。
 
 官方数据边界参见 [PMC Open Access Subset](https://pmc.ncbi.nlm.nih.gov/tools/openftlist/)
 和 [PMC AWS Cloud Service](https://pmc.ncbi.nlm.nih.gov/tools/pmcaws/)。

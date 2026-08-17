@@ -21,7 +21,8 @@
 - 第 N 页存在靠近页底、面积足够的视觉候选，或带“caption/legend on next page”显式
   标记，或页面由极少原生文本与非空 raster evidence 构成；
 - 后页的 `◀` / “continued from previous page”标记可作为方向证据；
-- 后页已有同类型本地视觉对象时不生成跨页关系候选，除非存在显式跨页方向标记；
+- 后页已有同类型本地视觉对象时默认不生成跨页关系候选；显式方向标记或满足全部
+  `cross_page_panel_continuity` 结构证据时才覆盖；
 - 只考虑相邻页，不扫描任意远距离页面。
 
 ### 2. FinalLayout 后关系审查
@@ -89,3 +90,9 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   页含后续面板及显式 caption”的多页 Figure。它暴露出“本页已有同类视觉就抑制跨页”的
   系统漏召回；gold 签署前未修改规则，冻结基线 TP=0、FP=0、FN=10、TN=147，详见
   [RANDOM_HOLDOUT_V0.4](RANDOM_HOLDOUT_V0.4.md)。
+- v0.4 在 gold 后已明确转为开发/校准集。新增 `cross_page_panel_continuity` 信号要求
+  前页大型 raster Figure 延伸到页底、后页页顶视觉片段紧邻 caption，并证明前页视觉
+  未被本页 caption 终止；`Figure N. Cont.` 和前一 caption 后的新视觉是显式覆盖证据。
+  低非文字残余覆盖会排除整页装饰/侧栏。v0.4 校准回放 TP=10、FP=0、FN=0、TN=147，
+  v0.3 的 100 个 gold 负页对和 challenge 的困难负例均保持不变。paired-page prompt
+  使用 v0.2，提醒模型 caption 页的本地面板可能是同一 Figure 的后续部分。

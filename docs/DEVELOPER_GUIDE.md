@@ -136,9 +136,10 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 - 候选关系式视觉协议与确定性 FinalLayout 编译
 - 唯一 `paperwright hybrid` 入口、五阶段 run contract、ROI 暂停/恢复和逐阶段产物复核
 - 跨页 Figure/Table–caption issue、paired-page review、显式拒绝与 ArticleModel/Reader 投影
+- 多页 Figure panel-continuity 候选、拆分 caption 首行重建与 prompt v0.2
 
 未完成：
 
 - L3 操作集扩展与规则回填
 - 把默认过渡 resolver 的阶段实现逐步迁入核心包，消除脚本级编排分叉
-- 跨页 Figure-caption binding
+- 用新的未见随机 holdout 验证跨页面板连续性修正
