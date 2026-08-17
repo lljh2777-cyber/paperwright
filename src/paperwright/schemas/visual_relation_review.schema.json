@@ -11,7 +11,7 @@
     "page": {"type": "object"},
     "task_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "reviewer": {"type": "string", "minLength": 1},
-    "prompt_version": {"const": "paperwright-visual-relations-prompt-v0.1"},
+    "prompt_version": {"enum": ["paperwright-visual-relations-prompt-v0.1", "paperwright-visual-relations-prompt-v0.2"]},
     "groups": {
       "type": "array",
       "items": {

@@ -40,6 +40,7 @@ from paperwright.visual_relations import (
     VISUAL_RELATION_TASK_FILENAME,
     canonical_visual_relation_review_json,
     compile_visual_relation_review,
+    normalize_visual_relation_review,
     validate_visual_relation_review,
 )
 
@@ -176,6 +177,7 @@ Rules:
 def _relation_prompt(
     task: LayoutTask,
     issues: list[dict] | None = None,
+    repair_error: str | None = None,
 ) -> str:
     selected_features = {
         "high_confidence_caption_kind",
@@ -222,6 +224,15 @@ def _relation_prompt(
         if has_cross_page_caption
         else "Every explicit Figure/Table caption must name a same-page visual parent."
     )
+    repair_instruction = ""
+    if repair_error:
+        compact_error = " ".join(str(repair_error).split())[:600]
+        repair_instruction = f"""
+
+The previous response failed deterministic validation:
+{compact_error}
+Return a corrected COMPLETE response. Recount every candidate ID exactly once
+before answering; do not merely patch or describe the previous response."""
     return f"""You are resolving candidate relationships on ONE scientific-paper page.
 
 The overlay labels deterministic candidate boxes. Do NOT draw or modify any bbox.
@@ -260,7 +271,7 @@ Rules:
 - Only page furniture or extraction noise may be discarded; keep uncertain content as unknown.
 - Exclude groups use role header/footer/margin and order null.
 - Other groups use consecutive order 1..N in scientific reading order.
-- Use only candidate IDs shown above and keep the response compact."""
+- Use only candidate IDs shown above and keep the response compact.{repair_instruction}"""
 
 
 def _relation_review(task: LayoutTask, data: dict, model: str) -> dict:
@@ -275,8 +286,9 @@ def _relation_review(task: LayoutTask, data: dict, model: str) -> dict:
         "discarded_candidate_ids": data.get("discarded_candidate_ids", []),
         "warnings": data.get("warnings", []),
     }
-    validate_visual_relation_review(review, task)
-    return review
+    normalized = normalize_visual_relation_review(review)
+    validate_visual_relation_review(normalized, task)
+    return normalized
 
 
 def _strip_fences(code: str) -> str:
@@ -525,6 +537,7 @@ def _generate_relation_layout(
     model: str,
     cost_report: CostReport,
     issues: list[dict] | None = None,
+    repair_error: str | None = None,
 ) -> tuple[dict, dict]:
     image_url = _data_url(image_path)
     resp = client.chat.completions.create(
@@ -535,7 +548,11 @@ def _generate_relation_layout(
                 "content": [
                     {
                         "type": "text",
-                        "text": _relation_prompt(relation_task, issues),
+                        "text": _relation_prompt(
+                            relation_task,
+                            issues,
+                            repair_error,
+                        ),
                     },
                     {"type": "image_url", "image_url": {"url": image_url}},
                 ],
@@ -595,6 +612,7 @@ def _review_page(
     if not image_path.is_file():
         raise SystemExit(f"缺少页面预览: {image_path}")
     last_error = None
+    repair_error = None
     for _ in range(attempts):
         try:
             relation_review = None
@@ -607,6 +625,7 @@ def _review_page(
                     model,
                     cost_report,
                     issues,
+                    repair_error,
                 )
             else:
                 layout = _generate_layout(
@@ -621,9 +640,10 @@ def _review_page(
             return layout, relation_review
         except (ValueError, KeyError, json.JSONDecodeError, ContractValidationError) as exc:
             last_error = exc
+            repair_error = str(exc)
             print(f"  校验失败: {exc}", file=sys.stderr)
-            # fall through and retry; no explicit repair prompt so the model
-            # gets a fresh sample on each attempt.
+            # Retry with the precise deterministic failure so temperature=0
+            # models do not repeat an identical invalid response.
     raise SystemExit(f"视觉复核失败: {last_error}")
 
 

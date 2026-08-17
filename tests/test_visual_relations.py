@@ -16,6 +16,7 @@ from paperwright.visual_relations import (
     build_visual_relation_task,
     canonical_visual_relation_review_json,
     compile_visual_relation_review,
+    normalize_visual_relation_review,
     validate_visual_relation_review,
 )
 from tests.test_layout_stage_a import _task
@@ -84,6 +85,16 @@ class VisualRelationContractTests(unittest.TestCase):
         self.assertEqual(body.bbox.x, 0.05)
         self.assertAlmostEqual(body.bbox.right, 0.95)
         self.assertEqual(body.source_candidate_ids, ())
+
+    def test_legacy_prompt_review_remains_readable(self):
+        review = self._review(
+            [
+                self._group("body", ("C01", "C02"), "text", "body", 1),
+                self._group("figure", ("C03",), "visual", "figure", 2),
+            ]
+        )
+        review["prompt_version"] = "paperwright-visual-relations-prompt-v0.1"
+        validate_visual_relation_review(review, self.relation_task)
 
     def test_issue_caption_bbox_becomes_read_only_anchor_candidate(self):
         raw = _task()
@@ -261,6 +272,66 @@ class VisualRelationContractTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ContractValidationError, "caption"):
             validate_visual_relation_review(discarded_caption, caption_task)
+
+    def test_normalizes_only_reading_order_structure(self):
+        groups = [
+            self._group("body", ("C01",), "text", "body", 7),
+            self._group("margin", ("C02",), "exclude", "margin", 8),
+            self._group("figure", ("C03",), "visual", "figure", 7),
+        ]
+        review = self._review(groups)
+        normalized = normalize_visual_relation_review(
+            review,
+        )
+
+        self.assertEqual(
+            [item["order"] for item in normalized["groups"]],
+            [1, None, 2],
+        )
+        self.assertEqual(
+            [item["candidate_ids"] for item in normalized["groups"]],
+            [["C01"], ["C02"], ["C03"]],
+        )
+        self.assertIn("normalized relation reading orders", normalized["warnings"][0])
+        validate_visual_relation_review(normalized, self.relation_task)
+
+    def test_compiler_clips_non_exclude_union_to_confirmed_roi(self):
+        overflowing = replace(
+            self.relation_task.candidates[2],
+            bbox=replace(
+                self.relation_task.candidates[2].bbox,
+                height=0.50,
+            ),
+        )
+        relation_task = replace(
+            self.relation_task,
+            candidates=(
+                self.relation_task.candidates[0],
+                self.relation_task.candidates[1],
+                overflowing,
+            ),
+        )
+        review = {
+            **self._review([]),
+            "task_sha256": relation_task.deterministic_sha256(),
+            "groups": [
+                self._group("body", ("C01", "C02"), "text", "body", 1),
+                self._group("figure", ("C03",), "visual", "figure", 2),
+            ],
+        }
+        layout = compile_visual_relation_review(
+            review,
+            relation_task=relation_task,
+            final_task=self.final_task,
+        )
+
+        figure = next(item for item in layout["regions"] if item["role"] == "figure")
+        self.assertAlmostEqual(figure["bbox"]["y"] + figure["bbox"]["height"], 0.82)
+        self.assertTrue(any("clipped" in item for item in layout["warnings"]))
+        add = next(
+            item for item in layout["actions"] if item["result_region_ids"] == ["r-figure"]
+        )
+        self.assertIn("clipped", add["reason"])
 
 
 if __name__ == "__main__":

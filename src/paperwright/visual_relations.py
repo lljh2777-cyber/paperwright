@@ -24,12 +24,19 @@ from .layout_models import (
 from .layout_review import (
     LAYOUT_REVIEW_PROMPT_VERSION,
     configure_layout_review_task,
+    layout_task_content_roi,
     validate_layout_review,
 )
 
 
 VISUAL_RELATION_REVIEW_VERSION = "paperwright-visual-relation-review-v0.1"
-VISUAL_RELATION_PROMPT_VERSION = "paperwright-visual-relations-prompt-v0.1"
+VISUAL_RELATION_PROMPT_VERSION = "paperwright-visual-relations-prompt-v0.2"
+SUPPORTED_VISUAL_RELATION_PROMPT_VERSIONS = frozenset(
+    {
+        "paperwright-visual-relations-prompt-v0.1",
+        VISUAL_RELATION_PROMPT_VERSION,
+    }
+)
 VISUAL_RELATION_TASK_FILENAME = "visual-relation-task.json"
 VISUAL_RELATION_REVIEW_FILENAME = "visual-relation-review.json"
 VISUAL_RELATION_OVERLAY_FILENAME = "candidate-overlay.png"
@@ -198,7 +205,8 @@ def validate_visual_relation_review(
     if (
         not isinstance(value["reviewer"], str)
         or not value["reviewer"]
-        or value["prompt_version"] != VISUAL_RELATION_PROMPT_VERSION
+        or value["prompt_version"]
+        not in SUPPORTED_VISUAL_RELATION_PROMPT_VERSIONS
     ):
         raise ContractValidationError("visual relation reviewer/prompt 非法")
     groups = value["groups"]
@@ -266,7 +274,11 @@ def validate_visual_relation_review(
     if assigned.intersection(discarded):
         raise ContractValidationError("candidate 不能同时 group 与 discard")
     if assigned.union(discarded) != set(candidates):
-        raise ContractValidationError("visual relation candidate accounting 不守恒")
+        missing = sorted(set(candidates) - assigned - set(discarded))
+        raise ContractValidationError(
+            "visual relation candidate accounting 不守恒; "
+            f"missing={','.join(missing) or 'none'}"
+        )
 
     for group_id, group in group_by_id.items():
         parent_id = group["parent_group_id"]
@@ -320,6 +332,64 @@ def validate_visual_relation_review(
                 raise ContractValidationError("compound raster 必须保留为 Figure/Table")
 
 
+def normalize_visual_relation_review(
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Repair syntax-only ordering defects without changing model semantics.
+
+    Candidate membership, grouping, roles, parents, and discard decisions remain
+    untouched.  Missing or duplicate candidates therefore still fail validation
+    and must be reconsidered by the reviewer.
+    """
+
+    normalized = dict(value)
+    raw_groups = value.get("groups")
+    if not isinstance(raw_groups, list) or not all(
+        isinstance(item, Mapping) for item in raw_groups
+    ):
+        return normalized
+
+    groups = [dict(item) for item in raw_groups]
+
+    changed = False
+    ordered_indices: list[int] = []
+    for index, group in enumerate(groups):
+        if group.get("content_class") == "exclude":
+            if group.get("order") is not None:
+                group["order"] = None
+                changed = True
+        else:
+            ordered_indices.append(index)
+
+    def reading_key(index: int) -> tuple[int, int, int]:
+        group = groups[index]
+        order = group.get("order")
+        valid_order = type(order) is int and order > 0
+        return (
+            0 if valid_order else 1,
+            order if valid_order else 0,
+            index,
+        )
+
+    for new_order, index in enumerate(
+        sorted(ordered_indices, key=reading_key),
+        start=1,
+    ):
+        if groups[index].get("order") != new_order:
+            groups[index]["order"] = new_order
+            changed = True
+
+    normalized["groups"] = groups
+    warnings = normalized.get("warnings")
+    if changed and isinstance(warnings, list) and all(
+        isinstance(item, str) and item for item in warnings
+    ):
+        warning = "paperwright normalized relation reading orders"
+        if warning not in warnings:
+            normalized["warnings"] = [*warnings, warning]
+    return normalized
+
+
 def canonical_visual_relation_review_json(
     value: Mapping[str, Any],
     *,
@@ -347,6 +417,20 @@ def _union_bbox(task: LayoutTask, candidate_ids: list[str]) -> NormalizedBBox:
     return NormalizedBBox(left, top, right - left, bottom - top)
 
 
+def _clip_to_roi(
+    bbox: NormalizedBBox,
+    roi: NormalizedBBox,
+) -> tuple[NormalizedBBox | None, bool]:
+    left = max(bbox.x, roi.x)
+    top = max(bbox.y, roi.y)
+    right = min(bbox.right, roi.right)
+    bottom = min(bbox.bottom, roi.bottom)
+    if right <= left or bottom <= top:
+        return None, True
+    clipped = NormalizedBBox(left, top, right - left, bottom - top)
+    return clipped, clipped != bbox
+
+
 def compile_visual_relation_review(
     review: Mapping[str, Any],
     *,
@@ -366,9 +450,26 @@ def compile_visual_relation_review(
     }
     regions: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
+    warnings = list(review["warnings"])
+    content_roi = layout_task_content_roi(final_task)
     for index, group in enumerate(review["groups"], start=1):
         region_id = region_id_by_group[group["group_id"]]
-        bbox = _union_bbox(relation_task, group["candidate_ids"]).to_dict()
+        union_bbox = _union_bbox(relation_task, group["candidate_ids"])
+        clipped = False
+        if group["content_class"] != "exclude" and content_roi is not None:
+            bounded_bbox, clipped = _clip_to_roi(union_bbox, content_roi)
+            if bounded_bbox is None:
+                raise ContractValidationError(
+                    f"non-exclude relation group {group['group_id']} is "
+                    "outside the confirmed Content ROI"
+                )
+            union_bbox = bounded_bbox
+        bbox = union_bbox.to_dict()
+        if clipped:
+            warnings.append(
+                f"region {region_id} candidate union clipped to confirmed "
+                "Content ROI"
+            )
         parent = group["parent_group_id"]
         regions.append(
             {
@@ -393,7 +494,12 @@ def compile_visual_relation_review(
                 "result_region_ids": [region_id],
                 "bbox": bbox,
                 "target_region_id": None,
-                "reason": "deterministic union of reviewed candidate group",
+                "reason": (
+                    "deterministic union of reviewed candidate group clipped "
+                    "to confirmed Content ROI"
+                    if clipped
+                    else "deterministic union of reviewed candidate group"
+                ),
             }
         )
     for index, group in enumerate(review["groups"], start=1):
@@ -419,7 +525,7 @@ def compile_visual_relation_review(
         "prompt_version": LAYOUT_REVIEW_PROMPT_VERSION,
         "regions": regions,
         "actions": actions,
-        "warnings": list(review["warnings"]),
+        "warnings": warnings,
     }
     validate_layout_review(FinalLayout.from_dict(layout), final_task)
     return layout
@@ -428,12 +534,14 @@ def compile_visual_relation_review(
 __all__ = [
     "VISUAL_RELATION_OVERLAY_FILENAME",
     "VISUAL_RELATION_PROMPT_VERSION",
+    "SUPPORTED_VISUAL_RELATION_PROMPT_VERSIONS",
     "VISUAL_RELATION_REVIEW_FILENAME",
     "VISUAL_RELATION_REVIEW_VERSION",
     "VISUAL_RELATION_TASK_FILENAME",
     "build_visual_relation_task",
     "canonical_visual_relation_review_json",
     "compile_visual_relation_review",
+    "normalize_visual_relation_review",
     "validate_visual_relation_review",
     "visual_relation_review_sha256",
 ]

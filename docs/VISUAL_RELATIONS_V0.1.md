@@ -38,7 +38,7 @@ issue scope 已有的 bbox 和 element ID 变成只读 `Ixxx` anchor candidate�
   "page": {},
   "task_sha256": "...",
   "reviewer": "model-id",
-  "prompt_version": "paperwright-visual-relations-prompt-v0.1",
+  "prompt_version": "paperwright-visual-relations-prompt-v0.2",
   "groups": [
     {
       "group_id": "figure",
@@ -64,13 +64,20 @@ issue scope 已有的 bbox 和 element ID 变成只读 `Ixxx` anchor candidate�
 - compound raster 必须保留为 Figure/Table；
 - role、content class、confidence 和文档/task 身份合法。
 
+prompt v0.2 增加两层通用容错，但不代替语义校验：程序只把非排除 group 的 `order`
+规范为连续序列，并把 exclude 的 `order` 置空；候选遗漏、重复、错误角色或父子关系仍
+会被拒绝。桥接重试会把上一次确定性校验错误加入下一次提示，要求模型重新返回完整
+响应，避免 temperature 0 下原样重复无效 JSON。
+新写入使用 prompt v0.2；v0.1 review 继续可读，以便回放既有 evidence。
+
 Schema 位于 `src/paperwright/schemas/visual_relation_review.schema.json`。
 
 ## 4. 确定性编译
 
 `compile_visual_relation_review` 对每个 group 取候选 bbox 的精确并集，映射父子关系，生成
-`add` / `attach-caption` 动作，然后调用现有 `validate_layout_review`。模型没有修改几何的
-接口。
+`add` / `attach-caption` 动作，然后调用现有 `validate_layout_review`。若非排除并集只是在
+已确认 Content ROI 边界上越界，编译器确定性求交，并在 layout warning 与 add action
+reason 中记录裁剪；完全位于 ROI 外仍拒绝。模型没有修改几何的接口。
 
 视觉桥 `--protocol auto` 优先使用该协议。候选不存在时才回退旧 regions 画框协议；
 `--protocol relations` 可要求必须使用关系协议。standard/full evidence 会保存 relation
@@ -88,4 +95,3 @@ review 和 candidate overlay，full 还保存 relation task。
 
 本轮没有调用外部视觉模型，因此这里只证明任务完整性、契约守恒和编译链路；不同模型
 在关系判断上的准确率仍需后续标注集评估。
-
