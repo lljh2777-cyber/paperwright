@@ -65,6 +65,10 @@
 24. 随机 holdout v0.5 资格冻结：按协议检查候选位置 38–54，纳入 12 篇同行评议原始
     研究、排除 5 篇非目标文章；冻结为 158 页、146 个相邻页对、9 个期刊。资格阶段没有
     运行 PaperWright、生成页面预览或查看跨页标签。
+25. 随机 holdout v0.5 silver：固定基线产生 6 个跨页候选，全页审计得到 4 个真实正例，
+    TP=4、FP=2、FN=0、TN=140，候选 recall=100%、precision=66.67%、负页对误报率
+    1.41%。正例少于事前指定的 5 个，只能作探索性结果；等待 silver-informed 人工签署，
+    期间不修改规则。
 
 ## 当前主链
 
@@ -120,6 +124,6 @@ PDF
 
 ## 下一阶段
 
-对已冻结的 v0.5 语料按基线 `e94cf33` 生成 standard evidence 和全页审计材料，详见
-[RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。v0.4 修正后的 10/10 仍只属于开发/
-校准结果。
+由人工逐篇复核 v0.5 的 12 张全页 contact sheet 并签署 gold；reviewer 已知 silver 汇总
+与候选文档族，因此必须称为 silver-informed review，而不是盲审。入口与边界见
+[RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
