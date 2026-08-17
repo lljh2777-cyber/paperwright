@@ -44,6 +44,9 @@
 18. 随机 holdout 人工 gold：Liao Li 于 2026-08-17 复核 8 张全页 contact sheet，结果
     全部为 `none`，与 silver 8/8 文档、100/100 相邻页标签一致，无 uncertain；形成
     `pair-audit-gold-v0.3.json`，仍未修改规则或回填结果。
+19. 随机 holdout v0.4 事前协议：固定基线 `6f322ec`，复用 v0.3 的 669 篇抽样框和候选
+    顺序，从位置 13 开始，按标签无关的停止规则再纳入 12 篇合格论文；资格、评估流程、
+    gold 转换条件和统计边界均在查看新页面前冻结。
 
 ## 当前主链
 
@@ -96,4 +99,5 @@ PDF
 
 继续沿已经冻结的随机候选顺序扩大固定样本量；在出现自然正例前，precision/recall 必须
 保持“不可定义”，不能借用 marker-selected gold 挑战集补齐自然分布指标，也不能据当前
-零误报结果宣称总体泛化通过。
+零误报结果宣称总体泛化通过。当前执行协议见
+[RANDOM_HOLDOUT_V0.4_PROTOCOL](RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
