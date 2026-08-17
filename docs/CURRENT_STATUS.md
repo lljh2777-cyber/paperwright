@@ -34,6 +34,9 @@
 15. 跨页 caption 挑战集 v0.2：冻结 8 篇/171 页自然版式批次与 4 篇/71 页显式标记
     挑战集；后者含 7 个出版社明确正例和 1 个裸面板标签负例。基线 TP=7、FP=1、FN=0，
     收紧裸 `Figure 1A` 锚点后 TP=7、FP=0、FN=0，旧 seed 回归保持不变。
+16. 人工 gold：Liao Li 于 2026-08-17 复核挑战集全部 8 张成对页面图，人工标签与 silver
+    标签 8/8 一致、无 uncertain；保留 silver 审计输入并生成全量 `human_verified` 的
+    `gold-v0.2.json`。
 
 ## 当前主链
 
@@ -67,7 +70,8 @@ PDF
   holdout 泛化结论。合成正例仍覆盖 task/review/writer/Reader 全链。
 - Caption challenge v0.2：自然抽取的 8 篇/171 页未出现正例；marker-selected 的 4 篇/
   71 页含 7 个显式正例，调整后全部召回且 1 个裸面板标签误报被消除。该集合已参与修正，
-  不能估计自然分布指标，详见 [CAPTION_CHALLENGE_V0.2](CAPTION_CHALLENGE_V0.2.md)。
+  8 个样本已完成人工复核并形成 gold，但仍不能估计自然分布指标，详见
+  [CAPTION_CHALLENGE_V0.2](CAPTION_CHALLENGE_V0.2.md)。
 
 ## 仍是兼容层的部分
 
@@ -79,7 +83,6 @@ PDF
 
 ## 下一阶段
 
-由人工逐例复核 marker-selected 挑战集的 8 个稳定样本；签署完成后才能从 silver 晋升为
-gold。随后再冻结未参与任何规则修正的随机论文 holdout，分别报告候选召回、候选精确率
-和自然 prevalence。不能用当前 seed、两个已用于修正的 holdout 或挑战集报告总体泛化
-性能。
+冻结未参与任何规则修正的随机论文 holdout，分别报告候选召回、候选精确率和自然
+prevalence。不能用当前 seed、两个已用于修正的 holdout 或 marker-selected gold 挑战集
+报告总体泛化性能。

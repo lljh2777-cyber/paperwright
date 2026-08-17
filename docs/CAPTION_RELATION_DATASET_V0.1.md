@@ -75,5 +75,6 @@ check，不是 holdout 结果。首个 6 出版体系 holdout 用于发现和修
 8 篇/171 页自然版式批次仍没有真实正例。为单独测试召回，又建立了 4 篇/8 例的
 marker-selected `silver` 挑战集，含 7 个出版社显式正例和 1 个裸面板标签负例；修正前
 TP=7、FP=1、FN=0，修正后 TP=7、FP=0、FN=0。详见
-[跨页 Caption 挑战集 v0.2](CAPTION_CHALLENGE_V0.2.md)。该集合也已参与修正，不能作为
-总体泛化指标；下一步仍是人工独立复核后晋升 gold。
+[跨页 Caption 挑战集 v0.2](CAPTION_CHALLENGE_V0.2.md)。Liao Li 已于 2026-08-17 完成
+8/8 人工复核并生成 `gold-v0.2.json`。该集合已经参与修正，所以 gold 只表示标签经过
+人工确认，仍不能作为总体泛化指标。

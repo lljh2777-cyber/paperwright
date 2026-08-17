@@ -77,5 +77,6 @@ heuristic 再次偷偷绑定。最终关系进入 image record、ArticleModel、
   后续 marker-selected 挑战集补入 7 个出版社显式正例，当前规则全部召回，并用 1 个
   `Figure 1A` 裸面板标签负例补强锚点过滤；详见
   [跨页 Caption 挑战集 v0.2](CAPTION_CHALLENGE_V0.2.md)；
-- 挑战集按显式正例标记富集且已经参与修正，尚未建立人工 gold，不能把结果描述成模型
-  质量、自然 prevalence 或总体泛化验收。
+- 挑战集 8 例已于 2026-08-17 由 Liao Li 全量复核，标签 8/8 一致并形成 gold；但它按
+  显式正例标记富集且已经参与修正，不能把结果描述成模型质量、自然 prevalence 或总体
+  泛化验收。
