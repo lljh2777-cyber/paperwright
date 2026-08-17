@@ -232,7 +232,7 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 [随机跨页 Caption Holdout v0.3](docs/RANDOM_HOLDOUT_V0.3.md)。
 下一批按事前协议沿同一候选顺序再纳入 12 篇/169 页；固定基线路由 0 个跨页候选，
 全页 silver 审计发现 9 个自然正例，均属于“多面板 Figure 跨页且 caption 页仍有后续
-面板”的漏召回族，当前等待盲法人工复核。见
+面板”的漏召回族，当前等待 silver 具体位置遮蔽的人工复核。见
 [随机跨页 Caption Holdout v0.4](docs/RANDOM_HOLDOUT_V0.4.md)及其
 [事前协议](docs/RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
 
