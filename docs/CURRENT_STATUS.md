@@ -84,6 +84,12 @@
     的 confirmed-ROI 求交。候选遗漏、重复、语义角色与父子关系继续由严格校验器拒绝。
     该改动针对 v0.5 暴露的适配层失败族，旧 v0.5 指标与独立性声明保持不变；完整链路
     的独立验收仍需新的未见论文。
+29. 未见论文 L2 完整链回归 v0.1：从冻结 PMC 顺序位置 55 起按资格纳入 3 篇/36 页，
+    由 `gpt-5.6-luna` high 执行实际流程，固定 `qwen3.7-plus` 视觉模型且禁止 adapter/
+    人工修补。1/3 完整通过；另两篇均在第 1 个正式 L2 页耗尽 3 次重试，错误分别是文本
+    role 与 `content_class` 不一致、header/margin 未使用 `exclude`。成功文档的五阶段、
+    Reader、ArticleModel、文本包、8 个 final layout 和 3 个 relation review 均独立验证
+    通过。详见 [UNSEEN_L2_FULLCHAIN_V0.1](UNSEEN_L2_FULLCHAIN_V0.1.md)。
 
 ## 当前主链
 

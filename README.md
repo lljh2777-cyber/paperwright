@@ -246,6 +246,10 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 prompt v0.2 的单次 L2 次指标为候选内 TP=4、FP=1、FN=0、TN=1：消除一个不同 Figure
 编号误报，但保留一个中间 continuation marker 误报。见
 [随机跨页 Caption Holdout v0.5](docs/RANDOM_HOLDOUT_V0.5.md)。
+页面级 L2 桥加固后的首批未见完整链回归按冻结顺序纳入 3 篇/36 页，由
+`gpt-5.6-luna` high 代理执行且禁止 task adapter 或人工修补；1 篇五阶段完成，2 篇因
+视觉模型输出的 role/content-class 契约冲突在首个 L2 页停止。见
+[未见论文 L2 完整生产链回归 v0.1](docs/UNSEEN_L2_FULLCHAIN_V0.1.md)。
 
 ## 页眉页脚剔除（--furniture）
 
