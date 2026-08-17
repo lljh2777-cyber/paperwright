@@ -1,6 +1,6 @@
 # PaperWright 当前实现状态
 
-更新时间：2026-08-16。
+更新时间：2026-08-17。
 
 ## 产品边界
 
@@ -37,6 +37,10 @@
 16. 人工 gold：Liao Li 于 2026-08-17 复核挑战集全部 8 张成对页面图，人工标签与 silver
     标签 8/8 一致、无 uncertain；保留 silver 审计输入并生成全量 `human_verified` 的
     `gold-v0.2.json`。
+17. 随机 holdout v0.3：从固定的 669 篇 PMC OA 抽样框以可重放随机顺序冻结 8 篇、
+    108 页、100 个相邻页对，未按出版社或正例标记换样。`23c7aad` 路由跨页候选为 0，
+    全页 silver 审计真实正例也为 0；pair-level prevalence 观察值 0%，双侧 95% 上界
+    3.62%，precision/recall 因零正例不可定义。本轮未修改规则。
 
 ## 当前主链
 
@@ -72,6 +76,9 @@ PDF
   71 页含 7 个显式正例，调整后全部召回且 1 个裸面板标签误报被消除。该集合已参与修正，
   8 个样本已完成人工复核并形成 gold，但仍不能估计自然分布指标，详见
   [CAPTION_CHALLENGE_V0.2](CAPTION_CHALLENGE_V0.2.md)。
+- Random holdout v0.3：随机冻结的 8 篇/108 页形成 100 个相邻页对，当前 silver 审计没有
+  正例；规则未因结果修改。它提供自然 prevalence 的初步上界，但不能估计候选 precision/
+  recall，详见 [RANDOM_HOLDOUT_V0.3](RANDOM_HOLDOUT_V0.3.md)。
 
 ## 仍是兼容层的部分
 
@@ -83,6 +90,7 @@ PDF
 
 ## 下一阶段
 
-冻结未参与任何规则修正的随机论文 holdout，分别报告候选召回、候选精确率和自然
-prevalence。不能用当前 seed、两个已用于修正的 holdout 或 marker-selected gold 挑战集
-报告总体泛化性能。
+先由人工复核 random holdout v0.3 的 8 张全页 contact sheet，将 100 个相邻负例从
+silver 晋升为 gold。随后继续沿已经冻结的随机候选顺序扩大固定样本量；在出现自然正例
+前，precision/recall 必须保持“不可定义”，不能借用 marker-selected gold 挑战集补齐
+自然分布指标，也不能据当前零误报结果宣称总体泛化通过。
