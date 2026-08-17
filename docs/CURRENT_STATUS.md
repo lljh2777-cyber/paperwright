@@ -73,6 +73,12 @@
     146/146 一致。H03 的 `7-9` 是三页 Figure span，按契约评分为 caption 起点边界
     `8-9`。最终基线仍为 TP=4、FP=2、FN=0、TN=140；达到点估计工程目标，但只有 4 个
     gold 正例，因此是独立但探索性的结果，不能宣称泛化验收通过。
+27. 随机 holdout v0.5 固定 L2 次指标：`qwen3.7-plus`、temperature 0、paired-page
+    prompt v0.2 单次运行覆盖全部 6 个冻结候选，候选内 TP=4、FP=1、FN=0、TN=1，端到端
+    为 TP=4、FP=1、FN=0、TN=141。模型拒绝了不同 Figure 6/7 的误报，但仍接受只有
+    `Figure 3. Cont.` 的中间边界。前置视觉布局桥在 3 篇首个候选页上均耗尽三次重试且
+    被契约拒绝，因此次指标使用透明的 frozen-issue task adapter；该失败与模型语义指标
+    分开报告。
 
 ## 当前主链
 
@@ -120,7 +126,9 @@ PDF
 - Random holdout v0.5：固定基线在 12 篇/158 页/146 个相邻页对中产生 6 个候选；人工
   gold 确认 4 个正例，得到 TP=4、FP=2、FN=0、TN=140。全部人工标签与 silver 一致，
   但 review 是 silver-informed，且正例少于预注册的 5 个，故只支持探索性结论，详见
-  [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
+  [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。固定 L2 单次判断在候选内得到
+  TP=4、FP=1、FN=0、TN=1；它保留全部正例并消除一个误报，但前置视觉布局桥的契约失败
+  说明当前完整生产链仍不能据此视为通过。
 
 ## 仍是兼容层的部分
 
@@ -132,6 +140,7 @@ PDF
 
 ## 下一阶段
 
-冻结 v0.5 gold，不使用本批修改路由规则。随后按事前协议把固定模型、固定 prompt 的最终
-L2 relation review 作为独立次指标运行并单独报告；确定性候选路由与模型判断质量不得混合。
-入口与边界见 [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
+冻结 v0.5 gold 与固定 L2 次指标，不使用本批继续调路由或 prompt。下一工作项应处理视觉
+布局桥的契约稳健性：在不让模型重画 bbox 的前提下，对“候选未核算、order 非法、ROI
+越界”提供确定性修复或带错误信息的受限重试，并先在既有回归材料验证。随后用新的未见
+论文检验完整生产链。入口与边界见 [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。

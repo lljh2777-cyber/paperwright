@@ -47,7 +47,9 @@ paperwright-caption-random-holdout-v0.5/
 - `pair-audit-silver-v0.5.json`：`95a53aed13307183f8a550f4d6413b4b55ffce0babbd03a9a6f7754b22fca865`
 - `HUMAN_REVIEW.md`：`1cce784ca7934e64582a1120f3a18cee26b39a1d7c1546cbc57989f6b4660b35`
 - `pair-audit-gold-v0.5.json`：`2a5203f1b6ca253020bab38635eb6131b8494fc2e98cf480967fbd04060230b0`
-- `results.json`：`33b1982997c55a94f392bcf9b38c9bf99e029237ecaf0ea7b2fb5940da451ad3`
+- `results.json`：`c4c2fb42cfadf568b1b8913087ae523f955d6381c6a70cd79227cec467e83a8e`
+- `l2-evaluation-qwen3.7-plus/results-l2.json`：
+  `0751b8a6d97badc68fb1345821a8d8e151fdc8c01f87d9d4c9c79ba14059ac11`
 
 ## 固定基线与 human-verified gold 结果
 
@@ -81,5 +83,28 @@ H03 的人工原始记录包含 `7-9`，reviewer 澄清其含义是同一 Figure
 结果、候选文档族和误报类型，所以本次必须称为 **silver-informed review**，不能称为
 盲审。gold 签署前后均未修改任何路由规则或阈值，v0.5 也尚未用于调参。
 
-确定性候选路由是本轮预注册主指标。模型相关的最终 L2 relation review 尚未运行，后续
-应使用固定模型与固定 prompt 单独报告，不能与上述路由指标混合。
+## 固定 L2 次指标
+
+确定性候选路由仍是本轮预注册主指标。gold 冻结后，使用固定的 `qwen3.7-plus`、
+temperature 0 和 `paperwright-cross-page-caption-prompt-v0.2` 对全部 6 个路由候选进行
+一次模型层 relation review；gold 标签没有进入 prompt。结果与路由指标分开：
+
+| 范围 | TP / FP / FN / TN | precision | recall |
+|---|---:|---:|---:|
+| 6 个候选内 | 4 / 1 / 0 / 1 | 80% | 100% |
+| 全部 146 个相邻页对的端到端结果 | 4 / 1 / 0 / 141 | 80% | 100% |
+
+模型正确拒绝 H10 的 6–7：前页 Figure 6 与后页 Figure 7 是不同对象；但接受了 H03 的
+7–8，把只有 `Figure 3. Cont.` 的中间页错误视为完整 caption 起点。L2 因而消除了路由
+两个误报中的一个，没有新增漏报；这只是一个固定模型 alias 的单次、极小样本结果，不
+估计模型跨运行或未来版本的稳定性。
+
+原计划先让视觉布局桥只处理 11 个候选相关页面，但 H01、H03、H10 的首个页面均在三次
+重试后被不可变布局契约拒绝：两篇没有完整核算候选，一篇产生 ROI 越界区块，0 个
+`final-layout.json` 写盘。为避免把页面布局 JSON 合规性混入 paired-page 语义指标，最终
+task 透明地从冻结的 6 个 issue-routing 页对、bbox 和原生 caption anchor 构造，并继续
+通过正式 task/review 校验器。该 adapter 限制和最初失败均保存在外部结果中。
+
+供应商原始 usage 仅作为可复现 provenance 保存，不计算价格、不设置预算阈值，也不纳入
+质量结论。本轮 3 次有效 paired-page 调用的记录为 14,839 input、5,597 output，其中
+5,121 reasoning tokens；失败的布局尝试没有生成 usage 文件，因此不做不完整汇总。

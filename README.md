@@ -242,7 +242,9 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 [随机跨页 Caption Holdout v0.5 协议](docs/RANDOM_HOLDOUT_V0.5_PROTOCOL.md)。
 该批冻结为 12 篇/158 页/146 个相邻页对；人工复核与 silver 的 146 个页对标签完全一致，
 现已形成 gold。固定基线为 TP=4、FP=2、FN=0、TN=140；因只有 4 个正例，结果按事前
-协议仍属独立但探索性，不能宣称泛化验收通过。见
+协议仍属独立但探索性，不能宣称泛化验收通过。固定 `qwen3.7-plus` 与 paired-page
+prompt v0.2 的单次 L2 次指标为候选内 TP=4、FP=1、FN=0、TN=1：消除一个不同 Figure
+编号误报，但保留一个中间 continuation marker 误报。见
 [随机跨页 Caption Holdout v0.5](docs/RANDOM_HOLDOUT_V0.5.md)。
 
 ## 页眉页脚剔除（--furniture）
