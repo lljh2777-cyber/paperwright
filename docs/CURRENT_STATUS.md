@@ -67,8 +67,12 @@
     运行 PaperWright、生成页面预览或查看跨页标签。
 25. 随机 holdout v0.5 silver：固定基线产生 6 个跨页候选，全页审计得到 4 个真实正例，
     TP=4、FP=2、FN=0、TN=140，候选 recall=100%、precision=66.67%、负页对误报率
-    1.41%。正例少于事前指定的 5 个，只能作探索性结果；等待 silver-informed 人工签署，
-    期间不修改规则。
+    1.41%。正例少于事前指定的 5 个，只能作探索性结果；期间未修改规则。
+26. 随机 holdout v0.5 人工 gold：Liao Li 于 2026-08-17 复核全部 12 张 contact sheet。
+    人工与 silver 的文档二分类、精确评分页对集合和相邻页标签分别为 12/12、12/12、
+    146/146 一致。H03 的 `7-9` 是三页 Figure span，按契约评分为 caption 起点边界
+    `8-9`。最终基线仍为 TP=4、FP=2、FN=0、TN=140；达到点估计工程目标，但只有 4 个
+    gold 正例，因此是独立但探索性的结果，不能宣称泛化验收通过。
 
 ## 当前主链
 
@@ -113,6 +117,10 @@ PDF
   规则在 gold 签署前保持冻结；转为开发/校准集后的面板连续性路由已召回 10/10，且
   没有命中其余 147 个页对。该数字不能作为独立泛化结果，详见
   [RANDOM_HOLDOUT_V0.4](RANDOM_HOLDOUT_V0.4.md)。
+- Random holdout v0.5：固定基线在 12 篇/158 页/146 个相邻页对中产生 6 个候选；人工
+  gold 确认 4 个正例，得到 TP=4、FP=2、FN=0、TN=140。全部人工标签与 silver 一致，
+  但 review 是 silver-informed，且正例少于预注册的 5 个，故只支持探索性结论，详见
+  [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
 
 ## 仍是兼容层的部分
 
@@ -124,6 +132,6 @@ PDF
 
 ## 下一阶段
 
-由人工逐篇复核 v0.5 的 12 张全页 contact sheet 并签署 gold；reviewer 已知 silver 汇总
-与候选文档族，因此必须称为 silver-informed review，而不是盲审。入口与边界见
-[RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
+冻结 v0.5 gold，不使用本批修改路由规则。随后按事前协议把固定模型、固定 prompt 的最终
+L2 relation review 作为独立次指标运行并单独报告；确定性候选路由与模型判断质量不得混合。
+入口与边界见 [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。

@@ -4,9 +4,9 @@
 
 - 事前协议提交：`9eb1ade`
 - 固定代码基线：`e94cf33218e4df5a7ff8cb920d7e68fb271b2fc9`
-- 语料状态：资格、PDF、baseline evidence 与 silver 已冻结
-- 标签状态：silver；等待人工签署
-- 规则状态：冻结后未修改
+- 语料状态：资格、PDF、baseline evidence、silver 与 gold 已冻结
+- 标签状态：gold；Liao Li 于 2026-08-17 完成全部 12 篇人工复核
+- 规则状态：gold 签署前后均未修改
 
 本轮用于独立验证 v0.4 gold 后开发的 `cross_page_panel_continuity` 修正。完整停止规则、
 资格条件、主次指标和解释边界见
@@ -44,14 +44,25 @@ paperwright-caption-random-holdout-v0.5/
 - `eligibility.json`：`f1236e00d855b5ba06b7d62f630a63b209d7472c6fe0002c2333b555454afa2e`
 - `corpus.json`：`7c7def68117bf9abb8a1c8606870a1fd137db17591084ae64ac3a8887459197e`
 - `PREREGISTRATION.md`：`571671d5555d75c7ef8e5cce391e94ea63dab5c4a45373d124f579f9955b588f`
+- `pair-audit-silver-v0.5.json`：`95a53aed13307183f8a550f4d6413b4b55ffce0babbd03a9a6f7754b22fca865`
+- `HUMAN_REVIEW.md`：`1cce784ca7934e64582a1120f3a18cee26b39a1d7c1546cbc57989f6b4660b35`
+- `pair-audit-gold-v0.5.json`：`2a5203f1b6ca253020bab38635eb6131b8494fc2e98cf480967fbd04060230b0`
+- `results.json`：`33b1982997c55a94f392bcf9b38c9bf99e029237ecaf0ea7b2fb5940da451ad3`
 
-## 固定基线与 silver 结果
+## 固定基线与 human-verified gold 结果
 
 严格使用固定基线和 `--extraction-profile standard` 生成了 105 个 issue：52 个复杂
 几何、47 个同页 caption–visual 和 6 个跨页 caption–visual。独立于路由输出的 12 张
-全页 contact sheet 审计发现 4 个 silver 正例，分布于 2 篇论文；无 uncertain。
+全页 contact sheet 审计发现 4 个 silver 正例，分布于 2 篇论文；无 uncertain。Liao Li
+随后逐篇复核全部 contact sheet，人工与 silver 在文档二分类、精确评分页对集合以及全部
+相邻页标签上分别为 12/12、12/12 和 146/146 一致（Cohen's kappa = 1.0），因此将本批
+提升为 gold。
 
-| 指标 | silver 结果 |
+H03 的人工原始记录包含 `7-9`，reviewer 澄清其含义是同一 Figure 连续跨越第 7、8、9
+页。对象级 span 被完整保留；按事前的相邻页评分契约，只有完整显式 caption 首次出现前
+的 `8-9` 计为正例，`7-8` 因第 8 页只有中间 continuation marker 而不计正例。
+
+| 指标 | gold 结果 |
 |---|---:|
 | TP / FP / FN / TN | 4 / 2 / 0 / 140 |
 | 候选 precision | 66.67% |
@@ -60,12 +71,15 @@ paperwright-caption-random-holdout-v0.5/
 | pair observed prevalence | 2.74% |
 | 含正例文档 | 2/12（16.67%） |
 
-4 个正例均是“前页视觉 + 后页继续面板并首次出现完整 legend”的多页面板 Figure，说明
-新增连续性信号在本批没有漏召回。两个误报分别是：把中间页仅有的 `Figure 3. Cont.`
-标记当成完整 legend 起点；把前页 Figure 6 与后页独立 Figure 7 误关联。观察点估计达到
-事前的 recall/FPR 工程目标，但正例数少于预设的 5 个，因此必须按协议视为探索性结果，
-不能宣称泛化验收通过。
+4 个 gold 正例均是“前页视觉 + 后页继续面板并首次出现完整 legend”的多页面板 Figure，
+说明新增连续性信号在本批没有漏召回。两个误报分别是：把中间页仅有的
+`Figure 3. Cont.` 标记当成完整 legend 起点；把前页 Figure 6 与后页独立 Figure 7
+误关联。观察点估计达到事前的 recall/FPR 工程目标，但正例数少于预设的 5 个，因此必须
+按协议视为**独立但探索性**的结果，不能宣称泛化验收通过。
 
-外部 `HUMAN_REVIEW.md` 不显示确切 silver 页对；但 reviewer 已在进度更新中得知聚合
-结果、候选文档族和误报类型，所以后续必须称为 **silver-informed review**，不能称为
-盲审。人工签署前不修改任何路由规则或阈值。
+外部 `HUMAN_REVIEW.md` 没有显示确切 silver 页对；但 reviewer 已在进度更新中得知聚合
+结果、候选文档族和误报类型，所以本次必须称为 **silver-informed review**，不能称为
+盲审。gold 签署前后均未修改任何路由规则或阈值，v0.5 也尚未用于调参。
+
+确定性候选路由是本轮预注册主指标。模型相关的最终 L2 relation review 尚未运行，后续
+应使用固定模型与固定 prompt 单独报告，不能与上述路由指标混合。
