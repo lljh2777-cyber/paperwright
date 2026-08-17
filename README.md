@@ -237,6 +237,9 @@ L2 默认优先使用候选关系协议：模型只分组候选、判断角色/�
 仍需新的未见 holdout 验证。见
 [随机跨页 Caption Holdout v0.4](docs/RANDOM_HOLDOUT_V0.4.md)及其
 [事前协议](docs/RANDOM_HOLDOUT_V0.4_PROTOCOL.md)。
+新的未见批次已在查看候选页面前固定基线 `e94cf33`，从冻结候选顺序位置 38 开始按
+标签无关停止规则纳入 12 篇；确定性候选与最终 L2 判断分开评估。见
+[随机跨页 Caption Holdout v0.5 协议](docs/RANDOM_HOLDOUT_V0.5_PROTOCOL.md)。
 
 ## 页眉页脚剔除（--furniture）
 
