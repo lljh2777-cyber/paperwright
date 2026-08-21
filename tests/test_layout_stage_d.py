@@ -1286,6 +1286,82 @@ class LayoutStageDTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((output / "article.md").is_file())
 
+    def test_standard_profile_keeps_inventory_when_no_page_escalates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            no_risk = LayoutRiskAssessment(
+                tuple(
+                    PageLayoutRisk(
+                        page_index=index,
+                        reasons=(),
+                        candidate_count=3,
+                        raster_candidate_count=1,
+                        separator_count=2,
+                        native_text_element_count=3,
+                    )
+                    for index in range(2)
+                )
+            )
+            with mock.patch(
+                "paperwright.api.assess_layout_risk",
+                return_value=no_risk,
+            ):
+                _, review = self._prepare(
+                    root,
+                    extraction_profile="standard",
+                )
+
+            index = json.loads(
+                (review / "review-index.json").read_text(encoding="utf-8")
+            )
+            cached = PhysicalDocument.from_dict(
+                json.loads(
+                    (
+                        review
+                        / "extraction-cache"
+                        / "physical-document.json"
+                    ).read_text(encoding="utf-8")
+                )
+            )
+            self.assertEqual(
+                index["effective_extraction_profile"],
+                "inventory-standard",
+            )
+            self.assertEqual(
+                index["physical_extraction_profile"],
+                "inventory-standard",
+            )
+            images = [
+                element
+                for page in cached.pages
+                for element in page.elements
+                if element.kind == "image"
+            ]
+            self.assertTrue(images)
+            self.assertTrue(
+                all(
+                    item.metadata.get("asset_materialization") == "deferred"
+                    for item in images
+                )
+            )
+
+            output = root / "inventory-standard-output"
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(
+                    [
+                        "layout-apply",
+                        str(root / "fixture.pdf"),
+                        str(review),
+                        str(output),
+                        "--workspace-root",
+                        str(root),
+                        "--evidence",
+                        "minimal",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            self.assertTrue((output / "article.md").is_file())
+
     def test_layout_apply_rejects_tampered_extraction_cache(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

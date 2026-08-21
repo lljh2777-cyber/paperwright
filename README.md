@@ -359,8 +359,9 @@ Figure/Caption 关系的块会被拒绝）。模型只负责识别与声明"同�
 仍可溯源）。`text-apply` 不覆盖原文件，只写出新的规范模型；完整说明见
 [文本复核协议](docs/TEXT_REVIEW_PROTOCOL_ZH.md)。
 
-`fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 仅把高风险页面升级为
-完整对象分析；`forensic` 对全文执行完整对象遍历。
+`fast` 使用原生文字坐标和低分辨率栅格证据；`standard` 先在所有页盘点原生
+image/vector bounds，再只对高风险页面解码图片资产；`forensic` 对全文执行完整对象
+遍历并物化图片。
 
 ## 找不到 `paperwright` 命令
 

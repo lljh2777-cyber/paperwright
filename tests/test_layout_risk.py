@@ -213,7 +213,7 @@ class LayoutRiskTests(unittest.TestCase):
             self.assertEqual(result.performance["extraction_mode"], "hybrid")
             self.assertEqual(
                 [item["extraction_mode"] for item in result.performance["pages"]],
-                ["full", "text-only"],
+                ["full", "inventory"],
             )
             self.assertTrue(
                 any(
@@ -226,6 +226,41 @@ class LayoutRiskTests(unittest.TestCase):
                     element.kind == "text"
                     for element in result.document.pages[1].elements
                 )
+            )
+
+    def test_pdfium_hybrid_retains_deferred_inventory_off_selected_pages(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "fixture.pdf"
+            create_born_digital_fixture(source)
+            backend = PDFiumBackend()
+
+            result = backend.extract_hybrid(
+                source,
+                PaperWrightConfig(),
+                full_page_indices=(1,),
+            )
+
+            self.assertEqual(
+                [item["extraction_mode"] for item in result.performance["pages"]],
+                ["inventory", "full"],
+            )
+            self.assertEqual(result.assets, ())
+            page_one_images = [
+                element
+                for element in result.document.pages[0].elements
+                if element.kind == "image"
+            ]
+            self.assertTrue(page_one_images)
+            self.assertTrue(
+                all(
+                    item.metadata.get("asset_materialization") == "deferred"
+                    and "asset_name" not in item.metadata
+                    for item in page_one_images
+                )
+            )
+            self.assertIn(
+                "all_pages_complete_bounds; selected_pages_materialized",
+                result.document.metadata["native_object_inventory"],
             )
 
 

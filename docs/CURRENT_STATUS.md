@@ -16,10 +16,10 @@
 citation/license 侧栏固化成 Figure-caption。继续调页级候选分类和 prompt 不能修复上游
 证据缺失。
 
-根因之一是当前 `standard` 会先生成 text-only PhysicalDocument，再用这份缺少
+根因之一是旧 `standard` 会先生成 text-only PhysicalDocument，再用这份缺少
 image/vector 的证据判断是否值得完整枚举。U02/U03 均未升级，最终缓存所有页面都只有
-text。相同 PDF 的 PDFium 完整遍历能直接发现 U02 的 6 个 image/566 个 vector 和 U03
-的 11 个 image/88 个 vector。
+text。E0 已移除这条循环盲区：当前 `standard` 先对所有页枚举 image/vector bounds，再
+决定哪些页需要解码图片资产。
 
 因此当前主线暂停新增未见论文批次和视觉关系 prompt 调参，先重建粗提取层。已接受的
 目标方案见 [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)：PDFium 提供全页
@@ -113,12 +113,16 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     confidence 仍不可自动修复，原始校验器也增加排除 role 的反向一致性约束。原 U01/U03
     在新目录的开发集回放均完成五阶段，28/28 final layout 与 14/14 relation review
     有效；该回放只验证已知停止点，不是独立泛化或语义质量结论。
+31. PDFium 全页对象 inventory（E0）：新增不解码位图的 `extract_inventory()`；标准路径
+    对每页保留 image/vector 类型与 bbox，图片明确标记 deferred，选择性升级只物化目标
+    页。U02/U03 inventory 与 full 的逐页非文字对象计数一致、均无图片解码；U02 第 3、
+    6、7 页的 6 个 image 已全部在标准入口可见。
 
 ## 当前主链
 
 ```text
 PDF
- → PhysicalDocument + raster evidence
+ → PDFium 全页 object inventory + raster evidence
  → issue-routing.json
  → L0 layout
  → L2 candidate relation review（仅局部视觉 issue）
@@ -176,7 +180,7 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)依次完成：PDFium 全页低成本对象
-inventory、provider snapshot/对齐契约、pdfplumber 侧车、GROBID 语义侧车，再在
-U02/U03 上验证证据是否足以排除已知错误。只有该门槛通过后，才进入 PaperRecipe/
-ArticleTree 纵向原型和新的独立论文验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E1 provider snapshot/
+对齐契约、E2 pdfplumber 侧车、E3 GROBID 语义侧车，再在 U02/U03 上验证证据是否足以
+排除已知错误。E0 的 PDFium 全页低成本 inventory 已完成。只有该门槛通过后，才进入
+PaperRecipe/ArticleTree 纵向原型和新的独立论文验收。

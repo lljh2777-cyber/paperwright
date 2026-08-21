@@ -715,6 +715,20 @@ class PDFiumBackend:
 
         return self._extract(source, config, text_only=True)
 
+    def extract_inventory(
+        self,
+        source: Path,
+        config: PaperWrightConfig,
+    ) -> BackendResult:
+        """Extract text and native object bounds without decoding bitmaps."""
+
+        return self._extract(
+            source,
+            config,
+            text_only=True,
+            inventory=True,
+        )
+
     def extract_hybrid(
         self,
         source: Path,
@@ -722,7 +736,7 @@ class PDFiumBackend:
         *,
         full_page_indices: tuple[int, ...],
     ) -> BackendResult:
-        """Walk native objects only on explicitly selected zero-based pages."""
+        """Materialize selected pages while retaining inventory on all others."""
 
         selected = frozenset(full_page_indices)
         if len(selected) != len(full_page_indices) or any(
@@ -735,6 +749,7 @@ class PDFiumBackend:
             source,
             config,
             text_only=True,
+            inventory=True,
             full_page_indices=selected,
         )
 
@@ -744,8 +759,13 @@ class PDFiumBackend:
         config: PaperWrightConfig,
         *,
         text_only: bool,
+        inventory: bool = False,
         full_page_indices: frozenset[int] = frozenset(),
     ) -> BackendResult:
+        if inventory and not text_only:
+            raise BackendExecutionError(
+                "inventory mode requires the text-page extraction path"
+            )
         pdfium = self._pdfium
         extraction_started = time.perf_counter_ns()
         hash_started = time.perf_counter_ns()
@@ -783,15 +803,10 @@ class PDFiumBackend:
             for page_index in range(len(document)):
                 page = document[page_index]
                 try:
-                    page_uses_text_only = (
-                        text_only and page_index not in full_page_indices
+                    page_uses_full = (
+                        not text_only or page_index in full_page_indices
                     )
-                    if page_uses_text_only:
-                        extracted_page, timing = self._extract_text_only_page(
-                            page,
-                            page_index,
-                        )
-                    else:
+                    if page_uses_full:
                         extracted_page, timing = self._extract_page(
                             page,
                             page_index,
@@ -800,8 +815,25 @@ class PDFiumBackend:
                             degenerate_counts,
                             degenerate_pages,
                         )
+                    elif inventory:
+                        extracted_page, timing = self._extract_inventory_page(
+                            page,
+                            page_index,
+                            warnings,
+                            degenerate_counts,
+                            degenerate_pages,
+                        )
+                    else:
+                        extracted_page, timing = self._extract_text_only_page(
+                            page,
+                            page_index,
+                        )
                     timing["extraction_mode"] = (
-                        "text-only" if page_uses_text_only else "full"
+                        "full"
+                        if page_uses_full
+                        else "inventory"
+                        if inventory
+                        else "text-only"
                     )
                     pages.append(extracted_page)
                     page_performance.append(timing)
@@ -833,8 +865,10 @@ class PDFiumBackend:
                 "source_object_identity": "unavailable_from_public_wrapper",
                 "text_order": "deterministic_basic_columns_v2_iterative_line_merge",
                 "text_object_extraction": (
-                    "pdfium_page_selective_hybrid_v1"
-                    if text_only and full_page_indices
+                    "pdfium_page_selective_inventory_hybrid_v2"
+                    if inventory and full_page_indices
+                    else "pdfium_textpage_character_geometry_with_inventory_v1"
+                    if inventory
                     else "pdfium_textpage_character_geometry_fast_v1"
                     if text_only
                     else "pdfium_native_text_object_character_geometry_v3"
@@ -842,17 +876,21 @@ class PDFiumBackend:
                 "text_line_reconstruction": "native_object_geometry_v2",
                 "extraction_profile": (
                     "hybrid-standard"
-                    if text_only and full_page_indices
+                    if inventory and full_page_indices
+                    else "inventory-standard"
+                    if inventory
                     else "text-only-fast"
                     if text_only
                     else "full"
                 ),
                 "native_object_inventory": (
                     (
-                        "selected_pages_full; other_pages_text_only; "
+                        "all_pages_complete_bounds; selected_pages_materialized; "
                         f"full_page_indices={sorted(full_page_indices)}"
                     )
-                    if text_only and full_page_indices
+                    if inventory and full_page_indices
+                    else "all_pages_complete_bounds; image_bitmaps_deferred"
+                    if inventory
                     else "text_only; image_and_vector_objects_not_enumerated"
                     if text_only
                     else "complete_supported_page_object_walk"
@@ -869,7 +907,9 @@ class PDFiumBackend:
             "clock": "time.perf_counter_ns",
             "extraction_mode": (
                 "hybrid"
-                if text_only and full_page_indices
+                if inventory and full_page_indices
+                else "inventory"
+                if inventory
                 else "text-only"
                 if text_only
                 else "full"
@@ -1157,6 +1197,200 @@ class PDFiumBackend:
         }
         return result, timing
 
+    def _extract_inventory_page(
+        self,
+        page: Any,
+        page_index: int,
+        warnings: list[dict[str, object]],
+        degenerate_counts: Counter[str],
+        degenerate_pages: list[dict[str, object]],
+    ) -> tuple[Page, dict[str, object]]:
+        """Inventory native object geometry while deferring image decoding.
+
+        Text continues to use the faster text-page character geometry path.
+        Image elements deliberately have no ``asset_name`` until a page is
+        materialized by the full extractor; downstream layout code can still
+        reason about their bounds and render an accepted page region.
+        """
+
+        page_started = time.perf_counter_ns()
+        text_page, text_timing = self._extract_text_only_page(page, page_index)
+        pdfium = self._pdfium
+        width, height = text_page.width, text_page.height
+        inventory: list[Element] = []
+        image_index = 0
+        vector_index = 0
+        native_object_counts: Counter[str] = Counter()
+        page_degenerate_counts: Counter[str] = Counter()
+
+        object_walk_started = time.perf_counter_ns()
+        for raw_index, obj in enumerate(page.get_objects()):
+            if isinstance(obj, pdfium.PdfTextObj):
+                native_object_counts["text"] += 1
+                continue
+            if isinstance(obj, pdfium.PdfImage):
+                native_object_counts["image"] += 1
+                object_kind = "image"
+            elif getattr(obj, "type", None) == 2:
+                native_object_counts["vector"] += 1
+                object_kind = "vector"
+            elif getattr(obj, "type", None) == 5:
+                native_object_counts["form"] += 1
+                object_kind = "form"
+            else:
+                native_object_counts["other"] += 1
+                object_kind = "other"
+
+            bounds = obj.get_bounds()
+            bbox = _clamped_bbox(bounds, width, height)
+            if bbox is None:
+                reason = _degenerate_bbox_reason(bounds, width, height)
+                if object_kind == "form":
+                    diagnostic_code = "ignored_degenerate_form_container"
+                elif object_kind == "vector":
+                    diagnostic_code = "unplaced_degenerate_vector_path"
+                    warnings.append(
+                        {
+                            "code": diagnostic_code,
+                            "page": page_index + 1,
+                            "raw_object_index": raw_index,
+                            "bbox_reason": reason,
+                        }
+                    )
+                elif object_kind == "image":
+                    diagnostic_code = "unplaced_degenerate_image"
+                    warnings.append(
+                        {
+                            "code": diagnostic_code,
+                            "page": page_index + 1,
+                            "raw_object_index": raw_index,
+                            "bbox_reason": reason,
+                        }
+                    )
+                else:
+                    diagnostic_code = "unplaced_degenerate_unsupported_object"
+                    warnings.append(
+                        {
+                            "code": diagnostic_code,
+                            "page": page_index + 1,
+                            "raw_object_index": raw_index,
+                            "object_type": getattr(obj, "type", None),
+                            "bbox_reason": reason,
+                        }
+                    )
+                degenerate_counts[diagnostic_code] += 1
+                page_degenerate_counts[diagnostic_code] += 1
+                continue
+
+            source_ref = f"page:{page_index}:native-object-index:{raw_index}"
+            if object_kind == "image":
+                inventory.append(
+                    Element(
+                        element_id=(
+                            f"p{page_index:04d}-image-{image_index:04d}"
+                        ),
+                        kind="image",
+                        page_index=page_index,
+                        bbox=bbox,
+                        source_object_id=None,
+                        provenance=Provenance(
+                            backend="pdfium",
+                            method="native_image_object_bounds_deferred",
+                            source_ref=source_ref,
+                            confidence=1.0,
+                            unavailable_reason=(
+                                "bitmap asset intentionally deferred; stable "
+                                "native PDF object ID unavailable"
+                            ),
+                        ),
+                        metadata={
+                            "raw_object_index": raw_index,
+                            "asset_materialization": "deferred",
+                        },
+                    )
+                )
+                image_index += 1
+            elif object_kind == "vector":
+                inventory.append(
+                    Element(
+                        element_id=(
+                            f"p{page_index:04d}-vector-{vector_index:05d}"
+                        ),
+                        kind="vector",
+                        page_index=page_index,
+                        bbox=bbox,
+                        source_object_id=None,
+                        provenance=Provenance(
+                            backend="pdfium",
+                            method="native_path_object_bounds",
+                            source_ref=source_ref,
+                            confidence=1.0,
+                            unavailable_reason=(
+                                "stable native PDF object ID unavailable"
+                            ),
+                        ),
+                        metadata={
+                            "raw_object_index": raw_index,
+                            "asset_materialization": "not_applicable",
+                        },
+                    )
+                )
+                vector_index += 1
+        object_walk_ns = time.perf_counter_ns() - object_walk_started
+
+        reading_order_started = time.perf_counter_ns()
+        ordered = _reading_order(
+            [*text_page.elements, *inventory],
+            width,
+        )
+        reading_order_ns = time.perf_counter_ns() - reading_order_started
+        normalization_started = time.perf_counter_ns()
+        normalized = tuple(
+            Element(
+                element_id=item.element_id,
+                kind=item.kind,
+                page_index=item.page_index,
+                bbox=item.bbox,
+                provenance=item.provenance,
+                text=item.text,
+                source_object_id=item.source_object_id,
+                metadata={**item.metadata, "normalized_order": order},
+            )
+            for order, item in enumerate(ordered)
+        )
+        normalization_ns = time.perf_counter_ns() - normalization_started
+        if page_degenerate_counts:
+            degenerate_pages.append(
+                {
+                    "page": page_index + 1,
+                    "counts": dict(sorted(page_degenerate_counts.items())),
+                }
+            )
+
+        result = Page(
+            page_index=page_index,
+            width=width,
+            height=height,
+            rotation=text_page.rotation,
+            elements=normalized,
+        )
+        timing: dict[str, object] = {
+            **text_timing,
+            "total_ms": _milliseconds(time.perf_counter_ns() - page_started),
+            "object_walk_ms": _milliseconds(object_walk_ns),
+            "image_decode_ms": 0.0,
+            "reading_order_ms": _milliseconds(reading_order_ns),
+            "normalization_ms": _milliseconds(normalization_ns),
+            "native_object_counts": dict(sorted(native_object_counts.items())),
+            "emitted_element_counts": {
+                "text": sum(item.kind == "text" for item in normalized),
+                "image": sum(item.kind == "image" for item in normalized),
+                "vector": sum(item.kind == "vector" for item in normalized),
+            },
+            "degenerate_object_count": sum(page_degenerate_counts.values()),
+        }
+        return result, timing
+
     def _extract_page(
         self,
         page: Any,
@@ -1391,6 +1625,7 @@ class PDFiumBackend:
                                 "width_px": width_px,
                                 "height_px": height_px,
                                 "raw_object_index": raw_index,
+                                "asset_materialization": "materialized",
                             },
                         )
                     )

@@ -458,13 +458,19 @@ class PaperWright:
             raster_analyses: dict[int, Any] | None = None
             preview_by_page: dict[int, Any] = {}
             if extraction_profile in {"fast", "standard"}:
-                extract_text_only = getattr(backend, "extract_text_only", None)
+                extractor_name = (
+                    "extract_inventory"
+                    if extraction_profile == "standard"
+                    else "extract_text_only"
+                )
+                extractor = getattr(backend, extractor_name, None)
                 render_previews = getattr(backend, "render_page_previews", None)
-                if not callable(extract_text_only) or not callable(render_previews):
+                if not callable(extractor) or not callable(render_previews):
                     raise BackendExecutionError(
-                        f"{backend.identity.name} backend does not support fast layout extraction"
+                        f"{backend.identity.name} backend does not support "
+                        f"{extraction_profile} layout extraction"
                     )
-                result = _backend_result(extract_text_only(source, self.config))
+                result = _backend_result(extractor(source, self.config))
                 page_indices = tuple(
                     page.page_index for page in result.document.pages
                 )
@@ -566,7 +572,7 @@ class PaperWright:
                     )
                     effective_extraction_profile = "hybrid-standard"
                 else:
-                    effective_extraction_profile = "fast"
+                    effective_extraction_profile = "inventory-standard"
             routing_plan = plan_routing(
                 result.document,
                 tasks,
@@ -805,7 +811,12 @@ class PaperWright:
             "effective_extraction_profile",
             recorded_profile,
         )
-        if effective_profile not in {"fast", "hybrid-standard", "forensic"}:
+        if effective_profile not in {
+            "fast",
+            "inventory-standard",
+            "hybrid-standard",
+            "forensic",
+        }:
             raise BackendExecutionError(
                 "unsupported effective review extraction profile"
             )
@@ -854,12 +865,11 @@ class PaperWright:
                 )
             if cached_result is not None:
                 result = cached_result
-            elif effective_profile in {"fast", "hybrid-standard"}:
-                extract_text_only = getattr(backend, "extract_text_only", None)
-                if not callable(extract_text_only):
-                    raise BackendExecutionError(
-                        f"{backend.identity.name} backend does not support fast layout extraction"
-                    )
+            elif effective_profile in {
+                "fast",
+                "inventory-standard",
+                "hybrid-standard",
+            }:
                 if effective_profile == "hybrid-standard":
                     extract_hybrid = getattr(backend, "extract_hybrid", None)
                     if not callable(extract_hybrid):
@@ -873,7 +883,31 @@ class PaperWright:
                             full_page_indices=escalation_pages,
                         )
                     )
+                elif effective_profile == "inventory-standard":
+                    extract_inventory = getattr(
+                        backend,
+                        "extract_inventory",
+                        None,
+                    )
+                    if not callable(extract_inventory):
+                        raise BackendExecutionError(
+                            f"{backend.identity.name} backend does not support "
+                            "standard inventory extraction"
+                        )
+                    result = _backend_result(
+                        extract_inventory(source, self.config)
+                    )
                 else:
+                    extract_text_only = getattr(
+                        backend,
+                        "extract_text_only",
+                        None,
+                    )
+                    if not callable(extract_text_only):
+                        raise BackendExecutionError(
+                            f"{backend.identity.name} backend does not support "
+                            "fast layout extraction"
+                        )
                     result = _backend_result(
                         extract_text_only(source, self.config)
                     )
@@ -883,7 +917,11 @@ class PaperWright:
                 raise BackendExecutionError(
                     "cached/extracted backend identity does not match configuration"
                 )
-            if effective_profile in {"fast", "hybrid-standard"}:
+            if effective_profile in {
+                "fast",
+                "inventory-standard",
+                "hybrid-standard",
+            }:
                 page_indices = tuple(
                     page.page_index
                     for page in result.document.pages

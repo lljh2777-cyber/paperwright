@@ -1,6 +1,6 @@
 # PaperWright 粗提取多证据架构 v0.1
 
-> 状态：已接受，等待实现（2026-08-21）
+> 状态：已接受；E0 已实现，E1–E5 待实现（2026-08-21）
 >
 > 范围：born-digital 科研论文的物理与结构证据采集
 >
@@ -194,6 +194,15 @@ source PDF + sha256
 ## 7. 实施顺序
 
 ### E0：修复必需物理清单
+
+**状态：已完成。** `PDFiumBackend.extract_inventory()` 现以 TextPage 提取原生文字，同时
+遍历所有页的 image/vector 类型与 bbox。image 元素以
+`asset_materialization=deferred` 明确表示尚无位图资产；`extract_hybrid()` 只在升级页
+解码图片，其他页继续保留完整 bounds inventory。显式 `fast` 仍保持纯文字诊断语义。
+
+U02/U03 的只读实现验收中，inventory 与 full 的逐页 image/vector 计数完全相同，且
+inventory 均产生 0 个图片资产、图片解码时间为 0。U02 第 3、6、7 页分别可见 2、2、2
+个原生 image，不再依赖旧 text-only 风险路由才能发现。
 
 1. 将 PDFium 的“对象枚举”与“位图解码/资产写出”拆开；
 2. 产品标准路径对每页枚举 text/image/vector 的类型与 bbox；

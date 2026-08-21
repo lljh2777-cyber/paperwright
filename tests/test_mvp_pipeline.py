@@ -122,6 +122,66 @@ class MVPPipelineTests(unittest.TestCase):
             )
         )
 
+    def test_inventory_keeps_native_bounds_without_decoding_images(self):
+        backend = PDFiumBackend()
+        full_result = backend.extract(self.source, PaperWrightConfig())
+        inventory_result = backend.extract_inventory(
+            self.source,
+            PaperWrightConfig(),
+        )
+
+        self.assertEqual(inventory_result.assets, ())
+        self.assertEqual(
+            inventory_result.performance["extraction_mode"],
+            "inventory",
+        )
+        self.assertEqual(
+            inventory_result.document.metadata["extraction_profile"],
+            "inventory-standard",
+        )
+        self.assertEqual(
+            inventory_result.document.metadata["native_object_inventory"],
+            "all_pages_complete_bounds; image_bitmaps_deferred",
+        )
+        self.assertTrue(
+            all(
+                page["image_decode_ms"] == 0.0
+                for page in inventory_result.performance["pages"]
+            )
+        )
+
+        for full_page, inventory_page in zip(
+            full_result.document.pages,
+            inventory_result.document.pages,
+            strict=True,
+        ):
+            full_non_text = [
+                (item.element_id, item.kind, item.bbox.to_dict())
+                for item in full_page.elements
+                if item.kind in {"image", "vector"}
+            ]
+            inventory_non_text = [
+                (item.element_id, item.kind, item.bbox.to_dict())
+                for item in inventory_page.elements
+                if item.kind in {"image", "vector"}
+            ]
+            self.assertEqual(inventory_non_text, full_non_text)
+
+        deferred_images = [
+            item
+            for page in inventory_result.document.pages
+            for item in page.elements
+            if item.kind == "image"
+        ]
+        self.assertTrue(deferred_images)
+        self.assertTrue(
+            all(
+                item.metadata.get("asset_materialization") == "deferred"
+                and "asset_name" not in item.metadata
+                for item in deferred_images
+            )
+        )
+
     def test_embedded_image_is_real_and_hash_matches(self):
         result = self.convert()
         manifest = result.manifest
