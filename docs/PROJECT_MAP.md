@@ -6,7 +6,7 @@ Read the actual source before editing; this map only routes investigation.
 |---|---|---|
 | CLI and orchestration | `src/paperwright/cli.py`, `api.py`, `hybrid.py`, `batch.py` | `test_cli.py`, `test_hybrid_pipeline.py`, `test_routing_plan.py`, `test_paths_api.py`, `test_phase5_alpha.py` |
 | Physical model and PDFium | `models.py`, `backends/base.py`, `backends/pdfium.py` | `test_models.py`, `test_pdfium_degenerate.py`, `test_mvp_pipeline.py` |
-| Source evidence and provider alignment | `source_evidence.py`, `pdfplumber_provider.py`, `grobid_provider.py`, `schemas/source_evidence.schema.json` | `test_source_evidence.py`, `test_grobid_provider.py`, `test_layout_stage_d.py` |
+| Source evidence and provider alignment | `source_evidence.py`, `pdfplumber_provider.py`, `grobid_provider.py`, `specialist_routing.py`, `docling_provider.py`, `schemas/source_evidence.schema.json` | `test_source_evidence.py`, `test_grobid_provider.py`, `test_specialist_routing.py`, `test_docling_provider.py`, `test_layout_stage_d.py` |
 | Direct reconstruction | `text_reconstruction.py`, `figures.py`, `region_render.py`, `content_render.py`, `writer.py` | `test_text_reconstruction.py`, `test_phase3_figures.py`, `test_phase4_region_render.py`, `test_content_render.py` |
 | Hybrid candidate generation | `layout_roi.py`, `layout_candidates.py`, `layout_candidate_features.py`, `raster_layout.py`, `layout_risk.py`, `layout_export.py` | `test_layout_stage_a.py`, `test_layout_stage_b.py`, `test_layout_risk.py`, `test_raster_layout.py` |
 | Routing | `issue_routing.py`, `routing.py`, `auto_layout.py`, `tools/run_routing_plan.py` | `test_routing.py`, `test_routing_plan.py` |

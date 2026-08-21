@@ -129,6 +129,12 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     请求、离线 TEI 解析及 title/author/affiliation/abstract/section/paragraph/caption/
     reference/citation proposed claims。claim 必须有坐标 observation，TEI 文本无正文
     权限；未配置或请求失败会保存显式 `unavailable`。当前尚无本地服务供 HTTP 实测。
+35. 局部 Docling 专家（E4）：Source Evidence v0.2 新增哈希绑定的 specialist requests 和
+    `complete/degraded/conflicted` bundle 状态；确定性发现 Table 边界、reading-order、
+    native/raster 三类冲突。Docling 仅在显式启用且有请求时按页运行，接入层再按 ROI 过滤，
+    只保存 DoclingDocument 子集、table data、provenance 与 proposed claims，从不采用其
+    Markdown。U02 只路由第 3 页已知 Table，U03 为 0 请求；当前本机未安装 Docling，
+    离线 JSON 夹具已覆盖解析与溯源。
 
 ## 当前主链
 
@@ -192,7 +198,8 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)下一步完成 E4 局部 Docling
-provider，再在 U02/U03 上验证多源证据是否足以排除已知错误。E0–E3 已完成；GROBID
-HTTP 真服务验证仍需本地服务。只有该门槛通过后，才进入 PaperRecipe/ArticleTree
-纵向原型和新的独立论文验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E4 已完成。下一步进入 E5：
+用 U02/U03 做 PaperRecipe/ArticleTree 纵向原型，验证多源 evidence/conflict 是否真正能
+排除漏 Figure、Table 数字流和首页 logo/citation 误绑定。GROBID HTTP 与 Docling 本地
+模型的真实服务验证仍分别受本机服务/可选依赖缺失限制，不能把离线适配测试表述为真实
+模型质量验收。

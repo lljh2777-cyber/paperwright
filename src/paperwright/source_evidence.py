@@ -17,7 +17,8 @@ from typing import Any
 from .exceptions import ContractValidationError
 from .models import Element, PhysicalDocument
 
-SOURCE_EVIDENCE_VERSION = "paperwright-source-evidence-v0.1"
+SOURCE_EVIDENCE_VERSION = "paperwright-source-evidence-v0.2"
+LEGACY_SOURCE_EVIDENCE_VERSION = "paperwright-source-evidence-v0.1"
 PROVIDER_SNAPSHOT_VERSION = "paperwright-provider-snapshot-v0.1"
 ALIGNMENTS_VERSION = "paperwright-observation-alignments-v0.1"
 CLAIMS_VERSION = "paperwright-source-claims-v0.1"
@@ -176,11 +177,17 @@ def build_pdfium_source_evidence(
         "source_sha256": document.source_sha256,
         "conflicts": [],
     }
+    specialist_requests = {
+        "contract_version": "paperwright-specialist-requests-v0.1",
+        "source_sha256": document.source_sha256,
+        "requests": [],
+    }
     artifacts = {
         "providers/pdfium-native.json": snapshot,
         "alignments.json": alignment_document,
         "claims.json": claims,
         "conflicts.json": conflicts,
+        "specialist-requests.json": specialist_requests,
     }
     provider_path = "providers/pdfium-native.json"
     index = {
@@ -211,12 +218,18 @@ def build_pdfium_source_evidence(
         "conflicts_sha256": _sha256_bytes(
             _canonical_json(conflicts).encode("utf-8")
         ),
+        "specialist_requests_path": "specialist-requests.json",
+        "specialist_requests_sha256": _sha256_bytes(
+            _canonical_json(specialist_requests).encode("utf-8")
+        ),
+        "status": "complete",
         "summary": {
             "provider_count": 1,
             "observation_count": observation_count,
             "alignment_count": len(alignments),
             "claim_count": 0,
             "conflict_count": 0,
+            "specialist_request_count": 0,
         },
     }
     return index, artifacts
@@ -291,8 +304,12 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
         index = json.loads(index_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ContractValidationError("source evidence index 无法解析") from exc
-    if not isinstance(index, dict) or index.get("contract_version") != SOURCE_EVIDENCE_VERSION:
+    if not isinstance(index, dict) or index.get("contract_version") not in {
+        SOURCE_EVIDENCE_VERSION,
+        LEGACY_SOURCE_EVIDENCE_VERSION,
+    }:
         raise ContractValidationError("source evidence index 契约版本不匹配")
+    is_current = index["contract_version"] == SOURCE_EVIDENCE_VERSION
     source_sha256 = index.get("source_sha256")
     if not isinstance(source_sha256, str) or len(source_sha256) != 64:
         raise ContractValidationError("source evidence source_sha256 非法")
@@ -305,6 +322,7 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
     provider_ids: set[str] = set()
     pdfium_observation_ids: set[str] = set()
     canonical_physical_ids: set[str] = set()
+    canonical_page_geometry: dict[int, tuple[float, float]] = {}
     for provider in providers:
         if not isinstance(provider, dict):
             raise ContractValidationError("source evidence provider 记录非法")
@@ -371,6 +389,8 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
                 or page.get("rotation") not in {0, 90, 180, 270}
             ):
                 raise ContractValidationError("provider snapshot page 几何非法")
+            if provider_id == PDFIUM_PROVIDER_ID:
+                canonical_page_geometry[page["page_index"]] = (width, height)
             for observation in observations:
                 if not isinstance(observation, dict):
                     raise ContractValidationError("provider observation 非法")
@@ -569,6 +589,95 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
         ):
             raise ContractValidationError("source evidence conflict 字段或引用非法")
         conflict_ids.add(conflict_id)
+    specialist_request_count = 0
+    if is_current:
+        requests_doc = _load_hashed_artifact(
+            root,
+            index.get("specialist_requests_path"),
+            index.get("specialist_requests_sha256"),
+        )
+        if (
+            requests_doc.get("contract_version")
+            != "paperwright-specialist-requests-v0.1"
+            or requests_doc.get("source_sha256") != source_sha256
+            or not isinstance(requests_doc.get("requests"), list)
+        ):
+            raise ContractValidationError("source evidence specialist requests 非法")
+        request_ids: set[str] = set()
+        conflict_by_id = {
+            item["conflict_id"]: item for item in conflicts["conflicts"]
+        }
+        for specialist_request in requests_doc["requests"]:
+            if not isinstance(specialist_request, dict):
+                raise ContractValidationError("specialist request 非法")
+            request_id = specialist_request.get("request_id")
+            conflict_id = specialist_request.get("conflict_id")
+            scope = specialist_request.get("scope")
+            page_indices = scope.get("page_indices") if isinstance(scope, dict) else None
+            scope_bbox = scope.get("paperwright_bbox") if isinstance(scope, dict) else None
+            capabilities = specialist_request.get("requested_capabilities")
+            if (
+                not isinstance(request_id, str)
+                or not request_id
+                or request_id in request_ids
+                or specialist_request.get("provider_id") not in provider_ids
+                or conflict_id not in conflict_by_id
+                or conflict_by_id[conflict_id].get("specialist_request_id")
+                != request_id
+                or not isinstance(page_indices, list)
+                or not page_indices
+                or page_indices != sorted(set(page_indices))
+                or not all(isinstance(item, int) and item >= 0 for item in page_indices)
+                or not set(page_indices).issubset(canonical_page_geometry)
+                or not isinstance(capabilities, list)
+                or not capabilities
+                or capabilities != sorted(set(capabilities))
+                or not all(isinstance(item, str) and item for item in capabilities)
+                or specialist_request.get("status")
+                not in {"requested", "not_run", "completed", "failed"}
+            ):
+                raise ContractValidationError("specialist request 字段或引用非法")
+            if scope_bbox is not None:
+                if not isinstance(scope_bbox, dict):
+                    raise ContractValidationError("specialist request bbox 非法")
+                x = _finite_number(scope_bbox.get("x"), "specialist bbox x")
+                y = _finite_number(scope_bbox.get("y"), "specialist bbox y")
+                width = _finite_number(
+                    scope_bbox.get("width"), "specialist bbox width"
+                )
+                height = _finite_number(
+                    scope_bbox.get("height"), "specialist bbox height"
+                )
+                if x < 0 or y < 0 or width <= 0 or height <= 0:
+                    raise ContractValidationError("specialist request bbox 非法")
+                if any(
+                    x + width > canonical_page_geometry[page_index][0] + 1e-6
+                    or y + height > canonical_page_geometry[page_index][1] + 1e-6
+                    for page_index in page_indices
+                ):
+                    raise ContractValidationError("specialist request bbox 越出页面")
+            request_ids.add(request_id)
+        specialist_request_count = len(request_ids)
+        bundle_status = index.get("status")
+        expected_status = (
+            "conflicted"
+            if any(
+                conflict["status"] in {"open", "degraded"}
+                for conflict in conflicts["conflicts"]
+            )
+            else "degraded"
+            if any(
+                provider["status"] in {"degraded", "unavailable"}
+                and (
+                    provider["provider_id"] != "docling-local"
+                    or bool(conflicts["conflicts"])
+                )
+                for provider in providers
+            )
+            else "complete"
+        )
+        if bundle_status != expected_status:
+            raise ContractValidationError("source evidence bundle status 不匹配")
     summary = index.get("summary")
     expected_summary = {
         "provider_count": len(providers),
@@ -577,6 +686,8 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
         "claim_count": len(claims["claims"]),
         "conflict_count": len(conflicts["conflicts"]),
     }
+    if is_current:
+        expected_summary["specialist_request_count"] = specialist_request_count
     if summary != expected_summary:
         raise ContractValidationError("source evidence summary 不匹配")
     return index
@@ -587,8 +698,9 @@ def write_pdfium_source_evidence(
     document: PhysicalDocument,
     *,
     source: Path | None = None,
+    raster_analyses: dict[int, object] | None = None,
 ) -> dict[str, Any]:
-    """Write PDFium evidence plus the default pdfplumber sidecar when given."""
+    """Write native, default sidecar, conflict and optional specialist evidence."""
 
     root = Path(root)
     if root.exists():
@@ -634,26 +746,84 @@ def write_pdfium_source_evidence(
         )
         add_provider(grobid_snapshot, grobid_alignments, grobid_claims)
 
-    if len(index["providers"]) > 1:
-        index["alignments_sha256"] = _sha256_bytes(
-            _canonical_json(artifacts["alignments.json"]).encode("utf-8")
-        )
-        index["claims_sha256"] = _sha256_bytes(
-            _canonical_json(artifacts["claims.json"]).encode("utf-8")
-        )
-        index["summary"] = {
-            "provider_count": len(index["providers"]),
-            "observation_count": sum(
-                int(value["observation_count"])
-                for path, value in artifacts.items()
-                if path.startswith("providers/")
-            ),
-            "alignment_count": len(
-                artifacts["alignments.json"]["alignments"]
-            ),
-            "claim_count": len(artifacts["claims.json"]["claims"]),
-            "conflict_count": len(artifacts["conflicts.json"]["conflicts"]),
+        from .specialist_routing import derive_specialist_requests
+
+        snapshots = {
+            value["provider_id"]: value
+            for path, value in artifacts.items()
+            if path.startswith("providers/")
         }
+        conflicts, specialist_requests = derive_specialist_requests(
+            document,
+            snapshots,
+            artifacts["claims.json"]["claims"],
+            raster_analyses=raster_analyses,
+        )
+        artifacts["conflicts.json"]["conflicts"] = conflicts
+        artifacts["specialist-requests.json"]["requests"] = specialist_requests
+
+        from .docling_provider import build_docling_evidence
+
+        (
+            docling_snapshot,
+            docling_alignments,
+            docling_claims,
+            request_status,
+        ) = build_docling_evidence(
+            Path(source),
+            document,
+            specialist_requests,
+        )
+        add_provider(docling_snapshot, docling_alignments, docling_claims)
+        for specialist_request in specialist_requests:
+            specialist_request["status"] = request_status.get(
+                specialist_request["request_id"],
+                "requested",
+            )
+
+    index["alignments_sha256"] = _sha256_bytes(
+        _canonical_json(artifacts["alignments.json"]).encode("utf-8")
+    )
+    index["claims_sha256"] = _sha256_bytes(
+        _canonical_json(artifacts["claims.json"]).encode("utf-8")
+    )
+    index["conflicts_sha256"] = _sha256_bytes(
+        _canonical_json(artifacts["conflicts.json"]).encode("utf-8")
+    )
+    index["specialist_requests_sha256"] = _sha256_bytes(
+        _canonical_json(artifacts["specialist-requests.json"]).encode("utf-8")
+    )
+    index["status"] = (
+        "conflicted"
+        if any(
+            conflict["status"] in {"open", "degraded"}
+            for conflict in artifacts["conflicts.json"]["conflicts"]
+        )
+        else "degraded"
+        if any(
+            provider["status"] in {"degraded", "unavailable"}
+            and (
+                provider["provider_id"] != "docling-local"
+                or bool(artifacts["conflicts.json"]["conflicts"])
+            )
+            for provider in index["providers"]
+        )
+        else "complete"
+    )
+    index["summary"] = {
+        "provider_count": len(index["providers"]),
+        "observation_count": sum(
+            int(value["observation_count"])
+            for path, value in artifacts.items()
+            if path.startswith("providers/")
+        ),
+        "alignment_count": len(artifacts["alignments.json"]["alignments"]),
+        "claim_count": len(artifacts["claims.json"]["claims"]),
+        "conflict_count": len(artifacts["conflicts.json"]["conflicts"]),
+        "specialist_request_count": len(
+            artifacts["specialist-requests.json"]["requests"]
+        ),
+    }
     (root / "providers").mkdir(parents=True)
     for relative, value in artifacts.items():
         path = root / relative
@@ -667,4 +837,7 @@ def write_pdfium_source_evidence(
         "contract_version": SOURCE_EVIDENCE_VERSION,
         "provider_count": index["summary"]["provider_count"],
         "observation_count": index["summary"]["observation_count"],
+        "status": index["status"],
+        "conflict_count": index["summary"]["conflict_count"],
+        "specialist_request_count": index["summary"]["specialist_request_count"],
     }

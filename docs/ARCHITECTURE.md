@@ -47,6 +47,10 @@ Markdown + images + manifest     article model
   与表格区域候选，不决定阅读顺序、cell 内容或 Markdown。
 - `paperwright.grobid_provider`：可选本地 GROBID HTTP/TEI 适配器；只提交带坐标、能回到
   原生文字的科研语义 claims。服务未配置或失败时写显式 unavailable provider。
+- `paperwright.specialist_routing`：从 Table、reading-order、native/raster 三类未决证据
+  生成确定性的 page/ROI 局部专家请求，不按模型价格或供应商状态路由。
+- `paperwright.docling_provider`：显式启用的可选本地专家；只转换请求页并过滤到请求 ROI，
+  保存 DoclingDocument item/table data/provenance 和 proposed claims，从不导入其 Markdown。
 - `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
 - `paperwright.api`：输入路径验证、后端选择和输出事务边界。
@@ -146,6 +150,7 @@ E0 已完成标准路径的 inventory/materialization 拆分；后续多 provide
 | text-reviewed manifest | v0.10 | 从完整 v0.9 包确定性派生，不覆盖父包 |
 | text-synthesized manifest | v0.11 | v0.10 + L3 synthesis-run 溯源与重放哈希链 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
+| source evidence | v0.2 | 增加 bundle 状态与哈希绑定 specialist requests；继续读取 v0.1 |
 | text task | v0.2 | 只读文本块、编辑策略及源 Article Model 哈希；继续读 v0.1 |
 | text review | v0.2 | 格式保持、断行去连字符与 join-blocks；继续读 v0.1 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |

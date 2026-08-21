@@ -109,6 +109,37 @@ class SourceEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ContractValidationError, "哈希不匹配"):
                 validate_source_evidence_bundle(evidence_root)
 
+    def test_legacy_v01_index_remains_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            document = self._document(root)
+            evidence_root = root / "source-evidence"
+            write_pdfium_source_evidence(evidence_root, document)
+            index_path = evidence_root / "index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index["contract_version"] = "paperwright-source-evidence-v0.1"
+            index.pop("status")
+            index.pop("specialist_requests_path")
+            index.pop("specialist_requests_sha256")
+            index["summary"].pop("specialist_request_count")
+            index_path.write_text(
+                json.dumps(
+                    index,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            validated = validate_source_evidence_bundle(evidence_root)
+
+            self.assertEqual(
+                validated["contract_version"],
+                "paperwright-source-evidence-v0.1",
+            )
+
     def test_pdfplumber_sidecar_adds_geometry_and_proposals_only(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -142,7 +173,9 @@ class SourceEvidenceTests(unittest.TestCase):
                 for item in page["observations"]
             }
 
-            self.assertEqual(index["summary"]["provider_count"], 3)
+            self.assertEqual(index["summary"]["provider_count"], 4)
+            self.assertEqual(index["status"], "conflicted")
+            self.assertEqual(index["summary"]["specialist_request_count"], 1)
             self.assertEqual(
                 next(
                     provider["status"]
@@ -167,6 +200,25 @@ class SourceEvidenceTests(unittest.TestCase):
                     for claim in claims
                 )
             )
+            docling = json.loads(
+                (
+                    evidence_root
+                    / "providers"
+                    / "docling-local.json"
+                ).read_text(encoding="utf-8")
+            )
+            requests = json.loads(
+                (evidence_root / "specialist-requests.json").read_text(
+                    encoding="utf-8"
+                )
+            )["requests"]
+            self.assertEqual(docling["status"], "unavailable")
+            self.assertEqual(
+                docling["diagnostics"][0]["code"],
+                "PAPERWRIGHT_DOCLING_ENABLED_not_set",
+            )
+            self.assertEqual(requests[0]["status"], "not_run")
+            self.assertEqual(requests[0]["scope"]["page_indices"], [0])
 
 
 if __name__ == "__main__":

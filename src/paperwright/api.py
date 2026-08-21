@@ -682,6 +682,7 @@ class PaperWright:
                 temporary / "source-evidence",
                 result.document,
                 source=source if extraction_profile != "fast" else None,
+                raster_analyses=raster_analyses,
             )
             (temporary / "routing.json").write_text(
                 routing_plan.canonical_json(),

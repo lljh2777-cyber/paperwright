@@ -4,9 +4,9 @@
   "title": "PaperWright Source Evidence Index",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract_version", "source_sha256", "providers", "alignments_path", "alignments_sha256", "claims_path", "claims_sha256", "conflicts_path", "conflicts_sha256", "summary"],
+  "required": ["contract_version", "source_sha256", "providers", "alignments_path", "alignments_sha256", "claims_path", "claims_sha256", "conflicts_path", "conflicts_sha256", "specialist_requests_path", "specialist_requests_sha256", "status", "summary"],
   "properties": {
-    "contract_version": {"const": "paperwright-source-evidence-v0.1"},
+    "contract_version": {"const": "paperwright-source-evidence-v0.2"},
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "providers": {
       "type": "array",
@@ -32,16 +32,20 @@
     "claims_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "conflicts_path": {"type": "string", "minLength": 1},
     "conflicts_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "specialist_requests_path": {"type": "string", "minLength": 1},
+    "specialist_requests_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["complete", "degraded", "conflicted"]},
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider_count", "observation_count", "alignment_count", "claim_count", "conflict_count"],
+      "required": ["provider_count", "observation_count", "alignment_count", "claim_count", "conflict_count", "specialist_request_count"],
       "properties": {
         "provider_count": {"type": "integer", "minimum": 1},
         "observation_count": {"type": "integer", "minimum": 0},
         "alignment_count": {"type": "integer", "minimum": 0},
         "claim_count": {"type": "integer", "minimum": 0},
-        "conflict_count": {"type": "integer", "minimum": 0}
+        "conflict_count": {"type": "integer", "minimum": 0},
+        "specialist_request_count": {"type": "integer", "minimum": 0}
       }
     }
   }

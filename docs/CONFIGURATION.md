@@ -38,6 +38,18 @@ export PAPERWRIGHT_GROBID_URL=http://127.0.0.1:8070
 `grobid-scholarly` provider 为 `unavailable`。GROBID 返回的 TEI 只提供 proposed claims，
 没有直接替换 PDF 原生正文的权限。
 
+Docling 同样不写入项目 JSON 配置，也不是默认依赖。只有 SourceEvidenceBundle 已产生
+局部 specialist request 时，以下显式开关才会加载本机安装的 Docling：
+
+```bash
+export PAPERWRIGHT_DOCLING_ENABLED=1
+```
+
+PaperWright 使用 Docling 的 `page_range` 逐个转换请求页，并在接入层继续过滤到请求 ROI。
+未启用、依赖未安装、请求页失败和“没有冲突所以未请求”有不同 diagnostics；Docling
+输出只能形成 proposed layout/table/reading-order claims，不能替换原生正文或直接写
+Markdown。
+
 单文档 explicit 调试：
 
 ```bash

@@ -1,6 +1,6 @@
 # PaperWright 粗提取多证据架构 v0.1
 
-> 状态：已接受；E0 已实现，E1–E5 待实现（2026-08-21）
+> 状态：已接受；E0–E4 已实现，E5 待实现（2026-08-21）
 >
 > 范围：born-digital 科研论文的物理与结构证据采集
 >
@@ -160,11 +160,12 @@ source PDF + sha256
 ## 6. 最小契约边界
 
 首版不要立即把所有 provider 元素塞进 `PhysicalDocument`。保留现有对象作为 PDFium
-规范物理视图，新增 `paperwright-source-evidence-v0.1` 索引：
+规范物理视图。E1 最初新增 `paperwright-source-evidence-v0.1`；E4 为哈希绑定的局部专家
+请求升级为兼容读取旧版的 `paperwright-source-evidence-v0.2` 索引：
 
 ```json
 {
-  "contract_version": "paperwright-source-evidence-v0.1",
+  "contract_version": "paperwright-source-evidence-v0.2",
   "source_sha256": "...",
   "providers": [
     {
@@ -178,7 +179,9 @@ source PDF + sha256
   ],
   "alignments_path": "alignments.json",
   "claims_path": "claims.json",
-  "conflicts_path": "conflicts.json"
+  "conflicts_path": "conflicts.json",
+  "specialist_requests_path": "specialist-requests.json",
+  "status": "conflicted"
 }
 ```
 
@@ -253,6 +256,24 @@ abstract、section、paragraph、figure/table caption、references 和 inline ci
 TEI 文本必须重新对齐原生字符，无法对齐的节点不得直接进入 ArticleTree。
 
 ### E4：局部 Docling provider
+
+**状态：已完成。** `source_evidence` 先从多源证据确定性产生三类 open conflict：未获独立
+支撑的 Table 边界/结构提案、GROBID 与原生文字的显著阅读顺序倒置、原生视觉对象与
+raster residual 的严重不一致。每个 conflict 生成仅含 page/ROI 和能力名的
+`paperwright-specialist-requests-v0.1` 请求。只有显式设置
+`PAPERWRIGHT_DOCLING_ENABLED=1` 且存在请求时才加载可选 Docling，并通过官方
+`page_range` 对选中页逐页运行；结果只保存请求 ROI 内的 DoclingDocument item、表格
+data 和 `page_no/bbox/charspan` provenance。代码从不请求或接收 Docling Markdown。
+
+未启用、未安装、页面转换失败与“没有冲突所以未请求”分别写入 provider diagnostics；
+请求状态为 `not_run/completed/failed`。存在 open conflict 时 bundle 顶层状态固定为
+`conflicted`，即使专家已返回 proposed evidence 也不会伪装成已自动解决。当前环境未安装
+Docling，因此真实模型推理尚未实测；导出 JSON 的解析、ROI 过滤、原生对齐、结构 claim
+和 provenance 已用固定离线夹具覆盖。
+
+U02/U03 的实现验收中，U02 只为第 3 页已知 Table 生成 1 个局部请求；U03 没有满足阈值
+的冲突并生成 0 个请求。未启用 Docling 时前者为 `conflicted + not_run`，后者明确记录
+`docling_not_requested_no_conflicts`，没有扩大到全文推理。
 
 只对下列冲突请求运行：多 provider 阅读顺序冲突、Table 边界/结构冲突、原生对象与
 raster residual 严重不一致。保存 DoclingDocument 子集和 provenance，不接收其全文
