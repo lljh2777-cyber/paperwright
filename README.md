@@ -9,7 +9,8 @@ paperwright 是一个本地优先、可追溯的 Hybrid 科研 PDF 重建工具�
 
 ```text
 PDF → evidence → issue routing → L0 + 局部 L1/L2/L3 → validation
-    → article-model.json → article.md + reader.json + assets + manifest.json
+    → article-tree.json → article-model.json
+    → article.md + reader.json + assets + manifest.json
 ```
 
 ## 当前能力
@@ -26,8 +27,9 @@ PDF → evidence → issue routing → L0 + 局部 L1/L2/L3 → validation
 - 自包含证据包、输出质量报告和无正文训练数据导出；
 - 页面完整性门禁：无文字非空页自动保留整页图，孤立 caption/疑似漏图显式降级；
 - 面向阅读器的稳定 Markdown 锚点、Figure/图注关系和 `reader.json`；
-- 作为 Markdown、Reader 和后续文本复核统一来源的 `article-model.json`；
-- 受限 `paper-recipe.json`、元素守恒 `article-tree.json` 与确定性重放；
+- 作为规范结构上游的最终 `article-tree.json`，并从它唯一投影
+  `article-model.json`、Markdown 和 Reader；
+- 受限 `paper-recipe.json`、元素守恒 source-element tree 与确定性重放；
 - 确定性内核完全本地运行；Hybrid resolver 按问题接入文本/视觉模型，模型
   **只做受限判断、不转写正文**（产品定位见
   [VISION](docs/VISION.md)）。
@@ -379,8 +381,8 @@ python -m paperwright convert input.pdf output-dir
 
 混合布局流程的最终结果采用自包含文档包：顶层只放 `article.md` 和
 `images/`，ROI、布局覆盖图、追溯数据与验证报告统一放入 `_paperwright/`。
-`_paperwright/article-model.json` 和 `_paperwright/reader.json` 属于所有证据级别都会
-保留的功能索引，不是调试证据。
+`_paperwright/article-tree.json`、`_paperwright/article-model.json` 和
+`_paperwright/reader.json` 属于所有证据级别都会保留的功能索引，不是调试证据。
 `layout-apply` 默认使用 `--evidence standard`；也可选择 `minimal` 或
 `full`，并通过 `--include-source-pdf` 显式复制原 PDF。完整结构与命令见
 [混合布局设计](docs/HYBRID_LAYOUT_OUTLINE_ZH.md)。
@@ -398,6 +400,7 @@ python -m paperwright convert input.pdf output-dir
 - [架构](docs/ARCHITECTURE.md)
 - [粗提取多证据架构 v0.1](docs/EXTRACTION_ENSEMBLE_V0.1.md)
 - [PaperRecipe 与 ArticleTree v0.1](docs/PAPER_RECIPE_ARTICLE_TREE_V0.1.md)
+- [Final ArticleTree v0.2](docs/FINAL_ARTICLE_TREE_V0.2.md)
 - [支持矩阵](docs/SUPPORT_MATRIX.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)

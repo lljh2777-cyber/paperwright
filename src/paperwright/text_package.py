@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -16,6 +17,12 @@ from .article_model import (
     canonical_article_model_json,
     render_article_markdown,
     validate_article_model,
+)
+from .article_tree import (
+    article_tree_to_article_model,
+    build_final_article_tree,
+    canonical_final_article_tree_json,
+    validate_final_article_tree,
 )
 from .exceptions import (
     ConfigurationError,
@@ -49,6 +56,7 @@ from .text_review import (
 TEXT_PACKAGE_VALIDATION_VERSION = "paperwright-text-package-validation-v0.1"
 _ARTICLE_PATH = "article.md"
 _MODEL_PATH = "_paperwright/article-model.json"
+_ARTICLE_TREE_PATH = "_paperwright/article-tree.json"
 _READER_PATH = "_paperwright/reader.json"
 _MANIFEST_PATH = "_paperwright/manifest.json"
 _TASK_PATH = "_paperwright/06-text-review/text-task.json"
@@ -106,7 +114,9 @@ def _verify_inventory(root: Path, manifest: Mapping[str, Any]) -> None:
             )
 
 
-def _load_source_package(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def _load_source_package(
+    root: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
     manifest_path = root / PurePosixPath(_MANIFEST_PATH)
     if not manifest_path.is_file() or manifest_path.is_symlink():
         raise ConfigurationError("源文档包缺少 _paperwright/manifest.json")
@@ -131,6 +141,20 @@ def _load_source_package(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if manifest["article_model"]["sha256"] != sha256_file(model_path):
         raise ContractValidationError("manifest article model hash 不匹配")
 
+    article_tree: dict[str, Any] | None = None
+    tree_path = _safe_package_path(root, _ARTICLE_TREE_PATH)
+    if tree_path.is_file():
+        article_tree = _load_json_object(tree_path, "final ArticleTree")
+        if tree_path.read_text(
+            encoding="utf-8"
+        ) != canonical_final_article_tree_json(article_tree):
+            raise ContractValidationError("源 final ArticleTree 不是规范 JSON")
+        validate_final_article_tree(article_tree, root=root)
+        if article_tree_to_article_model(article_tree) != model:
+            raise ContractValidationError(
+                "源 article model 不是 final ArticleTree 的确定性投影"
+            )
+
     article_path = _safe_package_path(root, _ARTICLE_PATH)
     if article_path.read_text(encoding="utf-8") != render_article_markdown(model):
         raise ContractValidationError("源 article.md 与 article model 不一致")
@@ -141,7 +165,7 @@ def _load_source_package(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         expected_reader
     ):
         raise ContractValidationError("源 reader 与 article model 不一致")
-    return manifest, model
+    return manifest, model, article_tree
 
 
 def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
@@ -178,6 +202,19 @@ def validate_text_reviewed_package(root: Path) -> dict[str, Any]:
         or sha256_file(model_path) != manifest["article_model"]["sha256"]
     ):
         raise ContractValidationError("文本派生 article model 绑定不一致")
+
+    tree_path = _safe_package_path(package_root, _ARTICLE_TREE_PATH)
+    if tree_path.is_file():
+        article_tree = _load_json_object(tree_path, "final ArticleTree")
+        if tree_path.read_text(
+            encoding="utf-8"
+        ) != canonical_final_article_tree_json(article_tree):
+            raise ContractValidationError("文本派生 final ArticleTree 不是规范 JSON")
+        validate_final_article_tree(article_tree, root=package_root)
+        if article_tree_to_article_model(article_tree) != model:
+            raise ContractValidationError(
+                "文本派生 article model 不是 final ArticleTree 的投影"
+            )
 
     article_path = _safe_package_path(package_root, _ARTICLE_PATH)
     if article_path.read_text(encoding="utf-8") != render_article_markdown(model):
@@ -395,7 +432,9 @@ def build_text_reviewed_package(
     attached, without mutating the v0.9 parent."""
 
     source, target = _package_paths(source_root, destination)
-    source_manifest, source_model = _load_source_package(source)
+    source_manifest, source_model, source_article_tree = _load_source_package(
+        source
+    )
     validate_text_task(task, article_model=source_model)
     validate_text_review(review, task=task)
     if synthesis_run is not None:
@@ -405,7 +444,36 @@ def build_text_reviewed_package(
             article_model=source_model,
             review=review,
         )
-    reviewed_model = apply_text_review(source_model, task=task, review=review)
+    reviewed_model_candidate = apply_text_review(
+        source_model,
+        task=task,
+        review=review,
+    )
+    review_input_sha256 = hashlib.sha256(
+        (
+            text_task_sha256(task)
+            + "\0"
+            + canonical_text_review_json(review, task=task)
+        ).encode("utf-8")
+    ).hexdigest()
+    reviewed_article_tree = build_final_article_tree(
+        source_sha256=str(reviewed_model_candidate["source_sha256"]),
+        physical_document_sha256=(
+            source_article_tree["physical_document_sha256"]
+            if source_article_tree is not None
+            else None
+        ),
+        structure_input_kind="text_review",
+        structure_input_sha256=review_input_sha256,
+        blocks=reviewed_model_candidate["blocks"],
+        markdown_by_id={
+            str(item["id"]): str(item["markdown"])
+            for item in reviewed_model_candidate["blocks"]
+        },
+        assets=reviewed_model_candidate["assets"],
+        relations=reviewed_model_candidate["relations"],
+    )
+    reviewed_model = article_tree_to_article_model(reviewed_article_tree)
 
     temporary = Path(
         tempfile.mkdtemp(
@@ -415,6 +483,11 @@ def build_text_reviewed_package(
     )
     try:
         _copy_manifest_outputs(source, temporary, source_manifest)
+        _write_text(
+            temporary,
+            _ARTICLE_TREE_PATH,
+            canonical_final_article_tree_json(reviewed_article_tree),
+        )
         article_path = _write_text(
             temporary,
             _ARTICLE_PATH,
@@ -456,6 +529,7 @@ def build_text_reviewed_package(
             )
 
         validate_article_model(reviewed_model, root=temporary)
+        validate_final_article_tree(reviewed_article_tree, root=temporary)
         if article_path.read_text(encoding="utf-8") != render_article_markdown(
             reviewed_model
         ):
@@ -509,6 +583,11 @@ def build_text_reviewed_package(
 
         replacements = {
             _ARTICLE_PATH: _output_record(temporary, _ARTICLE_PATH, "markdown"),
+            _ARTICLE_TREE_PATH: _output_record(
+                temporary,
+                _ARTICLE_TREE_PATH,
+                "article_tree",
+            ),
             _MODEL_PATH: _output_record(
                 temporary, _MODEL_PATH, "article_model"
             ),

@@ -42,6 +42,7 @@ class ManifestTests(unittest.TestCase):
             "source_evidence.schema.json",
             "paper_recipe.schema.json",
             "article_tree.schema.json",
+            "final_article_tree.schema.json",
             "visual_relation_review.schema.json",
             "physical_document.schema.json",
             "article_model.schema.json",

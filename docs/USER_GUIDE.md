@@ -156,6 +156,7 @@ output-dir/
 ├── article.md
 ├── images/
 └── _paperwright/
+    ├── article-tree.json
     ├── article-model.json
     ├── completeness-report.json
     ├── reader.json
@@ -167,6 +168,7 @@ output-dir/
 会明确记录为 `source_page_blank`。`completeness-report.json` 若为 `warning`，请按其中
 的页码检查孤立 caption 或疑似漏图。详见
 [Completeness Gate v0.1](COMPLETENESS_GATE_V0.1.md)。
+`article-tree.json` 是最终规范结构；ArticleModel、Markdown 和 Reader 都由它投影。
 
 ## 6. 文本复核
 

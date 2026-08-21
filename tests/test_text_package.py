@@ -15,6 +15,11 @@ from paperwright.article_model import (
     render_article_markdown,
     validate_article_model,
 )
+from paperwright.article_tree import (
+    article_tree_to_article_model,
+    canonical_final_article_tree_json,
+    validate_final_article_tree,
+)
 from paperwright.cli import main
 from paperwright.exceptions import ContractValidationError, OutputConflictError
 from paperwright.manifest import (
@@ -57,10 +62,14 @@ class TextPackageTests(unittest.TestCase):
         model = compilation.article_model(
             source_sha256=reader["source_sha256"]
         )
+        article_tree = compilation.article_tree(
+            source_sha256=reader["source_sha256"]
+        )
         (root / "images").mkdir(parents=True)
         (root / "_paperwright").mkdir()
         article_path = root / "article.md"
         model_path = root / "_paperwright/article-model.json"
+        tree_path = root / "_paperwright/article-tree.json"
         reader_path = root / "_paperwright/reader.json"
         image_path = root / "images/figure-0001.png"
         article_path.write_text(
@@ -68,6 +77,11 @@ class TextPackageTests(unittest.TestCase):
         )
         model_path.write_text(
             canonical_article_model_json(model), encoding="utf-8", newline="\n"
+        )
+        tree_path.write_text(
+            canonical_final_article_tree_json(article_tree),
+            encoding="utf-8",
+            newline="\n",
         )
         reader_path.write_text(
             canonical_reader_json(article_model_to_reader(model)),
@@ -77,6 +91,12 @@ class TextPackageTests(unittest.TestCase):
         image_path.write_bytes(image_data)
         outputs = [
             OutputFile("article.md", "markdown", article_path.stat().st_size, sha256_file(article_path)),
+            OutputFile(
+                "_paperwright/article-tree.json",
+                "article_tree",
+                tree_path.stat().st_size,
+                sha256_file(tree_path),
+            ),
             OutputFile(
                 "_paperwright/article-model.json",
                 "article_model",
@@ -212,6 +232,20 @@ class TextPackageTests(unittest.TestCase):
 
             reviewed_model = json.loads(
                 (first / "_paperwright/article-model.json").read_text(encoding="utf-8")
+            )
+            reviewed_tree = json.loads(
+                (first / "_paperwright/article-tree.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            validate_final_article_tree(reviewed_tree, root=first)
+            self.assertEqual(
+                reviewed_tree["structure_input"]["kind"],
+                "text_review",
+            )
+            self.assertEqual(
+                article_tree_to_article_model(reviewed_tree),
+                reviewed_model,
             )
             validate_article_model(reviewed_model, root=first)
             self.assertEqual(

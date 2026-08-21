@@ -52,8 +52,12 @@ Markdown + images + manifest     article model
 - `paperwright.docling_provider`：显式启用的可选本地专家；只转换请求页并过滤到请求 ROI，
   保存 DoclingDocument item/table data/provenance 和 proposed claims，从不导入其 Markdown。
 - `paperwright.paper_recipe`：从 SourceEvidence 与 raster 摘要产生无正文权限的论文级
-  `classify/exclude/split/merge/order/bind/render` 动作，编译并验证元素守恒的 ArticleTree；
+  `classify/exclude/split/merge/order/bind/render` 动作，编译并验证元素守恒的 source-element
+  ArticleTree v0.1；
   apply 适配器只投影安全的 caption、Table、原生 Figure 和出版家具决策。
+- `paperwright.article_tree`：把 reviewed/refined layouts 的 block、asset、relation 编译为
+  final ArticleTree v0.2；ArticleModel 只能由该树确定性投影，文本复核派生包同样先生成
+  新树再投影公开产物。
 - `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
 - `paperwright.api`：输入路径验证、后端选择和输出事务边界。

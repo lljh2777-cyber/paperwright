@@ -7,9 +7,11 @@ import hashlib
 import re
 from typing import Any, Mapping, MutableMapping, Sequence
 
-from .article_model import (
-    article_model_to_reader,
-    build_article_model,
+from .article_model import article_model_to_reader
+from .article_tree import (
+    article_tree_to_article_model,
+    build_final_article_tree,
+    reviewed_projection_sha256,
 )
 from .exceptions import ContractValidationError
 from .models import BBox, PhysicalDocument
@@ -67,6 +69,8 @@ class ReaderCompilation:
     assets: tuple[dict[str, Any], ...]
     relations: tuple[dict[str, Any], ...]
     markdown_by_id: tuple[tuple[str, str], ...]
+    source_sha256: str
+    physical_document_sha256: str
 
     def markdown_text(self) -> str:
         return "\n".join(self.markdown_lines).rstrip() + "\n"
@@ -77,10 +81,31 @@ class ReaderCompilation:
         )
 
     def article_model(self, *, source_sha256: str) -> dict[str, Any]:
-        return build_article_model(
-            source_sha256=source_sha256,
+        return article_tree_to_article_model(
+            self.article_tree(source_sha256=source_sha256)
+        )
+
+    def article_tree(self, *, source_sha256: str) -> dict[str, Any]:
+        """Build the canonical tree used by compatibility projections."""
+
+        if source_sha256 != self.source_sha256:
+            raise ContractValidationError(
+                "reader compilation source_sha256 与 PhysicalDocument 不一致"
+            )
+        markdown_by_id = dict(self.markdown_by_id)
+        projection_sha256 = reviewed_projection_sha256(
             blocks=self.blocks,
-            markdown_by_id=dict(self.markdown_by_id),
+            markdown_by_id=markdown_by_id,
+            assets=self.assets,
+            relations=self.relations,
+        )
+        return build_final_article_tree(
+            source_sha256=source_sha256,
+            physical_document_sha256=self.physical_document_sha256,
+            structure_input_kind="reviewed_projection",
+            structure_input_sha256=projection_sha256,
+            blocks=self.blocks,
+            markdown_by_id=markdown_by_id,
             assets=self.assets,
             relations=self.relations,
         )
@@ -498,4 +523,6 @@ def compile_reviewed_article(
             (str(block["id"]), block_text[str(block["id"])])
             for block in blocks
         ),
+        source_sha256=document.source_sha256,
+        physical_document_sha256=document.deterministic_sha256(),
     )

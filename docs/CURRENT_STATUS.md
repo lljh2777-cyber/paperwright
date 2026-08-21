@@ -142,6 +142,12 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     的 487 个对象从 prose 移入图片区域，并补回第 6、7 页 4 个原生 Figure；U03 首页
     raster-only 更新 logo 被 bbox-scoped furniture action 排除，citation/license 从伪
     caption 降为 margin。模型 producer 尚未开放，这些结果也不是新 holdout 泛化结论。
+37. final ArticleTree 规范上游（E6）：新增 `paperwright-article-tree-v0.2`，将最终 block、
+    asset、relation 与上游结构哈希编译成 `_paperwright/article-tree.json`。Hybrid
+    `layout-apply` 和 `text-package` 均先生成、验证该树，再唯一投影 ArticleModel、Markdown
+    与 Reader；prepare 阶段的 v0.1 树在发布包中改称 `source-element-tree.json`，继续负责
+    物理元素守恒。旧 v0.9 文本父包没有 final tree 时仍可显式兼容，但新布局包总是保存
+    PhysicalDocument 哈希绑定。
 
 ## 当前主链
 
@@ -153,7 +159,8 @@ PDF
  → L2 candidate relation review（仅局部视觉 issue）
  → deterministic FinalLayout compiler
  → paired-page caption relation review（仅跨页候选）
- → ArticleModel + Markdown + assets
+ → final ArticleTree v0.2
+ → ArticleModel + Markdown + Reader + assets
  → Completeness Gate
  → exact L1 block-pair discovery
  → L1，失败时 L3
@@ -206,8 +213,8 @@ PDF
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
 [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E5 纵向原型已完成。下一步
-把 ArticleTree 从审计/安全决策层提升为 ArticleModel 的规范上游，消除现有
-FinalLayout→writer 与 Recipe→layout adapter 的双重结构来源；随后冻结新的论文小批次，
-测量首页家具排除、Table 图片回退和原生 Figure 补全的误伤/漏召回。GROBID HTTP 与
+final ArticleTree v0.2 的规范上游迁移已经完成；下一步冻结新的论文小批次，测量首页
+家具排除、Table 图片回退和原生 Figure 补全的误伤/漏召回，并据此决定哪些 E5 baseline
+动作可以保留、收紧或必须回到局部 resolver。GROBID HTTP 与
 Docling 本地模型的真实服务验证仍分别受本机服务/可选依赖缺失限制，不能把离线适配测试
 表述为真实模型质量验收。

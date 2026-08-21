@@ -432,7 +432,7 @@ Hybrid v1 不从空白仓库重写。以下能力是保留资产：
 | extraction cache | 可复现提取证据，保留 |
 | `LayoutTask` | EvidenceBundle 的页面布局证据，保留并适配 |
 | `FinalLayout` | 当前布局决策契约，迁移期继续使用 |
-| `ArticleModel` | 规范文章模型，保留并成为所有路径唯一汇合点 |
+| `ArticleModel` | 稳定公开文章模型，保留；所有 Hybrid 路径先汇合到 final ArticleTree，再由其唯一投影 |
 | `Reader` | 对外来源与关系索引，保留 |
 | `TextTask` / `TextReview` | 当前文本操作契约，迁移期继续使用 |
 | `synthesize.py` | PaperRecipe 运行时的最小原型，扩展而非重写 |

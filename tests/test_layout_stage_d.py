@@ -12,6 +12,11 @@ from paperwright.article_model import (
     render_article_markdown,
     validate_article_model,
 )
+from paperwright.article_tree import (
+    ARTICLE_TREE_CONTRACT_VERSION,
+    article_tree_to_article_model,
+    validate_final_article_tree,
+)
 from paperwright.cli import main
 from paperwright.exceptions import ContractValidationError
 from paperwright.layout_models import (
@@ -1625,6 +1630,19 @@ class LayoutStageDTests(unittest.TestCase):
                 sha256_file(article_model_path),
                 manifest["article_model"]["sha256"],
             )
+            article_tree_path = output / "_paperwright" / "article-tree.json"
+            article_tree = json.loads(
+                article_tree_path.read_text(encoding="utf-8")
+            )
+            validate_final_article_tree(article_tree, root=output)
+            self.assertEqual(
+                article_tree["contract_version"],
+                ARTICLE_TREE_CONTRACT_VERSION,
+            )
+            self.assertEqual(
+                article_tree_to_article_model(article_tree),
+                article_model,
+            )
             self.assertFalse(
                 (
                     output
@@ -1649,7 +1667,7 @@ class LayoutStageDTests(unittest.TestCase):
                     output
                     / "_paperwright"
                     / "02-structure"
-                    / "article-tree.json"
+                    / "source-element-tree.json"
                 ).is_file()
             )
             self.assertIn(
@@ -1658,6 +1676,10 @@ class LayoutStageDTests(unittest.TestCase):
             )
             self.assertIn(
                 "article_tree",
+                {item["role"] for item in manifest["outputs"]},
+            )
+            self.assertIn(
+                "source_element_tree",
                 {item["role"] for item in manifest["outputs"]},
             )
             self.assertTrue(
@@ -1695,6 +1717,7 @@ class LayoutStageDTests(unittest.TestCase):
                     "page_completeness",
                     "text_reconstruction",
                     "reader_index",
+                    "article_tree",
                     "article_model",
                 },
             )
@@ -1770,6 +1793,7 @@ class LayoutStageDTests(unittest.TestCase):
                     if item.is_file()
                 },
                 {
+                    "_paperwright/article-tree.json",
                     "_paperwright/article-model.json",
                     "_paperwright/completeness-report.json",
                     "_paperwright/manifest.json",

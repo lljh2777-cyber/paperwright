@@ -16,6 +16,12 @@ from paperwright.article_model import (
     render_article_markdown,
     validate_article_model,
 )
+from paperwright.article_tree import (
+    ARTICLE_TREE_CONTRACT_VERSION,
+    article_tree_to_article_model,
+    canonical_final_article_tree_json,
+    validate_final_article_tree,
+)
 from paperwright.cli import main
 from paperwright.exceptions import ContractValidationError
 from paperwright.models import BBox, Element, Page, PhysicalDocument, Provenance
@@ -216,9 +222,16 @@ class ReaderContractTests(unittest.TestCase):
         self.assertNotIn("<!-- layout-region:", article)
         self.assertNotIn("<!-- page:", article)
 
-    def test_article_model_is_canonical_source_for_markdown_and_reader(self):
+    def test_article_tree_is_canonical_source_for_article_model_and_reader(self):
         compilation, reader, _, _, _ = self._compile()
-        model = compilation.article_model(source_sha256=reader["source_sha256"])
+        tree = compilation.article_tree(source_sha256=reader["source_sha256"])
+        validate_final_article_tree(tree)
+        self.assertEqual(
+            tree["contract_version"],
+            ARTICLE_TREE_CONTRACT_VERSION,
+        )
+        self.assertEqual(tree["summary"]["generated_text_count"], 0)
+        model = article_tree_to_article_model(tree)
         self.assertEqual(
             model["contract_version"],
             ARTICLE_MODEL_CONTRACT_VERSION,
@@ -236,6 +249,25 @@ class ReaderContractTests(unittest.TestCase):
                 )
             ),
         )
+
+    def test_final_article_tree_is_deterministic_and_rejects_drift(self):
+        compilation, reader, _, _, _ = self._compile()
+        first = compilation.article_tree(source_sha256=reader["source_sha256"])
+        second = compilation.article_tree(source_sha256=reader["source_sha256"])
+        self.assertEqual(
+            canonical_final_article_tree_json(first),
+            canonical_final_article_tree_json(second),
+        )
+        tampered = deepcopy(first)
+        tampered["nodes"][1]["order"] = 9
+        with self.assertRaisesRegex(ContractValidationError, "block"):
+            validate_final_article_tree(tampered)
+        wrong_source = "0" * 64
+        with self.assertRaisesRegex(ContractValidationError, "输入身份"):
+            validate_final_article_tree(
+                first,
+                expected_source_sha256=wrong_source,
+            )
 
     def test_article_model_rejects_multiline_blocks_and_order_gaps(self):
         compilation, reader, _, _, _ = self._compile()

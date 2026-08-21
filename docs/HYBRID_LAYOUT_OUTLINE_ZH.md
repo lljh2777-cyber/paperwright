@@ -377,6 +377,7 @@ output-dir/
     ├── run.json
     ├── source.json
     ├── manifest.json
+    ├── article-tree.json
     ├── article-model.json
     ├── reader.json
     ├── 02-roi/
@@ -401,13 +402,13 @@ _paperwright/06-text-review/
 └── validation-report.md
 ```
 
-派生包重新投影 Article Model、`article.md` 与 Reader，保留并校验父包证据，且不
-覆盖 manifest v0.9 父包。
+派生包先生成绑定 TextTask/TextReview 的新 final ArticleTree，再投影 Article Model、
+`article.md` 与 Reader；它保留并校验父包证据，且不覆盖 manifest v0.9 父包。
 
 `--evidence minimal` 只保留 `article.md`、`images/`、
-`_paperwright/manifest.json`、`_paperwright/article-model.json` 和
-`_paperwright/reader.json`。Article Model 是 Markdown 与 Reader 的规范共同来源，
-Reader 是阅读功能索引，
+`_paperwright/manifest.json`、`_paperwright/article-tree.json`、
+`_paperwright/article-model.json` 和 `_paperwright/reader.json`。Final ArticleTree
+是 ArticleModel 的规范上游，Article Model 再稳定投影 Markdown 与 Reader；Reader 是阅读功能索引，
 不是审计证据，因此不会随证据级别裁剪。`--evidence full` 还会增加
 `01-physical/physical-document.json`、每页 `page.png`、Content ROI
 预览和全部 `layout-task.json`，适合审计与训练数据积累。

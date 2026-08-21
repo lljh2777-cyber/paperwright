@@ -99,8 +99,8 @@ agent 会：先问关键选项 → 执行转换 → 校验 → **按下文清单
 
 1. **校验结果**：逐项报告 `validate-article-model` / `validate-reader` /
    `validate-text-review` 等的结果；`PASS` / 警告 / **阻断性 `FAIL`** 分开列；
-2. **交付物清单**：`article.md`、图片数量、`_paperwright/`（article-model、
-   reader.json、验证报告）、manifest 路径；
+2. **交付物清单**：`article.md`、图片数量、`_paperwright/`（article-tree、
+   article-model、reader.json、验证报告）、manifest 路径；
 3. **已知限制**：该 PDF 里未做到的事——扫描件（无 OCR）、表格语义行/列未
    重建、公式未转 LaTeX、某些图被保守拒绝等；
 4. **隐私声明**：明确说明"PaperWright 核心未调用任何模型/外部 API"；若本次

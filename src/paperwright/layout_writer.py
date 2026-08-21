@@ -18,6 +18,12 @@ from .article_model import (
     render_article_markdown,
     validate_article_model,
 )
+from .article_tree import (
+    article_tree_to_article_model,
+    build_final_article_tree,
+    canonical_final_article_tree_json,
+    validate_final_article_tree,
+)
 from .backends.base import ExtractedAsset
 from .completeness import (
     COMPLETENESS_REPORT_PATH,
@@ -857,6 +863,22 @@ def write_layout_outputs(
                 for item in reviewed_cross_page_bindings
             ),
         )
+    if article_tree is not None:
+        structure_input_kind = "source_element_tree"
+        structure_input_sha256 = hashlib.sha256(
+            canonical_article_tree_json(article_tree).encode("utf-8")
+        ).hexdigest()
+    else:
+        structure_input_kind = "reviewed_layouts"
+        structure_input_sha256 = hashlib.sha256(
+            json.dumps(
+                [item.deterministic_sha256() for item in materialized_layouts],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
     _validate_materialized_semantics(document, materialized_layouts)
     caption_by_region, caption_by_visual, caption_binding_quality = (
         _bind_caption_regions(
@@ -951,7 +973,7 @@ def write_layout_outputs(
             structure_dir = evidence_dir / "02-structure"
             structure_dir.mkdir(parents=True, exist_ok=True)
             recipe_path = structure_dir / "paper-recipe.json"
-            tree_path = structure_dir / "article-tree.json"
+            tree_path = structure_dir / "source-element-tree.json"
             recipe_path.write_text(
                 canonical_paper_recipe_json(paper_recipe),
                 encoding="utf-8",
@@ -1710,8 +1732,31 @@ def write_layout_outputs(
         provenance_pages=provenance_pages,
         image_records=image_records,
     )
-    article_model_value = reader_compilation.article_model(
-        source_sha256=document.source_sha256
+    final_article_tree_value = build_final_article_tree(
+        source_sha256=document.source_sha256,
+        physical_document_sha256=document.deterministic_sha256(),
+        structure_input_kind=structure_input_kind,
+        structure_input_sha256=structure_input_sha256,
+        blocks=reader_compilation.blocks,
+        markdown_by_id=dict(reader_compilation.markdown_by_id),
+        assets=reader_compilation.assets,
+        relations=reader_compilation.relations,
+    )
+    final_article_tree_path = evidence_dir / "article-tree.json"
+    final_article_tree_path.write_text(
+        canonical_final_article_tree_json(final_article_tree_value),
+        encoding="utf-8",
+        newline="\n",
+    )
+    validate_final_article_tree(
+        final_article_tree_value,
+        root=root,
+        expected_source_sha256=document.source_sha256,
+        expected_physical_document_sha256=document.deterministic_sha256(),
+    )
+    article_model_value = article_tree_to_article_model(
+        final_article_tree_value,
+        root=root,
     )
     article_model_path = evidence_dir / "article-model.json"
     article_model_path.write_text(
@@ -1797,6 +1842,16 @@ def write_layout_outputs(
             "asset_count": len(article_model_value["assets"]),
             "relation_count": len(article_model_value["relations"]),
         },
+        "article_tree": {
+            "status": "pass",
+            "contract_version": final_article_tree_value["contract_version"],
+            "block_count": final_article_tree_value["summary"]["block_count"],
+            "asset_count": final_article_tree_value["summary"]["asset_count"],
+            "relation_count": final_article_tree_value["summary"][
+                "relation_count"
+            ],
+            "generated_text_count": 0,
+        },
     }
     quality_warning_codes = {
         "markdown_text": "quality_markdown_text_suspicions",
@@ -1814,6 +1869,7 @@ def write_layout_outputs(
         "text_reconstruction": "quality_text_reconstruction_suspicious_unicode",
         "reader_index": "reader_index_invalid",
         "article_model": "article_model_invalid",
+        "article_tree": "article_tree_invalid",
     }
     for name, result in quality_checks.items():
         if result["status"] != "pass":
@@ -2012,6 +2068,7 @@ def write_layout_outputs(
 
     output_paths = [
         article_path,
+        final_article_tree_path,
         article_model_path,
         reader_path,
         completeness_path,
@@ -2063,6 +2120,8 @@ def write_layout_outputs(
             return "reader_index"
         if path == article_model_path:
             return "article_model"
+        if path == final_article_tree_path:
+            return "article_tree"
         if path == completeness_path:
             return "completeness_report"
         if path == references_path:
@@ -2098,8 +2157,8 @@ def write_layout_outputs(
             return "issue_routing"
         if name == "paper-recipe.json":
             return "paper_recipe"
-        if name == "article-tree.json":
-            return "article_tree"
+        if name == "source-element-tree.json":
+            return "source_element_tree"
         if name.endswith("-content-roi.png"):
             return "content_roi_preview"
         if name == "content-roi.json":

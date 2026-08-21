@@ -18,7 +18,8 @@ E0–E4 解决“有哪些原生对象、不同 provider 如何观察、哪里�
 - 明确禁止文件、网络、随机数、正文替换和 Markdown 写入能力；
 - 保存确定性 action trace 哈希和 `ready/degraded/human_required` 状态。
 
-`article-tree.json` 使用 `paperwright-article-tree-v0.1`：
+prepare 目录的 `article-tree.json` 使用 `paperwright-article-tree-v0.1`；发布到标准/完整
+证据包时命名为 `_paperwright/02-structure/source-element-tree.json`：
 
 - document → page → source-element 三层结构；
 - 每个 PhysicalDocument 元素恰好进入一个叶节点；
@@ -37,7 +38,9 @@ v0.1 的 producer 是确定性 baseline，不调用模型。未来 AI producer �
 漂移、输入身份变化或确定性重放不一致；standard/full 包把两份产物复制到
 `_paperwright/02-structure/` 并列入 manifest。
 
-当前安全投影只实现以下窄动作：
+apply 随后编译 `paperwright-article-tree-v0.2`，保存到
+`_paperwright/article-tree.json` 并作为 ArticleModel 的唯一上游；详见
+[Final ArticleTree v0.2](FINAL_ARTICLE_TREE_V0.2.md)。当前安全投影只实现以下窄动作：
 
 1. provider Table bbox 作为图片渲染，并从 text region 移除同一原生元素；
 2. 未被布局覆盖的原生 image 作为 Figure 保留；
@@ -48,8 +51,8 @@ v0.1 的 producer 是确定性 baseline，不调用模型。未来 AI producer �
 
 ## 已知边界
 
-- ArticleTree 目前是审计和安全决策层，最终 ArticleModel 仍由现有 FinalLayout writer
-  构造；两条结构来源尚未合并。
+- v0.1 ArticleTree 仍只负责审计和安全决策；最终文章结构由 v0.2 表达，两者通过规范
+  SHA-256 绑定，职责不混合。
 - 首页 raster 家具规则是开发样本上的窄几何规则，需要新的冻结论文校准误伤率。
 - Table 使用保真截图，不恢复语义 cell，也不声称可访问性表格已完成。
 - GROBID 未配置时无法稳定区分作者、单位、摘要和正文；Recipe 会诚实保持 degraded。

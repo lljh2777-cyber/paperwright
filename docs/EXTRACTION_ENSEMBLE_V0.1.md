@@ -321,6 +321,7 @@ exclude，citation/license 的旧 `r-g7` 从 caption 降为 margin；ArticleTree
 7. 任一高层节点都能回到 provider observation、page、bbox 和 source hash；
 8. provider 发生冲突时状态为 `conflicted/degraded`，不能仍报告质量已接受。
 
-本组验收和 ArticleTree/PaperRecipe 纵向原型已经完成。下一阶段不新增视觉关系 prompt
-补丁，而是让 ArticleTree 成为 ArticleModel 之前的规范结构输入，并在新冻结论文上验证
-首页家具、Table 图片回退和原生 Figure 补全的误伤率。
+本组验收和 ArticleTree/PaperRecipe 纵向原型已经完成。E6 已增加 final ArticleTree v0.2，
+使 Hybrid layout 和 text-package 都只能通过树投影 ArticleModel。下一阶段不新增视觉关系
+prompt 补丁，而是在新冻结论文上验证首页家具、Table 图片回退和原生 Figure 补全的
+误伤率。

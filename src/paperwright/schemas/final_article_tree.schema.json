@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/final-article-tree-v0.2.json",
+  "title": "PaperWright canonical final ArticleTree v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "compiler_version", "source_sha256", "physical_document_sha256", "structure_input", "root_node_id", "nodes", "assets", "relations", "summary"],
+  "properties": {
+    "contract_version": {"const": "paperwright-article-tree-v0.2"},
+    "compiler_version": {"const": "paperwright-final-article-tree-compiler-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "physical_document_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "structure_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256"],
+      "properties": {
+        "kind": {"enum": ["legacy_article_model", "source_element_tree", "text_review", "reviewed_layouts", "reviewed_projection"]},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "root_node_id": {"const": "article"},
+    "nodes": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "assets": {
+      "type": "array",
+      "items": {"$ref": "https://paperwright.local/schemas/article-model-v0.1.json#/$defs/asset"}
+    },
+    "relations": {
+      "type": "array",
+      "items": {"$ref": "https://paperwright.local/schemas/article-model-v0.1.json#/$defs/relation"}
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_count", "asset_count", "relation_count", "generated_text_count"],
+      "properties": {
+        "block_count": {"type": "integer", "minimum": 1},
+        "asset_count": {"type": "integer", "minimum": 0},
+        "relation_count": {"type": "integer", "minimum": 0},
+        "generated_text_count": {"const": 0}
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "parent_id", "node_kind", "role", "order", "markdown", "source_spans", "asset_id", "content_origin"],
+      "properties": {
+        "node_id": {"type": "string", "minLength": 1},
+        "parent_id": {"type": ["string", "null"]},
+        "node_kind": {"enum": ["article", "block"]},
+        "role": {"enum": ["article", "title", "heading", "body", "caption", "footnote", "visual_slot", "unknown"]},
+        "order": {"type": "integer", "minimum": 0},
+        "markdown": {"type": ["string", "null"]},
+        "source_spans": {
+          "type": "array",
+          "items": {"$ref": "https://paperwright.local/schemas/article-model-v0.1.json#/$defs/sourceSpan"}
+        },
+        "asset_id": {"type": ["string", "null"]},
+        "content_origin": {"enum": ["container", "source_projection"]}
+      }
+    }
+  }
+}
