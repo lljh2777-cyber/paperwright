@@ -262,6 +262,8 @@ def validate_visual_relation_review(
             if type(order) is not int or order < 1:
                 raise ContractValidationError("非 exclude group 必须有正整数 order")
             orders.append(order)
+        if role in _EXCLUDE_ROLES and content_class != "exclude":
+            raise ContractValidationError("排除 role 必须使用 exclude")
         if role in _TEXT_ROLES and content_class not in {"text", "unknown"}:
             raise ContractValidationError("文本 role 的 content_class 非法")
         if role in _VISUAL_ROLES and content_class not in {"visual", "unknown"}:
@@ -335,9 +337,13 @@ def validate_visual_relation_review(
 def normalize_visual_relation_review(
     value: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Repair syntax-only ordering defects without changing model semantics.
+    """Repair deterministic contract defects without changing model semantics.
 
-    Candidate membership, grouping, roles, parents, and discard decisions remain
+    A role with exactly one concrete compatible content class can safely repair
+    an explicitly conflicting redundant field (for example ``header`` implies
+    ``exclude``).  ``unknown`` remains an intentional uncertainty for text and
+    visual roles.  Candidate membership, grouping, roles, parents, and discard
+    decisions remain
     untouched.  Missing or duplicate candidates therefore still fail validation
     and must be reconsidered by the reviewer.
     """
@@ -351,13 +357,33 @@ def normalize_visual_relation_review(
 
     groups = [dict(item) for item in raw_groups]
 
-    changed = False
+    order_changed = False
+    role_warnings: list[str] = []
+    for group in groups:
+        group_id = group.get("group_id")
+        role = group.get("role")
+        content_class = group.get("content_class")
+        inferred_class: str | None = None
+        if role in _EXCLUDE_ROLES:
+            inferred_class = "exclude"
+        elif role in _TEXT_ROLES and content_class in {"visual", "exclude"}:
+            inferred_class = "text"
+        elif role in _VISUAL_ROLES and content_class in {"text", "exclude"}:
+            inferred_class = "visual"
+        if inferred_class is not None and content_class != inferred_class:
+            group["content_class"] = inferred_class
+            role_warnings.append(
+                "paperwright normalized relation role/class: "
+                f"group={group_id} role={role} "
+                f"content_class={content_class}->{inferred_class}"
+            )
+
     ordered_indices: list[int] = []
     for index, group in enumerate(groups):
         if group.get("content_class") == "exclude":
             if group.get("order") is not None:
                 group["order"] = None
-                changed = True
+                order_changed = True
         else:
             ordered_indices.append(index)
 
@@ -377,16 +403,22 @@ def normalize_visual_relation_review(
     ):
         if groups[index].get("order") != new_order:
             groups[index]["order"] = new_order
-            changed = True
+            order_changed = True
 
     normalized["groups"] = groups
     warnings = normalized.get("warnings")
-    if changed and isinstance(warnings, list) and all(
+    if isinstance(warnings, list) and all(
         isinstance(item, str) and item for item in warnings
     ):
-        warning = "paperwright normalized relation reading orders"
-        if warning not in warnings:
-            normalized["warnings"] = [*warnings, warning]
+        normalized_warnings = [*warnings, *role_warnings]
+        if order_changed:
+            # Keep this warning stable and separate from the auditable
+            # role-derived repairs above.
+            order_warning = "paperwright normalized relation reading orders"
+            if order_warning not in normalized_warnings:
+                normalized_warnings.append(order_warning)
+        if normalized_warnings != warnings:
+            normalized["warnings"] = normalized_warnings
     return normalized
 
 

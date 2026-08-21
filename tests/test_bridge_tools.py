@@ -406,6 +406,80 @@ class VisualBridgeIssueContextTests(unittest.TestCase):
         self.assertIn("missing=C03", second_prompt)
         self.assertIn("corrected COMPLETE response", second_prompt)
 
+    def test_relation_role_normalization_avoids_provider_retry(self):
+        raw_task = _layout_task()
+        relation_task = build_visual_relation_task(raw_task)
+        final_task = configure_layout_review_task(raw_task, "visual-direct")
+        response_value = {
+            "groups": [
+                {
+                    "group_id": "body",
+                    "candidate_ids": ["C01"],
+                    "content_class": "text",
+                    "role": "body",
+                    "order": 1,
+                    "parent_group_id": None,
+                    "confidence": 0.9,
+                },
+                {
+                    "group_id": "header",
+                    "candidate_ids": ["C02"],
+                    "content_class": "unknown",
+                    "role": "header",
+                    "order": 2,
+                    "parent_group_id": None,
+                    "confidence": 0.9,
+                },
+                {
+                    "group_id": "figure",
+                    "candidate_ids": ["C03"],
+                    "content_class": "visual",
+                    "role": "figure",
+                    "order": 3,
+                    "parent_group_id": None,
+                    "confidence": 0.9,
+                },
+            ],
+            "discarded_candidate_ids": [],
+            "warnings": [],
+        }
+        completion = mock.Mock()
+        completion.choices = [
+            mock.Mock(message=mock.Mock(content=json.dumps(response_value)))
+        ]
+        completion.usage = None
+        client = mock.Mock()
+        client.chat.completions.create.return_value = completion
+        with tempfile.TemporaryDirectory() as temp_dir:
+            page_dir = Path(temp_dir) / "page-0002"
+            page_dir.mkdir()
+            (page_dir / "layout-task.json").write_text(
+                final_task.canonical_json(),
+                encoding="utf-8",
+            )
+            (page_dir / "visual-relation-task.json").write_text(
+                relation_task.canonical_json(),
+                encoding="utf-8",
+            )
+            Image.new("RGB", (40, 40), "white").save(
+                page_dir / "candidate-overlay.png"
+            )
+            layout, review = VISUAL_TOOL["_review_page"](
+                client,
+                page_dir,
+                "fixture-model",
+                {"pages": []},
+                CostReport(),
+                attempts=3,
+            )
+
+        self.assertEqual(client.chat.completions.create.call_count, 1)
+        header = next(item for item in review["groups"] if item["role"] == "header")
+        self.assertEqual(header["content_class"], "exclude")
+        self.assertIsNone(header["order"])
+        self.assertTrue(any("group=header" in item for item in review["warnings"]))
+        self.assertEqual(len(layout["regions"]), 3)
+
 
 class L3BridgeToolTests(unittest.TestCase):
     def test_output_pair_is_atomic_and_rolls_back_on_second_replace(self):

@@ -250,6 +250,9 @@ prompt v0.2 的单次 L2 次指标为候选内 TP=4、FP=1、FN=0、TN=1：消�
 `gpt-5.6-luna` high 代理执行且禁止 task adapter 或人工修补；1 篇五阶段完成，2 篇因
 视觉模型输出的 role/content-class 契约冲突在首个 L2 页停止。见
 [未见论文 L2 完整生产链回归 v0.1](docs/UNSEEN_L2_FULLCHAIN_V0.1.md)。
+随后加入只修正明确 role 与冗余 class/order 自相矛盾的确定性规范化；原失败两篇在新的
+开发集 run/output 根中均完成五阶段，28/28 final layout 与 14/14 relation review 有效。
+该回放不是新的未见评估，也不证明 role 判断或最终 Markdown 的语义质量。
 
 ## 页眉页脚剔除（--furniture）
 

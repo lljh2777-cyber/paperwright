@@ -64,10 +64,16 @@ issue scope 已有的 bbox 和 element ID 变成只读 `Ixxx` anchor candidate�
 - compound raster 必须保留为 Figure/Table；
 - role、content class、confidence 和文档/task 身份合法。
 
-prompt v0.2 增加两层通用容错，但不代替语义校验：程序只把非排除 group 的 `order`
-规范为连续序列，并把 exclude 的 `order` 置空；候选遗漏、重复、错误角色或父子关系仍
-会被拒绝。桥接重试会把上一次确定性校验错误加入下一次提示，要求模型重新返回完整
-响应，避免 temperature 0 下原样重复无效 JSON。
+prompt v0.2 后的确定性规范化不代替语义校验。程序把非排除 group 的 `order` 规范为
+连续序列，并把 exclude 的 `order` 置空；当模型已经给出明确 role 时，还会修正与 role
+冲突的冗余 `content_class`：`header/footer/margin → exclude`，明确文本 role → `text`，
+明确视觉 role → `visual`。文本/视觉 role 的 `unknown` 保留，不从 `unknown/other` role
+推导 class。每次修正均写入稳定 warning。
+
+候选遗漏、重复、group/role 判断、caption parent、discard 和 confidence 不会被修正，
+仍由校验器拒绝。这里把 role 当作模型已作出的语义决定，只消除其与冗余 class/order 的
+自相矛盾；它不能证明 role 本身正确。桥接重试会把上一次确定性校验错误加入下一次提示，
+要求模型重新返回完整响应，避免 temperature 0 下原样重复无效 JSON。
 新写入使用 prompt v0.2；v0.1 review 继续可读，以便回放既有 evidence。
 
 Schema 位于 `src/paperwright/schemas/visual_relation_review.schema.json`。

@@ -295,6 +295,84 @@ class VisualRelationContractTests(unittest.TestCase):
         self.assertIn("normalized relation reading orders", normalized["warnings"][0])
         validate_visual_relation_review(normalized, self.relation_task)
 
+    def test_normalizes_role_derived_content_class_without_semantic_repairs(self):
+        groups = [
+            self._group("heading", ("C01",), "visual", "heading", 1, "parent"),
+            self._group("body", ("C02",), "exclude", "body", 2),
+            self._group("caption", ("C03",), "visual", "caption", 3),
+            self._group("footnote", ("C04",), "exclude", "footnote", 4),
+            self._group("figure", ("C05",), "text", "figure", 5),
+            self._group("table", ("C06",), "exclude", "table", 6),
+            self._group("equation", ("C07",), "text", "equation", 7),
+            self._group("header", ("C08",), "unknown", "header", 8),
+            self._group("footer", ("C09",), "text", "footer", 9),
+            self._group("margin", ("C10",), "visual", "margin", 10),
+            self._group("unknown-role", ("C11",), "visual", "unknown", 11),
+            self._group("other-role", ("C12",), "exclude", "other", 12),
+        ]
+        review = self._review(groups, discarded=("C13",))
+        normalized = normalize_visual_relation_review(review)
+
+        self.assertEqual(
+            [item["content_class"] for item in normalized["groups"]],
+            [
+                "text", "text", "text", "text", "visual", "visual", "visual",
+                "exclude", "exclude", "exclude", "visual", "exclude",
+            ],
+        )
+        self.assertEqual(
+            [item["role"] for item in normalized["groups"]],
+            [item["role"] for item in groups],
+        )
+        self.assertEqual(
+            [item["candidate_ids"] for item in normalized["groups"]],
+            [item["candidate_ids"] for item in groups],
+        )
+        self.assertEqual(len(normalized["groups"]), len(groups))
+        self.assertEqual(
+            [item["confidence"] for item in normalized["groups"]],
+            [item["confidence"] for item in groups],
+        )
+        self.assertEqual(normalized["discarded_candidate_ids"], ["C13"])
+        self.assertEqual(normalized["groups"][0]["parent_group_id"], "parent")
+        self.assertEqual(normalized["groups"][7]["order"], None)
+        self.assertEqual(len(normalized["warnings"]), 11)
+        self.assertEqual(
+            normalized["warnings"][0],
+            "paperwright normalized relation role/class: "
+            "group=heading role=heading content_class=visual->text",
+        )
+        self.assertTrue(
+            any(
+                "group=margin role=margin content_class=visual->exclude" in item
+                for item in normalized["warnings"]
+            )
+        )
+        self.assertEqual(
+            normalize_visual_relation_review(normalized),
+            normalized,
+            "normalization and its audit warnings must be idempotent",
+        )
+
+    def test_validator_rejects_exclude_role_with_non_exclude_class(self):
+        for content_class in ("text", "visual", "unknown"):
+            with self.subTest(content_class=content_class):
+                review = self._review(
+                    [
+                        self._group(
+                            "header",
+                            ("C01",),
+                            content_class,
+                            "header",
+                            1,
+                        ),
+                        self._group("figure", ("C02",), "visual", "figure", 2),
+                        self._group("body", ("C03",), "text", "body", 3),
+                    ]
+                )
+                with self.assertRaisesRegex(ContractValidationError, "排除 role"):
+                    validate_visual_relation_review(review, self.relation_task)
+
     def test_compiler_clips_non_exclude_union_to_confirmed_roi(self):
         overflowing = replace(
             self.relation_task.candidates[2],

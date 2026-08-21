@@ -1,6 +1,6 @@
 # PaperWright 当前实现状态
 
-更新时间：2026-08-17。
+更新时间：2026-08-21。
 
 ## 产品边界
 
@@ -90,6 +90,12 @@
     role 与 `content_class` 不一致、header/margin 未使用 `exclude`。成功文档的五阶段、
     Reader、ArticleModel、文本包、8 个 final layout 和 3 个 relation review 均独立验证
     通过。详见 [UNSEEN_L2_FULLCHAIN_V0.1](UNSEEN_L2_FULLCHAIN_V0.1.md)。
+30. Role-derived 冗余字段规范化：明确 `header/footer/margin` role 确定性映射到
+    `exclude`，明确文本/视觉 role 的冲突 class 分别映射到 `text`/`visual`，保留
+    `unknown`；每项修正写稳定 warning。候选分组、role、caption parent、discard、
+    confidence 仍不可自动修复，原始校验器也增加排除 role 的反向一致性约束。原 U01/U03
+    在新目录的开发集回放均完成五阶段，28/28 final layout 与 14/14 relation review
+    有效；该回放只验证已知停止点，不是独立泛化或语义质量结论。
 
 ## 当前主链
 
@@ -151,7 +157,9 @@ PDF
 
 ## 下一阶段
 
-冻结 v0.5 gold 与固定 L2 次指标，不使用本批继续调路由或 prompt。下一工作项应处理视觉
-布局桥的契约稳健性：在不让模型重画 bbox 的前提下，对“候选未核算、order 非法、ROI
-越界”提供确定性修复或带错误信息的受限重试，并先在既有回归材料验证。随后用新的未见
-论文检验完整生产链。入口与边界见 [RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)。
+冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
+规范化规则。下一工作项应从冻结候选位置 65 之后选择新的未见科研论文，检验完整生产链；
+同时把 normalization warning 作为定向语义审计入口，区分“冗余 class 噪声”与“role
+本身误判”，避免把契约通过率误当成 Markdown 质量。入口与边界见
+[RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)和
+[UNSEEN_L2_FULLCHAIN_V0.1](UNSEEN_L2_FULLCHAIN_V0.1.md)。
