@@ -9,6 +9,7 @@
 | Python 3.13 | 已实测 | 2026-08-13 安装、单测与端到端转换验证通过 |
 | PDFium | 主后端 | 锁定验证组合为 pypdfium2 5.11.0 / PDFium 151.0.7920.0 |
 | pdfplumber | 默认几何侧车 | 锁定 0.11.10；只提供独立 observation 与 table proposal |
+| GROBID | 可选本地语义侧车 | 通过 `PAPERWRIGHT_GROBID_URL` 启用；当前 HTTP 服务未实测 |
 | PDFBox | 不可用 | 仅接口占位；选择时明确失败 |
 
 ## 当前文档范围

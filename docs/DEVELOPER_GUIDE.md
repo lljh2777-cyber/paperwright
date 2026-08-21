@@ -7,7 +7,7 @@
 
 | 层 | 模块 | 职责 |
 |---|---|---|
-| L0 确定性内核 | `backends/pdfium.py`, `models.py`, `source_evidence.py`, `pdfplumber_provider.py`, `figures.py`, `content_render.py`, `region_render.py`, `writer.py` | PDFium inventory/materialization、pdfplumber 几何侧车、provider 证据快照、Figure/Table/Equation 图片化、Markdown/manifest 写出 |
+| L0 确定性内核 | `backends/pdfium.py`, `models.py`, `source_evidence.py`, `pdfplumber_provider.py`, `grobid_provider.py`, `figures.py`, `content_render.py`, `region_render.py`, `writer.py` | PDFium inventory/materialization、pdfplumber/GROBID 侧车、provider 证据快照、Figure/Table/Equation 图片化、Markdown/manifest 写出 |
 | L1 文本判断 | `text_review.py`, `tools/run_text_review.py` | 只判断格式整理与 join-blocks，写 `text-review.json` |
 | L2 视觉判断 | `visual_relations.py`, `cross_page_caption.py`, `layout_models.py`, `layout_review.py`, `layout_writer.py`, `tools/run_visual_review.py` | 页内候选关系 + 相邻页 caption-of，确定性编译/投影 |
 | L3 程序合成 | `synthesize.py`, `tools/run_text_synthesize.py` | 受限 DSL + 守恒校验 + 重放溯源 |

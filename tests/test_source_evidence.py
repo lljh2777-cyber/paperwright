@@ -142,7 +142,15 @@ class SourceEvidenceTests(unittest.TestCase):
                 for item in page["observations"]
             }
 
-            self.assertEqual(index["summary"]["provider_count"], 2)
+            self.assertEqual(index["summary"]["provider_count"], 3)
+            self.assertEqual(
+                next(
+                    provider["status"]
+                    for provider in index["providers"]
+                    if provider["provider_id"] == "grobid-scholarly"
+                ),
+                "unavailable",
+            )
             self.assertTrue({"char", "word", "line", "image"}.issubset(kinds))
             self.assertTrue(
                 any(

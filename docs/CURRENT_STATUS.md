@@ -125,6 +125,10 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     image 独立观察并与 PDFium 对齐；Table finder 只提交无 Markdown 权限的 proposed
     `table_region` claim。U02 唯一命中第 3 页已知表格，U03 为 0 个表格 claim；显式
     `fast` 不运行侧车。
+34. GROBID 科研语义侧车（E3）：新增可选本地 HTTP provider、固定 TEI coordinate
+    请求、离线 TEI 解析及 title/author/affiliation/abstract/section/paragraph/caption/
+    reference/citation proposed claims。claim 必须有坐标 observation，TEI 文本无正文
+    权限；未配置或请求失败会保存显式 `unavailable`。当前尚无本地服务供 HTTP 实测。
 
 ## 当前主链
 
@@ -188,7 +192,7 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E3 GROBID 语义侧车，
-再在 U02/U03 上验证多源证据是否足以排除已知错误。E0 全页 inventory、E1 provider
-snapshot/对齐契约和 E2 pdfplumber 几何侧车已完成。只有该门槛通过后，才进入
-PaperRecipe/ArticleTree 纵向原型和新的独立论文验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)下一步完成 E4 局部 Docling
+provider，再在 U02/U03 上验证多源证据是否足以排除已知错误。E0–E3 已完成；GROBID
+HTTP 真服务验证仍需本地服务。只有该门槛通过后，才进入 PaperRecipe/ArticleTree
+纵向原型和新的独立论文验收。

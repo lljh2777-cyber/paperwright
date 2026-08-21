@@ -239,6 +239,15 @@ caption 引导的 crop 内重跑策略可以改变参数，但必须记录参数
 
 ### E3：接入 GROBID
 
+**状态：已完成。** 新增可选本地 HTTP provider `grobid-scholarly`。设置
+`PAPERWRIGHT_GROBID_URL` 后，PaperWright 请求 `processFulltextDocument` 的固定 TEI
+coordinate 集，并将 title/author/affiliation/abstract/section/paragraph/figure-table
+caption/reference/citation 作为 proposed claims；每个 claim 必须先有合法 page+bbox
+observation，并尝试对齐 PDFium 原生文字。TEI 文本没有直接正文权限。未配置、请求失败
+或服务不可达时，索引明确保存 `status=unavailable` 及原因，而不是空结构。当前环境没有
+运行 GROBID 服务，因此 HTTP 端到端留待服务部署验证；TEI 解析、角色约束与坐标对齐已
+用固定离线夹具覆盖。
+
 以可选本地 HTTP provider 接受固定 TEI 与坐标输出。第一阶段只使用：front matter、
 abstract、section、paragraph、figure/table caption、references 和 inline citation links。
 TEI 文本必须重新对齐原生字符，无法对齐的节点不得直接进入 ArticleTree。

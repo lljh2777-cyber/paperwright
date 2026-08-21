@@ -594,19 +594,20 @@ def write_pdfium_source_evidence(
     if root.exists():
         raise ContractValidationError("source evidence 输出目录已存在，拒绝覆盖")
     index, artifacts = build_pdfium_source_evidence(document)
-    if source is not None:
-        from .pdfplumber_provider import build_pdfplumber_evidence
 
-        snapshot, sidecar_alignments, sidecar_claims = (
-            build_pdfplumber_evidence(Path(source), document)
-        )
-        snapshot_path = "providers/pdfplumber-geometry.json"
+    def add_provider(
+        snapshot: dict[str, Any],
+        alignments: list[dict[str, Any]],
+        claims: list[dict[str, Any]],
+    ) -> None:
+        provider_id = str(snapshot["provider_id"])
+        snapshot_path = f"providers/{provider_id}.json"
         artifacts[snapshot_path] = snapshot
-        artifacts["alignments.json"]["alignments"].extend(sidecar_alignments)
-        artifacts["claims.json"]["claims"].extend(sidecar_claims)
+        artifacts["alignments.json"]["alignments"].extend(alignments)
+        artifacts["claims.json"]["claims"].extend(claims)
         index["providers"].append(
             {
-                "provider_id": snapshot["provider_id"],
+                "provider_id": provider_id,
                 "version": snapshot["provider_version"],
                 "capabilities": snapshot["capabilities"],
                 "missing_capabilities": snapshot["missing_capabilities"],
@@ -617,6 +618,23 @@ def write_pdfium_source_evidence(
                 "status": snapshot["status"],
             }
         )
+
+    if source is not None:
+        from .pdfplumber_provider import build_pdfplumber_evidence
+
+        snapshot, sidecar_alignments, sidecar_claims = (
+            build_pdfplumber_evidence(Path(source), document)
+        )
+        add_provider(snapshot, sidecar_alignments, sidecar_claims)
+
+        from .grobid_provider import build_grobid_evidence
+
+        grobid_snapshot, grobid_alignments, grobid_claims = (
+            build_grobid_evidence(Path(source), document)
+        )
+        add_provider(grobid_snapshot, grobid_alignments, grobid_claims)
+
+    if len(index["providers"]) > 1:
         index["alignments_sha256"] = _sha256_bytes(
             _canonical_json(artifacts["alignments.json"]).encode("utf-8")
         )

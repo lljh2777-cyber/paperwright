@@ -27,6 +27,17 @@
 
 配置是严格 JSON：未知字段、错误类型和不安全 output policy 会直接拒绝。
 
+可选 GROBID 不写入 JSON 配置，避免把本地服务状态误当成可重放文档参数。启动本地服务后
+设置环境变量，例如：
+
+```bash
+export PAPERWRIGHT_GROBID_URL=http://127.0.0.1:8070
+```
+
+未设置或请求失败时，转换不会伪装成“论文没有语义结构”；SourceEvidenceBundle 会记录
+`grobid-scholarly` provider 为 `unavailable`。GROBID 返回的 TEI 只提供 proposed claims，
+没有直接替换 PDF 原生正文的权限。
+
 单文档 explicit 调试：
 
 ```bash

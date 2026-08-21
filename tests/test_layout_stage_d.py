@@ -1335,7 +1335,7 @@ class LayoutStageDTests(unittest.TestCase):
                 index["source_evidence"]["contract_version"],
                 "paperwright-source-evidence-v0.1",
             )
-            self.assertEqual(index["source_evidence"]["provider_count"], 2)
+            self.assertEqual(index["source_evidence"]["provider_count"], 3)
             self.assertTrue((review / "source-evidence" / "index.json").is_file())
             images = [
                 element

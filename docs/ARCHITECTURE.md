@@ -45,6 +45,8 @@ Markdown + images + manifest     article model
   PDFium 与 pdfplumber，PhysicalDocument 继续作为下游兼容视图。
 - `paperwright.pdfplumber_provider`：默认轻量几何侧车；只提交独立字符/单词、图形对象
   与表格区域候选，不决定阅读顺序、cell 内容或 Markdown。
+- `paperwright.grobid_provider`：可选本地 GROBID HTTP/TEI 适配器；只提交带坐标、能回到
+  原生文字的科研语义 claims。服务未配置或失败时写显式 unavailable provider。
 - `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
 - `paperwright.api`：输入路径验证、后端选择和输出事务边界。
