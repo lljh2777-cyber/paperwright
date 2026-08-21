@@ -9,6 +9,23 @@
 - AI 只处理有证据的未决判断；所有模型输出必须经过确定性契约、守恒和回放校验。
 - 路由不使用模型价格、token 预算或供应商身份。
 
+## 质量重评与当前决策
+
+2026-08-21 对未见完整链输出进行人工可读性反查后，确认“契约完成”不等于“论文重建
+质量可接受”。U02 漏掉正文 Figure、把 Table 写成数字碎片；U03 把更新提示 logo 与
+citation/license 侧栏固化成 Figure-caption。继续调页级候选分类和 prompt 不能修复上游
+证据缺失。
+
+根因之一是当前 `standard` 会先生成 text-only PhysicalDocument，再用这份缺少
+image/vector 的证据判断是否值得完整枚举。U02/U03 均未升级，最终缓存所有页面都只有
+text。相同 PDF 的 PDFium 完整遍历能直接发现 U02 的 6 个 image/566 个 vector 和 U03
+的 11 个 image/88 个 vector。
+
+因此当前主线暂停新增未见论文批次和视觉关系 prompt 调参，先重建粗提取层。已接受的
+目标方案见 [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)：PDFium 提供全页
+原生对象清单，pdfplumber 补充独立字符/图形/表格几何，GROBID 提供科研论文语义骨架，
+Docling 只处理局部冲突；各 provider 的观察、主张和最终决定严格分层。
+
 ## 已完成
 
 1. 科研论文质量基线：13 篇、305 页，八维标注与失败分类。
@@ -158,8 +175,8 @@ PDF
 ## 下一阶段
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
-规范化规则。下一工作项应从冻结候选位置 65 之后选择新的未见科研论文，检验完整生产链；
-同时把 normalization warning 作为定向语义审计入口，区分“冗余 class 噪声”与“role
-本身误判”，避免把契约通过率误当成 Markdown 质量。入口与边界见
-[RANDOM_HOLDOUT_V0.5](RANDOM_HOLDOUT_V0.5.md)和
-[UNSEEN_L2_FULLCHAIN_V0.1](UNSEEN_L2_FULLCHAIN_V0.1.md)。
+规范化规则，也暂不从位置 65 之后扩展新 holdout。按
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)依次完成：PDFium 全页低成本对象
+inventory、provider snapshot/对齐契约、pdfplumber 侧车、GROBID 语义侧车，再在
+U02/U03 上验证证据是否足以排除已知错误。只有该门槛通过后，才进入 PaperRecipe/
+ArticleTree 纵向原型和新的独立论文验收。

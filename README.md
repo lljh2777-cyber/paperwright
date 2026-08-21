@@ -394,6 +394,7 @@ python -m paperwright convert input.pdf output-dir
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)
+- [粗提取多证据架构 v0.1](docs/EXTRACTION_ENSEMBLE_V0.1.md)
 - [支持矩阵](docs/SUPPORT_MATRIX.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)

@@ -97,6 +97,10 @@ Markdown + images + manifest     article model
 
 ## 提取配置
 
+> 本节记录 v0.9 已实现的兼容行为。质量重评后接受的目标设计不再允许标准证据由
+> text-only 风险路由决定是否枚举视觉对象；迁移方案见
+> [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)。
+
 - `fast`：只读取 TextPage 文字与坐标，批量渲染低分辨率页面并生成栅格证据；
 - `standard`：先执行 fast 风险评估，只对触发门槛的页面做完整对象遍历；
 - `forensic`：对全部页面执行完整对象遍历，保留兼容行为。
