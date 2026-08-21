@@ -135,6 +135,13 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     只保存 DoclingDocument 子集、table data、provenance 与 proposed claims，从不采用其
     Markdown。U02 只路由第 3 页已知 Table，U03 为 0 请求；当前本机未安装 Docling，
     离线 JSON 夹具已覆盖解析与溯源。
+36. PaperRecipe/ArticleTree 纵向原型（E5）：prepare 写出受限
+    `paperwright-paper-recipe-v0.1` 和元素守恒的 `paperwright-article-tree-v0.1`，apply
+    校验输入/证据哈希并确定性重放后才投影安全动作。Recipe 不含正文或 Markdown；Tree
+    每个物理元素恰有一个叶节点且 `generated_text_count=0`。U02 开发回放把第 3 页 Table
+    的 487 个对象从 prose 移入图片区域，并补回第 6、7 页 4 个原生 Figure；U03 首页
+    raster-only 更新 logo 被 bbox-scoped furniture action 排除，citation/license 从伪
+    caption 降为 margin。模型 producer 尚未开放，这些结果也不是新 holdout 泛化结论。
 
 ## 当前主链
 
@@ -198,8 +205,9 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E4 已完成。下一步进入 E5：
-用 U02/U03 做 PaperRecipe/ArticleTree 纵向原型，验证多源 evidence/conflict 是否真正能
-排除漏 Figure、Table 数字流和首页 logo/citation 误绑定。GROBID HTTP 与 Docling 本地
-模型的真实服务验证仍分别受本机服务/可选依赖缺失限制，不能把离线适配测试表述为真实
-模型质量验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E5 纵向原型已完成。下一步
+把 ArticleTree 从审计/安全决策层提升为 ArticleModel 的规范上游，消除现有
+FinalLayout→writer 与 Recipe→layout adapter 的双重结构来源；随后冻结新的论文小批次，
+测量首页家具排除、Table 图片回退和原生 Figure 补全的误伤/漏召回。GROBID HTTP 与
+Docling 本地模型的真实服务验证仍分别受本机服务/可选依赖缺失限制，不能把离线适配测试
+表述为真实模型质量验收。

@@ -36,6 +36,16 @@ from .layout_roi import (
 )
 from .layout_writer import write_layout_outputs
 from .models import PhysicalDocument
+from .paper_recipe import (
+    ARTICLE_TREE_VERSION,
+    PAPER_RECIPE_VERSION,
+    build_paper_recipe,
+    canonical_article_tree_json,
+    canonical_paper_recipe_json,
+    compile_article_tree,
+    validate_article_tree,
+    validate_paper_recipe,
+)
 from .paths import validate_conversion_paths, validate_input_pdf
 from .raster_layout import analyze_page_raster
 from .source_evidence import (
@@ -684,6 +694,24 @@ class PaperWright:
                 source=source if extraction_profile != "fast" else None,
                 raster_analyses=raster_analyses,
             )
+            paper_recipe = build_paper_recipe(
+                result.document,
+                temporary / "source-evidence",
+                raster_analyses=raster_analyses,
+            )
+            paper_recipe_path = temporary / "paper-recipe.json"
+            paper_recipe_path.write_text(
+                canonical_paper_recipe_json(paper_recipe),
+                encoding="utf-8",
+                newline="\n",
+            )
+            article_tree = compile_article_tree(result.document, paper_recipe)
+            article_tree_path = temporary / "article-tree.json"
+            article_tree_path.write_text(
+                canonical_article_tree_json(article_tree),
+                encoding="utf-8",
+                newline="\n",
+            )
             (temporary / "routing.json").write_text(
                 routing_plan.canonical_json(),
                 encoding="utf-8",
@@ -732,6 +760,22 @@ class PaperWright:
                 ),
                 "extraction_cache": extraction_cache,
                 "source_evidence": source_evidence,
+                "paper_recipe": {
+                    "path": "paper-recipe.json",
+                    "sha256": _sha256_file(paper_recipe_path),
+                    "contract_version": PAPER_RECIPE_VERSION,
+                    "status": paper_recipe["status"],
+                    "action_count": len(paper_recipe["actions"]),
+                },
+                "article_tree": {
+                    "path": "article-tree.json",
+                    "sha256": _sha256_file(article_tree_path),
+                    "contract_version": ARTICLE_TREE_VERSION,
+                    "status": article_tree["status"],
+                    "source_element_count": article_tree["summary"][
+                        "source_element_count"
+                    ],
+                },
                 "page_count": len(tasks),
                 "content_roi": {
                     "path": "content-roi.json",
@@ -846,6 +890,7 @@ class PaperWright:
             ):
                 raise BackendExecutionError("issue routing hash mismatch")
         source_evidence_record = review_index.get("source_evidence")
+        source_evidence_path: Path | None = None
         if source_evidence_record is not None:
             if not isinstance(source_evidence_record, dict):
                 raise BackendExecutionError("invalid source evidence index record")
@@ -866,6 +911,31 @@ class PaperWright:
                 "source_sha256"
             ):
                 raise BackendExecutionError("source evidence source hash mismatch")
+        paper_recipe_value: dict[str, Any] | None = None
+        article_tree_value: dict[str, Any] | None = None
+        recipe_record = review_index.get("paper_recipe")
+        tree_record = review_index.get("article_tree")
+        if (recipe_record is None) != (tree_record is None):
+            raise BackendExecutionError("paper recipe and article tree must coexist")
+        if recipe_record is not None:
+            if not isinstance(recipe_record, dict) or not isinstance(tree_record, dict):
+                raise BackendExecutionError("invalid paper recipe/article tree record")
+            recipe_path = _review_cache_path(review_root, recipe_record.get("path"))
+            tree_path = _review_cache_path(review_root, tree_record.get("path"))
+            if (
+                not recipe_path.is_file()
+                or _sha256_file(recipe_path) != recipe_record.get("sha256")
+                or not tree_path.is_file()
+                or _sha256_file(tree_path) != tree_record.get("sha256")
+            ):
+                raise BackendExecutionError("paper recipe/article tree hash mismatch")
+            try:
+                paper_recipe_value = json.loads(recipe_path.read_text(encoding="utf-8"))
+                article_tree_value = json.loads(tree_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise BackendExecutionError(
+                    "cannot read paper recipe/article tree"
+                ) from exc
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
         if not callable(getattr(backend, "render_region", None)):
@@ -1069,6 +1139,26 @@ class PaperWright:
                 )
                 validate_layout_review(review, recorded_task)
                 reviews.append(review)
+            if paper_recipe_value is not None and article_tree_value is not None:
+                assert source_evidence_path is not None
+                validate_paper_recipe(
+                    paper_recipe_value,
+                    document=result.document,
+                    evidence_root=source_evidence_path.parent,
+                )
+                validate_article_tree(
+                    article_tree_value,
+                    document=result.document,
+                    recipe=paper_recipe_value,
+                )
+                replayed_tree = compile_article_tree(
+                    result.document,
+                    paper_recipe_value,
+                )
+                if replayed_tree != article_tree_value:
+                    raise BackendExecutionError(
+                        "article tree deterministic replay mismatch"
+                    )
             prepared = write_layout_outputs(
                 root=temporary,
                 source=source,
@@ -1083,6 +1173,8 @@ class PaperWright:
                 evidence_level=evidence_level,
                 include_source_pdf=include_source_pdf,
                 review_root=review_root,
+                paper_recipe=paper_recipe_value,
+                article_tree=article_tree_value,
             )
             total = sum(
                 path.stat().st_size

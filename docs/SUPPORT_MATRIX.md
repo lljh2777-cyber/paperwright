@@ -21,8 +21,10 @@
 - 混合布局包的公开 Markdown 锚点、Reader v0.1 索引及独立完整性校验；
 - Text Task/Review v0.1/v0.2、manifest v0.10 文本复核派生包、manifest v0.11 L3 合成溯源派生包及父包哈希链；
 - 纯 PDFium `fast`、PDFium inventory + pdfplumber 的 `standard` 和完整对象 `forensic` 提取；
+- PaperRecipe v0.1 受限结构动作、ArticleTree v0.1 元素守恒编译和确定性重放；
 - region-render 默认关闭，`auto` 为显式 opt-in；
 - 表格不可靠时输出 `degraded`，不伪造语义结构。
+- Recipe 的模型 producer 尚未开放；当前实现是同契约的确定性 baseline producer。
 
 ## 不在当前范围
 

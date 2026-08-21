@@ -51,6 +51,9 @@ Markdown + images + manifest     article model
   生成确定性的 page/ROI 局部专家请求，不按模型价格或供应商状态路由。
 - `paperwright.docling_provider`：显式启用的可选本地专家；只转换请求页并过滤到请求 ROI，
   保存 DoclingDocument item/table data/provenance 和 proposed claims，从不导入其 Markdown。
+- `paperwright.paper_recipe`：从 SourceEvidence 与 raster 摘要产生无正文权限的论文级
+  `classify/exclude/split/merge/order/bind/render` 动作，编译并验证元素守恒的 ArticleTree；
+  apply 适配器只投影安全的 caption、Table、原生 Figure 和出版家具决策。
 - `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
 - `paperwright.api`：输入路径验证、后端选择和输出事务边界。
@@ -151,6 +154,8 @@ E0 已完成标准路径的 inventory/materialization 拆分；后续多 provide
 | text-synthesized manifest | v0.11 | v0.10 + L3 synthesis-run 溯源与重放哈希链 |
 | article model | v0.1 | Markdown、Reader 与后续文本复核的规范来源 |
 | source evidence | v0.2 | 增加 bundle 状态与哈希绑定 specialist requests；继续读取 v0.1 |
+| paper recipe | v0.1 | 只引用原生元素/证据/ROI；禁止正文替换、Markdown、文件和网络能力 |
+| article tree | v0.1 | 每个 PhysicalDocument 元素唯一归属，正文只保存 source SHA-256 |
 | text task | v0.2 | 只读文本块、编辑策略及源 Article Model 哈希；继续读 v0.1 |
 | text review | v0.2 | 格式保持、断行去连字符与 join-blocks；继续读 v0.1 |
 | reader index | v0.1 | 正文块、视觉资产、图注关系和能力声明 |

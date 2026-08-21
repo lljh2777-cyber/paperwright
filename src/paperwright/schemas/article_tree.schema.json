@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/article_tree.schema.json",
+  "title": "PaperWright ArticleTree",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "compiler_version", "source_sha256", "physical_document_sha256", "paper_recipe_sha256", "status", "root_node_id", "nodes", "summary"],
+  "properties": {
+    "contract_version": {"const": "paperwright-article-tree-v0.1"},
+    "compiler_version": {"const": "paperwright-article-tree-compiler-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "physical_document_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "paper_recipe_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "status": {"enum": ["ready", "degraded", "human_required"]},
+    "root_node_id": {"const": "document"},
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["node_id", "parent_id", "kind", "role", "order", "page_index", "source_element_ids", "source_text_sha256", "disposition", "decision_action_ids"],
+        "properties": {
+          "node_id": {"type": "string", "minLength": 1},
+          "parent_id": {"type": ["string", "null"]},
+          "kind": {"enum": ["document", "page", "source_element"]},
+          "role": {"type": "string", "minLength": 1},
+          "order": {"type": "integer", "minimum": 0},
+          "page_index": {"type": ["integer", "null"], "minimum": 0},
+          "source_element_ids": {"type": "array", "maxItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "source_text_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+          "disposition": {"enum": ["keep", "exclude", "render"]},
+          "decision_action_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_count", "source_element_count", "kept_element_count", "rendered_element_count", "excluded_element_count", "generated_text_count"],
+      "properties": {
+        "page_count": {"type": "integer", "minimum": 1},
+        "source_element_count": {"type": "integer", "minimum": 0},
+        "kept_element_count": {"type": "integer", "minimum": 0},
+        "rendered_element_count": {"type": "integer", "minimum": 0},
+        "excluded_element_count": {"type": "integer", "minimum": 0},
+        "generated_text_count": {"const": 0}
+      }
+    }
+  }
+}

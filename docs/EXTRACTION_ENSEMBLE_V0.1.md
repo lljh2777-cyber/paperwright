@@ -1,6 +1,6 @@
 # PaperWright 粗提取多证据架构 v0.1
 
-> 状态：已接受；E0–E4 已实现，E5 待实现（2026-08-21）
+> 状态：已接受；E0–E5 纵向原型已实现（2026-08-21）
 >
 > 范围：born-digital 科研论文的物理与结构证据采集
 >
@@ -285,6 +285,25 @@ Markdown 作为最终内容。
 PaperRecipe。Recipe 可以 classify/exclude/split/merge/order/bind/render，但不能生成或
 替换论文正文。
 
+**状态：纵向原型已完成。** 当前先实现确定性 baseline producer，写出
+`paperwright-paper-recipe-v0.1`；它只保存原生元素 ID、证据引用、规范化 bbox 和受限
+动作，不保存正文或 Markdown。`paperwright-article-tree-v0.1` 编译器为每个
+PhysicalDocument 元素生成唯一叶节点，以 source text SHA-256 代替正文副本，并验证
+完整覆盖、无重复、父子引用、输入哈希和确定性重放。
+
+Recipe 已接到 `layout-apply`：provider Table claim 投影成局部图片渲染，区域内原生数字
+不再同时进入 prose；未被视觉布局覆盖的原生 image 会补成 Figure；caption 角色必须有
+原生 `Figure/Table N` 锚或 provider semantic claim；首页小型 raster-only 出版标记和
+底部出版 vector 家具可显式排除。模型生成 Recipe 的运行时仍未开放，后续 producer 必须
+复用同一契约、能力白名单和验证器，不能获得额外正文权限。
+
+U02/U03 回放结果：U02 第 3 页 Table action 覆盖 487 个物理对象，原开发布局投影后这些
+对象在 text region 中剩余 0 个；第 6、7 页补回 4 个原生 Figure。U03 首页 raster
+residual `RV0002` 被 bbox-scoped furniture action 排除，旧 `r-g6` 伪 Figure 转为
+exclude，citation/license 的旧 `r-g7` 从 caption 降为 margin；ArticleTree 对 1759 个
+物理元素完整守恒，`generated_text_count=0`。这些是已知 U02/U03 的开发回放，不是新的
+未见论文泛化结论。
+
 ## 8. 首轮验收
 
 粗提取层的验收对象是“是否提供了足够且诚实的证据”，不是 JSON 是否通过 schema，
@@ -302,5 +321,6 @@ PaperRecipe。Recipe 可以 classify/exclude/split/merge/order/bind/render，但
 7. 任一高层节点都能回到 provider observation、page、bbox 和 source hash；
 8. provider 发生冲突时状态为 `conflicted/degraded`，不能仍报告质量已接受。
 
-通过这组验收后，才进入 ArticleTree/PaperRecipe 的三页纵向原型。此阶段不再新增未见
-论文批次，也不继续调当前视觉关系 prompt。
+本组验收和 ArticleTree/PaperRecipe 纵向原型已经完成。下一阶段不新增视觉关系 prompt
+补丁，而是让 ArticleTree 成为 ArticleModel 之前的规范结构输入，并在新冻结论文上验证
+首页家具、Table 图片回退和原生 Figure 补全的误伤率。

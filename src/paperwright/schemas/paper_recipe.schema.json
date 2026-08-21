@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperwright.local/schemas/paper_recipe.schema.json",
+  "title": "PaperWright PaperRecipe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "runtime_version", "source_sha256", "physical_document_sha256", "source_evidence_index_sha256", "producer", "allowed_operations", "forbidden_capabilities", "actions", "unresolved_conflict_ids", "status", "replay"],
+  "properties": {
+    "contract_version": {"const": "paperwright-paper-recipe-v0.1"},
+    "runtime_version": {"const": "paperwright-recipe-runtime-v0.1"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "physical_document_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_evidence_index_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "producer": {"type": "string", "minLength": 1},
+    "allowed_operations": {"type": "array", "uniqueItems": true, "items": {"enum": ["classify", "exclude", "split", "merge", "order", "bind", "render"]}},
+    "forbidden_capabilities": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "operation", "page_index", "element_ids", "role", "disposition", "bbox", "evidence_refs", "reason"],
+        "properties": {
+          "action_id": {"type": "string", "pattern": "^recipe-[0-9a-f]{20}$"},
+          "operation": {"enum": ["classify", "exclude", "split", "merge", "order", "bind", "render"]},
+          "page_index": {"type": "integer", "minimum": 0},
+          "element_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "role": {"type": ["string", "null"]},
+          "disposition": {"enum": ["keep", "exclude", "render"]},
+          "bbox": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/bbox"}]},
+          "evidence_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "unresolved_conflict_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "status": {"enum": ["ready", "degraded", "human_required"]},
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic", "trace_sha256", "same_input_same_actions"],
+      "properties": {
+        "deterministic": {"const": true},
+        "trace_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "same_input_same_actions": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

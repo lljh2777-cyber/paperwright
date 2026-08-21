@@ -1640,6 +1640,30 @@ class LayoutStageDTests(unittest.TestCase):
                 (
                     output
                     / "_paperwright"
+                    / "02-structure"
+                    / "paper-recipe.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    output
+                    / "_paperwright"
+                    / "02-structure"
+                    / "article-tree.json"
+                ).is_file()
+            )
+            self.assertIn(
+                "paper_recipe",
+                {item["role"] for item in manifest["outputs"]},
+            )
+            self.assertIn(
+                "article_tree",
+                {item["role"] for item in manifest["outputs"]},
+            )
+            self.assertTrue(
+                (
+                    output
+                    / "_paperwright"
                     / "03-layout"
                     / "page-0001-overlay.png"
                 ).is_file()

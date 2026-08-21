@@ -40,6 +40,8 @@ class ManifestTests(unittest.TestCase):
             "hybrid_run.schema.json",
             "issue_routing.schema.json",
             "source_evidence.schema.json",
+            "paper_recipe.schema.json",
+            "article_tree.schema.json",
             "visual_relation_review.schema.json",
             "physical_document.schema.json",
             "article_model.schema.json",

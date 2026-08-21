@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import re
 import shutil
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 import unicodedata
 
 from .article_model import (
@@ -66,6 +66,11 @@ from .manifest import (
     sha256_file,
 )
 from .models import BBox, Element, Page, PhysicalDocument
+from .paper_recipe import (
+    canonical_article_tree_json,
+    canonical_paper_recipe_json,
+    refine_layouts_with_recipe,
+)
 from .quality import (
     analyze_image_links,
     analyze_layout_elements,
@@ -749,6 +754,8 @@ def write_layout_outputs(
     evidence_level: str = "standard",
     include_source_pdf: bool = False,
     review_root: Path | None = None,
+    paper_recipe: Mapping[str, Any] | None = None,
+    article_tree: Mapping[str, Any] | None = None,
 ) -> PreparedLayoutOutput:
     """Write reviewed layout output without changing the default writer."""
 
@@ -788,7 +795,10 @@ def write_layout_outputs(
             strict=True,
         )
     )
-    _validate_materialized_semantics(document, materialized_layouts)
+    if (paper_recipe is None) != (article_tree is None):
+        raise ContractValidationError(
+            "PaperRecipe 与 ArticleTree 必须成对提供"
+        )
     reviewed_cross_page_bindings: tuple[CaptionBinding, ...] = ()
     rejected_cross_page_captions: frozenset[tuple[int, str]] = frozenset()
     cross_page_task_source: Path | None = None
@@ -827,6 +837,27 @@ def write_layout_outputs(
                 cross_page_review,
                 task=recorded_cross_page_task,
             )
+    if paper_recipe is not None:
+        materialized_layouts = refine_layouts_with_recipe(
+            document,
+            materialized_layouts,
+            paper_recipe,
+            protected_caption_keys=frozenset(
+                (
+                    item.caption_page_index,
+                    item.caption_region_id,
+                )
+                for item in reviewed_cross_page_bindings
+            ),
+            protected_visual_keys=frozenset(
+                (
+                    item.visual_page_index,
+                    item.visual_region_id,
+                )
+                for item in reviewed_cross_page_bindings
+            ),
+        )
+    _validate_materialized_semantics(document, materialized_layouts)
     caption_by_region, caption_by_visual, caption_binding_quality = (
         _bind_caption_regions(
             document,
@@ -912,9 +943,26 @@ def write_layout_outputs(
     image_records: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = list(backend_warnings)
     layout_output_paths: list[Path] = []
+    structure_output_paths: list[Path] = []
     issue_routing_path: Path | None = None
     if evidence_level in {"standard", "full"}:
         assert review_root is not None
+        if paper_recipe is not None and article_tree is not None:
+            structure_dir = evidence_dir / "02-structure"
+            structure_dir.mkdir(parents=True, exist_ok=True)
+            recipe_path = structure_dir / "paper-recipe.json"
+            tree_path = structure_dir / "article-tree.json"
+            recipe_path.write_text(
+                canonical_paper_recipe_json(paper_recipe),
+                encoding="utf-8",
+                newline="\n",
+            )
+            tree_path.write_text(
+                canonical_article_tree_json(article_tree),
+                encoding="utf-8",
+                newline="\n",
+            )
+            structure_output_paths.extend((recipe_path, tree_path))
         if (
             cross_page_task_source is not None
             and cross_page_review_source is not None
@@ -1974,6 +2022,7 @@ def write_layout_outputs(
     if physical_path is not None:
         output_paths.append(physical_path)
     output_paths.extend(layout_output_paths)
+    output_paths.extend(structure_output_paths)
     output_paths.extend(evidence_paths)
     if evidence_level in {"standard", "full"}:
         manifest_inventory = analyze_manifest_inventory(root, output_paths)
@@ -2047,6 +2096,10 @@ def write_layout_outputs(
             return "provider_usage"
         if name == "issue-routing.json":
             return "issue_routing"
+        if name == "paper-recipe.json":
+            return "paper_recipe"
+        if name == "article-tree.json":
+            return "article_tree"
         if name.endswith("-content-roi.png"):
             return "content_roi_preview"
         if name == "content-roi.json":

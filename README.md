@@ -27,6 +27,7 @@ PDF → evidence → issue routing → L0 + 局部 L1/L2/L3 → validation
 - 页面完整性门禁：无文字非空页自动保留整页图，孤立 caption/疑似漏图显式降级；
 - 面向阅读器的稳定 Markdown 锚点、Figure/图注关系和 `reader.json`；
 - 作为 Markdown、Reader 和后续文本复核统一来源的 `article-model.json`；
+- 受限 `paper-recipe.json`、元素守恒 `article-tree.json` 与确定性重放；
 - 确定性内核完全本地运行；Hybrid resolver 按问题接入文本/视觉模型，模型
   **只做受限判断、不转写正文**（产品定位见
   [VISION](docs/VISION.md)）。
@@ -396,6 +397,7 @@ python -m paperwright convert input.pdf output-dir
 - [配置参考](docs/CONFIGURATION.md)
 - [架构](docs/ARCHITECTURE.md)
 - [粗提取多证据架构 v0.1](docs/EXTRACTION_ENSEMBLE_V0.1.md)
+- [PaperRecipe 与 ArticleTree v0.1](docs/PAPER_RECIPE_ARTICLE_TREE_V0.1.md)
 - [支持矩阵](docs/SUPPORT_MATRIX.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Alpha RC 说明](docs/ALPHA_RC_RELEASE_NOTES.md)
