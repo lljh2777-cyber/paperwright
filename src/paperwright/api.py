@@ -38,6 +38,10 @@ from .layout_writer import write_layout_outputs
 from .models import PhysicalDocument
 from .paths import validate_conversion_paths, validate_input_pdf
 from .raster_layout import analyze_page_raster
+from .source_evidence import (
+    validate_source_evidence_bundle,
+    write_pdfium_source_evidence,
+)
 from .writer import write_outputs
 from .visual_relations import (
     VISUAL_RELATION_OVERLAY_FILENAME,
@@ -674,6 +678,10 @@ class PaperWright:
                 temporary,
                 result,
             )
+            source_evidence = write_pdfium_source_evidence(
+                temporary / "source-evidence",
+                result.document,
+            )
             (temporary / "routing.json").write_text(
                 routing_plan.canonical_json(),
                 encoding="utf-8",
@@ -721,6 +729,7 @@ class PaperWright:
                     {task.contract_version for task in tasks}
                 ),
                 "extraction_cache": extraction_cache,
+                "source_evidence": source_evidence,
                 "page_count": len(tasks),
                 "content_roi": {
                     "path": "content-roi.json",
@@ -834,6 +843,27 @@ class PaperWright:
                 != issue_routing_record.get("sha256")
             ):
                 raise BackendExecutionError("issue routing hash mismatch")
+        source_evidence_record = review_index.get("source_evidence")
+        if source_evidence_record is not None:
+            if not isinstance(source_evidence_record, dict):
+                raise BackendExecutionError("invalid source evidence index record")
+            source_evidence_path = _review_cache_path(
+                review_root,
+                source_evidence_record.get("path"),
+            )
+            if (
+                not source_evidence_path.is_file()
+                or _sha256_file(source_evidence_path)
+                != source_evidence_record.get("sha256")
+            ):
+                raise BackendExecutionError("source evidence index hash mismatch")
+            source_evidence = validate_source_evidence_bundle(
+                source_evidence_path.parent
+            )
+            if source_evidence.get("source_sha256") != review_index.get(
+                "source_sha256"
+            ):
+                raise BackendExecutionError("source evidence source hash mismatch")
         destination.parent.mkdir(parents=True, exist_ok=True)
         backend = self.registry.get(self.config.backend)
         if not callable(getattr(backend, "render_region", None)):

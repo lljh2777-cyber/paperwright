@@ -117,6 +117,10 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     对每页保留 image/vector 类型与 bbox，图片明确标记 deferred，选择性升级只物化目标
     页。U02/U03 inventory 与 full 的逐页非文字对象计数一致、均无图片解码；U02 第 3、
     6、7 页的 6 个 image 已全部在标准入口可见。
+32. SourceEvidenceBundle（E1）：新增 `paperwright-source-evidence-v0.1` 索引、PDFium
+    provider snapshot、原始/PaperWright 双坐标、文本 fingerprint 和 observation→
+    PhysicalDocument identity alignment。prepare 写入五文件哈希链，apply 重验路径、
+    哈希、坐标变换、ID/引用和 alignment 覆盖；claims/conflicts 独立且首版为空。
 
 ## 当前主链
 
@@ -180,7 +184,7 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E1 provider snapshot/
-对齐契约、E2 pdfplumber 侧车、E3 GROBID 语义侧车，再在 U02/U03 上验证证据是否足以
-排除已知错误。E0 的 PDFium 全页低成本 inventory 已完成。只有该门槛通过后，才进入
-PaperRecipe/ArticleTree 纵向原型和新的独立论文验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E2 pdfplumber 侧车、
+E3 GROBID 语义侧车，再在 U02/U03 上验证证据是否足以排除已知错误。E0 全页 inventory
+与 E1 provider snapshot/对齐契约已完成。只有该门槛通过后，才进入 PaperRecipe/
+ArticleTree 纵向原型和新的独立论文验收。

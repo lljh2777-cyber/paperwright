@@ -213,6 +213,13 @@ E0 完成后，即使所有可选 provider 都缺失，U02 第 6、7 页也不�
 
 ### E1：建立 provider snapshot 与对齐层
 
+**状态：已完成。** 新增 `paperwright.source_evidence` 与
+`paperwright-source-evidence-v0.1` 索引。`layout-prepare` 现在写入哈希绑定的 PDFium
+provider snapshot、逐 observation 的原坐标/PaperWright 坐标、规范文本指纹、到
+PhysicalDocument element 的 identity alignment，以及独立的 claims/conflicts 文件；
+`layout-apply` 会重新验证整条哈希链、坐标变换、ID 唯一性与 alignment 守恒。旧
+PhysicalDocument 继续作为下游兼容视图。
+
 1. 新增 `SourceEvidenceBundle` 索引和严格校验器；
 2. PDFium 先以 provider snapshot 形式接入；
 3. 加入文本 fingerprint、bbox 映射和 observation alignment；

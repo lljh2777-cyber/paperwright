@@ -112,6 +112,7 @@ def audit_wheel(path: Path) -> dict[str, object]:
             "paperwright/schemas/final_layout.schema.json",
             "paperwright/schemas/hybrid_run.schema.json",
             "paperwright/schemas/issue_routing.schema.json",
+            "paperwright/schemas/source_evidence.schema.json",
             "paperwright/schemas/layout_task.schema.json",
             "paperwright/schemas/manifest.schema.json",
             "paperwright/schemas/physical_document.schema.json",

@@ -1331,6 +1331,11 @@ class LayoutStageDTests(unittest.TestCase):
                 index["physical_extraction_profile"],
                 "inventory-standard",
             )
+            self.assertEqual(
+                index["source_evidence"]["contract_version"],
+                "paperwright-source-evidence-v0.1",
+            )
+            self.assertTrue((review / "source-evidence" / "index.json").is_file())
             images = [
                 element
                 for page in cached.pages

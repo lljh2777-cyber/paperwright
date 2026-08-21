@@ -39,6 +39,7 @@ class ManifestTests(unittest.TestCase):
             "cross_page_caption_task.schema.json",
             "hybrid_run.schema.json",
             "issue_routing.schema.json",
+            "source_evidence.schema.json",
             "visual_relation_review.schema.json",
             "physical_document.schema.json",
             "article_model.schema.json",

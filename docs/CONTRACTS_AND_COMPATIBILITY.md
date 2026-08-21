@@ -16,6 +16,8 @@ Read `docs/ARCHITECTURE.md`, the relevant model, and the corresponding schema be
 
 - package version: `pyproject.toml` and `src/paperwright/__init__.py`
 - physical document model: `models.py` and `schemas/physical_document.schema.json`
+- multi-provider source evidence: `source_evidence.py` and
+  `schemas/source_evidence.schema.json`
 - layout task/final layout: `layout_models.py` and their schemas
 - manifest writers/readers: `manifest.py`, `writer.py`, and `layout_writer.py`
 - reader interoperability: `reader.py`, `reader_contract.py`, and
