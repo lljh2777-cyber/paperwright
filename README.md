@@ -153,7 +153,7 @@ paperwright --help
 ```
 
 两种方式都会根据 `pyproject.toml` 自动安装
-`pypdfium2==5.11.0` 和 `Pillow==12.2.0`，无需提前手动安装。
+`pypdfium2==5.11.0`、`Pillow==12.2.0` 和 `pdfplumber==0.11.10`，无需提前手动安装。
 
 ## 转换单篇科研论文（推荐）
 

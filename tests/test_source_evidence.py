@@ -109,6 +109,57 @@ class SourceEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ContractValidationError, "哈希不匹配"):
                 validate_source_evidence_bundle(evidence_root)
 
+    def test_pdfplumber_sidecar_adds_geometry_and_proposals_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "fixture.pdf"
+            create_born_digital_fixture(source)
+            document = PDFiumBackend().extract_inventory(
+                source,
+                PaperWrightConfig(),
+            ).document
+            evidence_root = root / "source-evidence"
+
+            write_pdfium_source_evidence(
+                evidence_root,
+                document,
+                source=source,
+            )
+            index = validate_source_evidence_bundle(evidence_root)
+            snapshot = json.loads(
+                (
+                    evidence_root
+                    / "providers"
+                    / "pdfplumber-geometry.json"
+                ).read_text(encoding="utf-8")
+            )
+            claims = json.loads(
+                (evidence_root / "claims.json").read_text(encoding="utf-8")
+            )["claims"]
+            kinds = {
+                item["kind"]
+                for page in snapshot["pages"]
+                for item in page["observations"]
+            }
+
+            self.assertEqual(index["summary"]["provider_count"], 2)
+            self.assertTrue({"char", "word", "line", "image"}.issubset(kinds))
+            self.assertTrue(
+                any(
+                    item["kind"] == "image"
+                    for item in snapshot["pages"][0]["observations"]
+                )
+            )
+            self.assertTrue(claims)
+            self.assertTrue(
+                all(
+                    claim["claim_type"] == "table_region"
+                    and claim["status"] == "proposed"
+                    and claim["payload"]["direct_markdown_authority"] is False
+                    for claim in claims
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -681,6 +681,7 @@ class PaperWright:
             source_evidence = write_pdfium_source_evidence(
                 temporary / "source-evidence",
                 result.document,
+                source=source if extraction_profile != "fast" else None,
             )
             (temporary / "routing.json").write_text(
                 routing_plan.canonical_json(),

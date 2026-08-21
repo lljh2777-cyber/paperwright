@@ -397,9 +397,14 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
                     raise ContractValidationError("provider observation ID 非法或重复")
                 paperwright = observation.get("paperwright_bbox")
                 provider_bbox = observation.get("provider_bbox")
+                mapping_bbox = observation.get(
+                    "provider_bbox_for_mapping",
+                    provider_bbox,
+                )
                 if (
                     not isinstance(paperwright, dict)
                     or not isinstance(provider_bbox, dict)
+                    or not isinstance(mapping_bbox, dict)
                     or not isinstance(observation.get("kind"), str)
                     or not observation["kind"]
                     or not isinstance(
@@ -418,7 +423,7 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
                 y = _finite_number(paperwright.get("y"), "bbox y")
                 box_width = _finite_number(paperwright.get("width"), "bbox width")
                 box_height = _finite_number(paperwright.get("height"), "bbox height")
-                mapped = _transform_provider_bbox(provider_bbox, affine)
+                mapped = _transform_provider_bbox(mapping_bbox, affine)
                 expected = (x, y, box_width, box_height)
                 if (
                     box_width <= 0
@@ -580,13 +585,57 @@ def validate_source_evidence_bundle(root: Path) -> dict[str, Any]:
 def write_pdfium_source_evidence(
     root: Path,
     document: PhysicalDocument,
+    *,
+    source: Path | None = None,
 ) -> dict[str, Any]:
-    """Write a new bundle and return its parent-index record."""
+    """Write PDFium evidence plus the default pdfplumber sidecar when given."""
 
     root = Path(root)
     if root.exists():
         raise ContractValidationError("source evidence 输出目录已存在，拒绝覆盖")
     index, artifacts = build_pdfium_source_evidence(document)
+    if source is not None:
+        from .pdfplumber_provider import build_pdfplumber_evidence
+
+        snapshot, sidecar_alignments, sidecar_claims = (
+            build_pdfplumber_evidence(Path(source), document)
+        )
+        snapshot_path = "providers/pdfplumber-geometry.json"
+        artifacts[snapshot_path] = snapshot
+        artifacts["alignments.json"]["alignments"].extend(sidecar_alignments)
+        artifacts["claims.json"]["claims"].extend(sidecar_claims)
+        index["providers"].append(
+            {
+                "provider_id": snapshot["provider_id"],
+                "version": snapshot["provider_version"],
+                "capabilities": snapshot["capabilities"],
+                "missing_capabilities": snapshot["missing_capabilities"],
+                "snapshot_path": snapshot_path,
+                "snapshot_sha256": _sha256_bytes(
+                    _canonical_json(snapshot).encode("utf-8")
+                ),
+                "status": snapshot["status"],
+            }
+        )
+        index["alignments_sha256"] = _sha256_bytes(
+            _canonical_json(artifacts["alignments.json"]).encode("utf-8")
+        )
+        index["claims_sha256"] = _sha256_bytes(
+            _canonical_json(artifacts["claims.json"]).encode("utf-8")
+        )
+        index["summary"] = {
+            "provider_count": len(index["providers"]),
+            "observation_count": sum(
+                int(value["observation_count"])
+                for path, value in artifacts.items()
+                if path.startswith("providers/")
+            ),
+            "alignment_count": len(
+                artifacts["alignments.json"]["alignments"]
+            ),
+            "claim_count": len(artifacts["claims.json"]["claims"]),
+            "conflict_count": len(artifacts["conflicts.json"]["conflicts"]),
+        }
     (root / "providers").mkdir(parents=True)
     for relative, value in artifacts.items():
         path = root / relative

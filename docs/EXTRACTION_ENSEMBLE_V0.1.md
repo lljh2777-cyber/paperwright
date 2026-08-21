@@ -227,6 +227,13 @@ PhysicalDocument 继续作为下游兼容视图。
 
 ### E2：接入 pdfplumber
 
+**状态：已完成。** `standard/forensic` 现在默认运行锁定的 pdfplumber 0.11.10，保存
+char/word、line/rect/curve、image 的独立 observations，并按文字/类型/几何与 PDFium
+元素建立可拒绝 alignment。默认线框表格检测只写 `table_region` proposed claim，明确
+`direct_markdown_authority=false`，不恢复 cell 文本、不直接写 Markdown。显式 `fast`
+仍只保留 PDFium 证据。U02 产生唯一的第 3 页表格 claim；U03 没有表格 claim，避免了
+此前文字对齐策略的大面积假阳性。
+
 输出 char/word、line/rect/curve、image bbox 和 table/cell proposal。表格算法只产生 claim；
 caption 引导的 crop 内重跑策略可以改变参数，但必须记录参数与结果。
 

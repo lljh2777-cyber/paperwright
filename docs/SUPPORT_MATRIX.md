@@ -8,6 +8,7 @@
 | Python 3.10–3.13 | 声明范围 | 打包元数据与测试约束；3.13 已通过安装与转换验证 |
 | Python 3.13 | 已实测 | 2026-08-13 安装、单测与端到端转换验证通过 |
 | PDFium | 主后端 | 锁定验证组合为 pypdfium2 5.11.0 / PDFium 151.0.7920.0 |
+| pdfplumber | 默认几何侧车 | 锁定 0.11.10；只提供独立 observation 与 table proposal |
 | PDFBox | 不可用 | 仅接口占位；选择时明确失败 |
 
 ## 当前文档范围
@@ -17,7 +18,7 @@
 - Content ROI、布局候选、结构化复核、布局应用及质量证据包；
 - 混合布局包的公开 Markdown 锚点、Reader v0.1 索引及独立完整性校验；
 - Text Task/Review v0.1/v0.2、manifest v0.10 文本复核派生包、manifest v0.11 L3 合成溯源派生包及父包哈希链；
-- `fast`、按页选择性升级的 `standard` 和完整对象 `forensic` 提取；
+- 纯 PDFium `fast`、PDFium inventory + pdfplumber 的 `standard` 和完整对象 `forensic` 提取；
 - region-render 默认关闭，`auto` 为显式 opt-in；
 - 表格不可靠时输出 `degraded`，不伪造语义结构。
 

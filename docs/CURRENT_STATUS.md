@@ -121,6 +121,10 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     provider snapshot、原始/PaperWright 双坐标、文本 fingerprint 和 observation→
     PhysicalDocument identity alignment。prepare 写入五文件哈希链，apply 重验路径、
     哈希、坐标变换、ID/引用和 alignment 覆盖；claims/conflicts 独立且首版为空。
+33. pdfplumber 几何侧车（E2）：`standard/forensic` 默认保存 char/word、line/rect/curve、
+    image 独立观察并与 PDFium 对齐；Table finder 只提交无 Markdown 权限的 proposed
+    `table_region` claim。U02 唯一命中第 3 页已知表格，U03 为 0 个表格 claim；显式
+    `fast` 不运行侧车。
 
 ## 当前主链
 
@@ -184,7 +188,7 @@ PDF
 
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
-[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E2 pdfplumber 侧车、
-E3 GROBID 语义侧车，再在 U02/U03 上验证证据是否足以排除已知错误。E0 全页 inventory
-与 E1 provider snapshot/对齐契约已完成。只有该门槛通过后，才进入 PaperRecipe/
-ArticleTree 纵向原型和新的独立论文验收。
+[粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)继续完成 E3 GROBID 语义侧车，
+再在 U02/U03 上验证多源证据是否足以排除已知错误。E0 全页 inventory、E1 provider
+snapshot/对齐契约和 E2 pdfplumber 几何侧车已完成。只有该门槛通过后，才进入
+PaperRecipe/ArticleTree 纵向原型和新的独立论文验收。

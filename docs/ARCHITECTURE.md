@@ -41,8 +41,10 @@ Markdown + images + manifest     article model
 - `paperwright.backends.pdfium`：调用 pypdfium2 的薄适配器；PDF 解析、字体/
   图像解码均由 PDFium 完成，项目不重写底层解析器。
 - `paperwright.source_evidence`：写入和验证不可变 provider snapshot、双坐标、文本
-  fingerprint、observation alignment、claims/conflicts 与顶层哈希索引；当前先适配
-  PDFium，PhysicalDocument 继续作为下游兼容视图。
+  fingerprint、observation alignment、claims/conflicts 与顶层哈希索引；已适配
+  PDFium 与 pdfplumber，PhysicalDocument 继续作为下游兼容视图。
+- `paperwright.pdfplumber_provider`：默认轻量几何侧车；只提交独立字符/单词、图形对象
+  与表格区域候选，不决定阅读顺序、cell 内容或 Markdown。
 - `paperwright.backends.pdfbox`：PDFBox 对照/回退边界；不得把 Java 对象泄漏到
   核心模型。
 - `paperwright.api`：输入路径验证、后端选择和输出事务边界。
