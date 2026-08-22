@@ -217,9 +217,10 @@ PDF
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
 [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E5 纵向原型已完成。下一步
 final ArticleTree v0.2 的规范上游迁移已经完成。GROBID HTTP 集成已经用真实 CRF 服务
-验通，但尚未证明其 claims 正确；下一工作项是冻结新的 6–8 篇论文小批次，对照无 GROBID
-与启用 GROBID 的结果，逐类测量 front matter、摘要、章节、caption、引用和参考文献的
-对齐覆盖、误判与 ArticleTree 决策贡献。同时测量首页家具排除、Table 图片回退和原生
-Figure 补全的误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧或必须回到局部
-resolver。Docling 本地模型仍受可选依赖缺失限制，不能把离线适配测试表述为真实模型质量
-验收。
+验通，但尚未证明其 claims 正确；已冻结
+[GROBID 科研语义证据评估 v0.1 协议](GROBID_SEMANTIC_EVAL_V0.1_PROTOCOL.md)，下一步沿既有
+PMC OA 随机顺序从位置 65 开始冻结 8 篇论文，对照无 GROBID 与启用 GROBID 的结果，
+逐类测量 front matter、摘要、章节、caption、引用和参考文献的对齐覆盖、误判与
+ArticleTree 决策贡献。同时测量首页家具排除、Table 图片回退和原生 Figure 补全的
+误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧或必须回到局部 resolver。
+Docling 本地模型仍受可选依赖缺失限制，不能把离线适配测试表述为真实模型质量验收。
