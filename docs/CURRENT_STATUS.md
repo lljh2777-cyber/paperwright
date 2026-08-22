@@ -1,6 +1,6 @@
 # PaperWright 当前实现状态
 
-更新时间：2026-08-21。
+更新时间：2026-08-22。
 
 ## 产品边界
 
@@ -128,7 +128,10 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
 34. GROBID 科研语义侧车（E3）：新增可选本地 HTTP provider、固定 TEI coordinate
     请求、离线 TEI 解析及 title/author/affiliation/abstract/section/paragraph/caption/
     reference/citation proposed claims。claim 必须有坐标 observation，TEI 文本无正文
-    权限；未配置或请求失败会保存显式 `unavailable`。当前尚无本地服务供 HTTP 实测。
+    权限；未配置或请求失败会保存显式 `unavailable`。2026-08-22 已用 GROBID
+    `0.9.0-crf` + OpenJDK 21 完成真实 HTTP 与 PaperWright `layout-prepare` 端到端实测：
+    12 个 Wapiti 模型全部加载，示例论文 provider 为 `complete` 并保存 847 个
+    observations。该结果只验通集成，不代表语义质量验收。
 35. 局部 Docling 专家（E4）：Source Evidence v0.2 新增哈希绑定的 specialist requests 和
     `complete/degraded/conflicted` bundle 状态；确定性发现 Table 边界、reading-order、
     native/raster 三类冲突。Docling 仅在显式启用且有请求时按页运行，接入层再按 ROI 过滤，
@@ -213,8 +216,10 @@ PDF
 冻结 v0.5 gold、原 unseen v0.1 和本次开发回放，不再使用这些样本修改路由、prompt 或
 规范化规则，也暂不从位置 65 之后扩展新 holdout。按
 [粗提取多证据架构 v0.1](EXTRACTION_ENSEMBLE_V0.1.md)的 E0–E5 纵向原型已完成。下一步
-final ArticleTree v0.2 的规范上游迁移已经完成；下一步冻结新的论文小批次，测量首页
-家具排除、Table 图片回退和原生 Figure 补全的误伤/漏召回，并据此决定哪些 E5 baseline
-动作可以保留、收紧或必须回到局部 resolver。GROBID HTTP 与
-Docling 本地模型的真实服务验证仍分别受本机服务/可选依赖缺失限制，不能把离线适配测试
-表述为真实模型质量验收。
+final ArticleTree v0.2 的规范上游迁移已经完成。GROBID HTTP 集成已经用真实 CRF 服务
+验通，但尚未证明其 claims 正确；下一工作项是冻结新的 6–8 篇论文小批次，对照无 GROBID
+与启用 GROBID 的结果，逐类测量 front matter、摘要、章节、caption、引用和参考文献的
+对齐覆盖、误判与 ArticleTree 决策贡献。同时测量首页家具排除、Table 图片回退和原生
+Figure 补全的误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧或必须回到局部
+resolver。Docling 本地模型仍受可选依赖缺失限制，不能把离线适配测试表述为真实模型质量
+验收。

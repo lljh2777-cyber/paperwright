@@ -247,9 +247,10 @@ caption 引导的 crop 内重跑策略可以改变参数，但必须记录参数
 coordinate 集，并将 title/author/affiliation/abstract/section/paragraph/figure-table
 caption/reference/citation 作为 proposed claims；每个 claim 必须先有合法 page+bbox
 observation，并尝试对齐 PDFium 原生文字。TEI 文本没有直接正文权限。未配置、请求失败
-或服务不可达时，索引明确保存 `status=unavailable` 及原因，而不是空结构。当前环境没有
-运行 GROBID 服务，因此 HTTP 端到端留待服务部署验证；TEI 解析、角色约束与坐标对齐已
-用固定离线夹具覆盖。
+或服务不可达时，索引明确保存 `status=unavailable` 及原因，而不是空结构。2026-08-22
+已用 GROBID `0.9.0-crf` + OpenJDK 21 完成真实 HTTP 端到端验证；示例论文的 TEI 解析、
+坐标 observation、原生文字 alignment 和证据包写出全部通过。该验证证明适配器可运行，
+不把 provider claim 数量解释成语义准确率；真实论文的逐类型质量对照仍是下一工作项。
 
 以可选本地 HTTP provider 接受固定 TEI 与坐标输出。第一阶段只使用：front matter、
 abstract、section、paragraph、figure/table caption、references 和 inline citation links。

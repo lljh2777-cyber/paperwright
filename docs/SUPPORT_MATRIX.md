@@ -9,7 +9,7 @@
 | Python 3.13 | 已实测 | 2026-08-13 安装、单测与端到端转换验证通过 |
 | PDFium | 主后端 | 锁定验证组合为 pypdfium2 5.11.0 / PDFium 151.0.7920.0 |
 | pdfplumber | 默认几何侧车 | 锁定 0.11.10；只提供独立 observation 与 table proposal |
-| GROBID | 可选本地语义侧车 | 通过 `PAPERWRIGHT_GROBID_URL` 启用；当前 HTTP 服务未实测 |
+| GROBID | 可选本地语义侧车 | `0.9.0-crf` + OpenJDK 21 已完成真实 HTTP/TEI/PaperWright 端到端实测；通过 `PAPERWRIGHT_GROBID_URL` 启用，语义质量仍待独立评估 |
 | Docling | 可选局部专家 | 仅在冲突请求存在且设置 `PAPERWRIGHT_DOCLING_ENABLED=1` 时按页运行；当前本机模型未实测，JSON/provenance 适配已有离线测试 |
 | PDFBox | 不可用 | 仅接口占位；选择时明确失败 |
 

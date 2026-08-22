@@ -397,6 +397,7 @@ python -m paperwright convert input.pdf output-dir
 - [产品愿景与架构](docs/VISION.md)
 - [Alpha 快速开始](docs/QUICKSTART_ALPHA.md)
 - [配置参考](docs/CONFIGURATION.md)
+- [GROBID CRF 本地侧车](docs/GROBID_LOCAL.md)
 - [架构](docs/ARCHITECTURE.md)
 - [粗提取多证据架构 v0.1](docs/EXTRACTION_ENSEMBLE_V0.1.md)
 - [PaperRecipe 与 ArticleTree v0.1](docs/PAPER_RECIPE_ARTICLE_TREE_V0.1.md)
