@@ -139,6 +139,8 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 - 多页 Figure panel-continuity 候选、拆分 caption 首行重建与 prompt v0.2
 - SourceEvidence E0–E4、多源局部冲突路由、PaperRecipe v0.1、元素守恒 ArticleTree
   v0.1，以及 ArticleModel 的规范上游 final ArticleTree v0.2
+- `paperwright.grobid_evaluation`：冻结 corpus 校验、GROBID claim 分类型证据统计和盲化
+  人工 audit task；`tools/run_grobid_semantic_eval.py` 负责成对 native/CRF 采集
 
 未完成：
 

@@ -221,8 +221,10 @@ final ArticleTree v0.2 的规范上游迁移已经完成。GROBID HTTP 集成已
 [GROBID 科研语义证据评估 v0.1 协议](GROBID_SEMANTIC_EVAL_V0.1_PROTOCOL.md)及
 [8 篇/151 页独立语料](GROBID_SEMANTIC_EVAL_V0.1_CORPUS.md)。语料沿既有 PMC OA 随机
 顺序取位置 65–72，冻结前没有运行 PaperWright/GROBID 或查看页面标签。下一步实现
-确定性双路径 runner，对照无 GROBID 与启用 GROBID 的结果，逐类测量 front matter、
-摘要、章节、caption、引用和参考文献的对齐覆盖、误判与 ArticleTree 决策贡献。同时
-测量首页家具排除、Table 图片回退和原生 Figure 补全的误伤/漏召回，据此决定哪些 E5
-baseline 动作可以保留、收紧或必须回到局部 resolver。Docling 本地模型仍受可选依赖
-缺失限制，不能把离线适配测试表述为真实模型质量验收。
+确定性双路径 runner 已实现：运行前重验全部 PDF，检查固定 GROBID 服务，明确隔离 native
+与 grobid-crf 环境，拒绝覆盖输出，并生成逐类型 alignment/字符覆盖、冲突、Recipe 引用
+统计及盲化 audit task。下一步运行冻结批次，逐类测量 front matter、摘要、章节、caption、
+引用和参考文献的对齐覆盖、误判与 ArticleTree 决策贡献。同时测量首页家具排除、Table
+图片回退和原生 Figure 补全的误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧
+或必须回到局部 resolver。Docling 本地模型仍受可选依赖缺失限制，不能把离线适配测试
+表述为真实模型质量验收。

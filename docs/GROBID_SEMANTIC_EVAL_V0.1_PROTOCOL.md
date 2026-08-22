@@ -42,6 +42,19 @@ PaperRecipe/source-element tree、issue routing 和 review index。运行期间�
 配置、GROBID 模型或 PDF；失败和 unavailable 按原样计入，不得重跑换样。仅可对明确的瞬时
 服务中断重试一次，并同时保存首次错误。
 
+固定 runner 先重验 corpus 和全部 PDF，再检查 GROBID 版本、ready 状态和失败模型数：
+
+```bash
+python tools/run_grobid_semantic_eval.py \
+  ../paperwright-grobid-semantic-eval-v0.1/CORPUS.json \
+  ../paperwright-grobid-semantic-eval-v0.1/runs/baseline-ff8959f \
+  --grobid-url http://127.0.0.1:8070 \
+  --grobid-version 0.9.0
+```
+
+输出目录存在即拒绝覆盖。runner 会明确移除 native 分支的 GROBID/Docling 环境变量，为
+两条分支保存 stdout/stderr，生成 `report.json` 和不披露下游采用结果的逐文档 audit task。
+
 为隔离 provider 增量，本轮不调用 Docling、L1、L2 或 L3，不人工修改 ROI、Recipe、claim
 或 alignment。
 
@@ -60,7 +73,9 @@ PaperRecipe/source-element tree、issue routing 和 review index。运行期间�
 2. claim、coordinate observation 和冲突数量；
 3. **native alignment support**：claim 引用的 GROBID observations 中，具有至少一个
    PDFium 原生文字 alignment 的比例；
-4. **native text coverage**：已对齐原生文字的规范化字符数占 claim 规范化字符数的比例；
+4. **aligned character coverage**：具有 alignment 的 observation 规范化字符数占全部
+   claim observation 字符数的比例；同时报告按最佳 alignment `text_score` 加权的
+   **alignment-weighted text coverage**，避免把低文本相似度的几何命中计成完整覆盖；
 5. 对照路径新增、移除或改变的 conflicts、specialist requests、Recipe actions 和
    source-element ArticleTree 节点归属；
 6. 被下游 decision 实际引用的 GROBID claim 数量。只存在但未被使用的 claim 不算质量

@@ -48,6 +48,7 @@ OA API package URL、实际 retrieval URL 和 `retrieval_fallback=true`。
 
 ## 下一步
 
-实现一个确定性 E7 runner：验证 corpus 后，分别在明确移除 GROBID 环境变量和连接固定
-CRF 服务的条件下执行 `layout-prepare --extraction-profile standard`，保存成对证据包，
-再生成逐 claim type 的机器统计和不暴露下游采用结果的人工审计任务。
+确定性 E7 runner 已实现为 `tools/run_grobid_semantic_eval.py`：它会验证 corpus，分别在
+明确移除 GROBID 环境变量和连接固定 CRF 服务的条件下执行
+`layout-prepare --extraction-profile standard`，保存成对证据包，再生成逐 claim type 的
+机器统计和不暴露下游采用结果的人工审计任务。下一步是在冻结输出目录执行完整批次。
