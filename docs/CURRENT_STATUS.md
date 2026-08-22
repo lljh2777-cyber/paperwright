@@ -157,8 +157,13 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     alignment、字符覆盖和文本相似度加权覆盖已固化；这些指标不等于语义正确率。
 39. GROBID 人工 gold 工作台：audit task 升级到 v0.2，补齐 PDFium 原生文字/bbox 和成功
     论文全部 143 页；新增无外部前端依赖的浏览器审阅器、localStorage 恢复、JSON 导入/
-    导出、六类 recall gold 全文枚举及 task-bound response 完整性验证。规范空白包覆盖
-    7 篇、1,944 个 claims；尚未填写人工标签，不能报告语义 precision/recall。
+    导出、六类 recall gold 全文枚举及 task-bound response 完整性验证。初始空白包覆盖
+    7 篇、1,944 个 claims。
+40. GROBID 多页 gold 单元：人工 `g07` 暴露出 v0.1 会把跨页摘要/参考文献拆成两个 recall
+    单元；response/manifest 升级到 v0.2，以一个 semantic unit 下的多个 page segments 保持
+    分母守恒，并新增显式迁移/合并工具。`g07` 的 141 条标签已无损迁移并严格验证；摘要
+    为 1 unit/2 segments，参考文献为 24 units/25 segments。尚未建立 claim↔gold 显式匹配，
+    因此仍不发布 strict recall。
 
 ## 当前主链
 
@@ -231,7 +236,8 @@ final ArticleTree v0.2 的规范上游迁移均已完成。GROBID HTTP 集成已
 顺序取位置 65–72，冻结前没有运行 PaperWright/GROBID 或查看页面标签。冻结批次现已完成
 7/8 对；机器结果见
 [GROBID 科研语义证据评估 v0.1 机器结果](GROBID_SEMANTIC_EVAL_V0.1_RESULTS.md)。盲化
-[人工 gold 工作台](GROBID_HUMAN_REVIEW_V0.1.md)也已生成；下一步完成 7 份 response，逐类
+[人工 gold 工作台 v0.2](GROBID_HUMAN_REVIEW_V0.2.md)也已生成，且首篇 `g07` 已完成；下一步
+建立 claim↔gold 匹配并试算 `g07`，再继续其余 6 份 response，逐类
 测量 front matter、摘要、章节、caption、引用和参考文献
 的严格 precision/recall 与 ArticleTree 决策贡献。同时测量首页家具排除、Table
 图片回退和原生 Figure 补全的误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧

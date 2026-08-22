@@ -6,14 +6,16 @@ import hashlib
 import html
 import json
 import math
+from copy import deepcopy
 from typing import Any, Mapping
 
 from .exceptions import ContractValidationError
 from .grobid_evaluation import GROBID_AUDIT_TASK_VERSION
 
-GROBID_HUMAN_REVIEW_VERSION = "paperwright-grobid-human-review-v0.1"
+GROBID_HUMAN_REVIEW_LEGACY_VERSION = "paperwright-grobid-human-review-v0.1"
+GROBID_HUMAN_REVIEW_VERSION = "paperwright-grobid-human-review-v0.2"
 GROBID_HUMAN_REVIEW_MANIFEST_VERSION = (
-    "paperwright-grobid-human-review-manifest-v0.1"
+    "paperwright-grobid-human-review-manifest-v0.2"
 )
 REVIEW_LABELS = (
     "correct",
@@ -216,6 +218,103 @@ def _validate_gold_bbox(
         _fail("GROBID human review gold bbox 越界")
 
 
+def _completion_for_response(
+    task: Mapping[str, Any], response: Mapping[str, Any]
+) -> dict[str, Any]:
+    annotations = response.get("claim_annotations", [])
+    enumeration = response.get("gold_enumeration", {})
+    labeled = sum(
+        isinstance(item, dict) and item.get("label") is not None
+        for item in annotations
+    )
+    complete_types = sum(
+        isinstance(enumeration.get(claim_type), dict)
+        and enumeration[claim_type].get("status")
+        in {"complete", "not_applicable"}
+        for claim_type in RECALL_GOLD_TYPES
+    )
+    return {
+        "claim_count": len(task["claims"]),
+        "claims_labeled": labeled,
+        "gold_types_complete": complete_types,
+        "ready_for_scoring": (
+            labeled == len(task["claims"])
+            and complete_types == len(RECALL_GOLD_TYPES)
+        ),
+    }
+
+
+def migrate_grobid_human_review_v01(
+    task: Mapping[str, Any], response: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Migrate a v0.1 response without guessing which units should be merged."""
+
+    validate_grobid_audit_task(task)
+    if response.get("contract_version") == GROBID_HUMAN_REVIEW_VERSION:
+        migrated = deepcopy(response)
+        validate_grobid_human_review(task, migrated)
+        return migrated
+    if response.get("contract_version") != GROBID_HUMAN_REVIEW_LEGACY_VERSION:
+        _fail("GROBID human review migration source contract_version 不支持")
+    migrated = deepcopy(response)
+    migrated["contract_version"] = GROBID_HUMAN_REVIEW_VERSION
+    enumeration = migrated.get("gold_enumeration")
+    if not isinstance(enumeration, dict):
+        _fail("GROBID human review migration gold_enumeration 非法")
+    for claim_type in RECALL_GOLD_TYPES:
+        record = enumeration.get(claim_type)
+        if not isinstance(record, dict) or not isinstance(record.get("units"), list):
+            _fail("GROBID human review migration gold type 非法")
+        for unit in record["units"]:
+            if not isinstance(unit, dict):
+                _fail("GROBID human review migration gold unit 非法")
+            unit["segments"] = [
+                {
+                    "page_index": unit.pop("page_index", None),
+                    "text": unit.pop("text", None),
+                    "paperwright_bbox": unit.pop("paperwright_bbox", None),
+                }
+            ]
+    migrated["completion"] = _completion_for_response(task, migrated)
+    validate_grobid_human_review(task, migrated)
+    return migrated
+
+
+def merge_grobid_gold_units(
+    task: Mapping[str, Any],
+    response: Mapping[str, Any],
+    *,
+    source_unit_id: str,
+    target_unit_id: str,
+) -> dict[str, Any]:
+    """Merge one continued gold unit into another, preserving segment order."""
+
+    validate_grobid_human_review(task, response)
+    merged = deepcopy(response)
+    source: tuple[dict[str, Any], int, dict[str, Any]] | None = None
+    target: dict[str, Any] | None = None
+    for claim_type in RECALL_GOLD_TYPES:
+        record = merged.get("gold_enumeration", {}).get(claim_type, {})
+        for index, unit in enumerate(record.get("units", [])):
+            if unit.get("gold_unit_id") == source_unit_id:
+                source = (record, index, unit)
+            if unit.get("gold_unit_id") == target_unit_id:
+                target = unit
+    if source is None or target is None or source[2] is target:
+        _fail("GROBID human review merge gold unit ID 非法")
+    source_record, source_index, source_unit = source
+    if source_unit.get("claim_type") != target.get("claim_type"):
+        _fail("GROBID human review 只能合并同类型 gold units")
+    target["segments"].extend(source_unit["segments"])
+    if source_unit.get("note"):
+        separator = "\n" if target.get("note") else ""
+        target["note"] = f"{target.get('note', '')}{separator}{source_unit['note']}"
+    source_record["units"].pop(source_index)
+    merged["completion"] = _completion_for_response(task, merged)
+    validate_grobid_human_review(task, merged)
+    return merged
+
+
 def validate_grobid_human_review(
     task: Mapping[str, Any],
     response: Mapping[str, Any],
@@ -237,7 +336,6 @@ def validate_grobid_human_review(
     expected_ids = [claim["claim_id"] for claim in task["claims"]]
     if not isinstance(annotations, list) or len(annotations) != len(expected_ids):
         _fail("GROBID human review claim_annotations 不守恒")
-    labels = []
     for annotation, expected_id in zip(annotations, expected_ids, strict=True):
         if (
             not isinstance(annotation, dict)
@@ -246,7 +344,6 @@ def validate_grobid_human_review(
             or not isinstance(annotation.get("note"), str)
         ):
             _fail("GROBID human review claim annotation 非法或乱序")
-        labels.append(annotation.get("label"))
     pages = {page["page_index"]: page for page in task["page_images"]}
     enumeration = response.get("gold_enumeration")
     if not isinstance(enumeration, dict) or set(enumeration) != set(
@@ -254,7 +351,6 @@ def validate_grobid_human_review(
     ):
         _fail("GROBID human review gold types 不完整")
     unit_ids: set[str] = set()
-    complete_types = 0
     for claim_type in RECALL_GOLD_TYPES:
         record = enumeration[claim_type]
         if (
@@ -263,41 +359,41 @@ def validate_grobid_human_review(
             or not isinstance(record.get("units"), list)
         ):
             _fail("GROBID human review gold enumeration 非法")
-        if record["status"] in {"complete", "not_applicable"}:
-            complete_types += 1
         if record["status"] == "not_applicable" and record["units"]:
             _fail("not_applicable gold type 不得包含 units")
         for unit in record["units"]:
             if not isinstance(unit, dict):
                 _fail("GROBID human review gold unit 非法")
             unit_id = unit.get("gold_unit_id")
-            page_index = unit.get("page_index")
             if (
                 not isinstance(unit_id, str)
                 or not unit_id
                 or unit_id in unit_ids
                 or unit.get("claim_type") != claim_type
-                or page_index not in pages
-                or not isinstance(unit.get("text"), str)
-                or not unit["text"].strip()
                 or not isinstance(unit.get("note"), str)
+                or not isinstance(unit.get("segments"), list)
+                or not unit["segments"]
             ):
                 _fail("GROBID human review gold unit 字段非法")
             unit_ids.add(unit_id)
-            page = pages[page_index]
-            _validate_gold_bbox(
-                unit.get("paperwright_bbox"),
-                page_width=float(page["width"]),
-                page_height=float(page["height"]),
-            )
-    labeled = sum(label is not None for label in labels)
-    ready = labeled == len(labels) and complete_types == len(RECALL_GOLD_TYPES)
-    expected_completion = {
-        "claim_count": len(labels),
-        "claims_labeled": labeled,
-        "gold_types_complete": complete_types,
-        "ready_for_scoring": ready,
-    }
+            for segment in unit["segments"]:
+                if not isinstance(segment, dict):
+                    _fail("GROBID human review gold segment 非法")
+                page_index = segment.get("page_index")
+                if (
+                    page_index not in pages
+                    or not isinstance(segment.get("text"), str)
+                    or not segment["text"].strip()
+                ):
+                    _fail("GROBID human review gold segment 字段非法")
+                page = pages[page_index]
+                _validate_gold_bbox(
+                    segment.get("paperwright_bbox"),
+                    page_width=float(page["width"]),
+                    page_height=float(page["height"]),
+                )
+    expected_completion = _completion_for_response(task, response)
+    ready = expected_completion["ready_for_scoring"]
     if response.get("completion") != expected_completion:
         _fail("GROBID human review completion 与内容不一致")
     if require_complete and (not ready or not response["reviewer"].strip()):
@@ -315,6 +411,7 @@ _REVIEW_HTML = r'''<!doctype html>
 :root{--bg:#f3f6fa;--surface:#fff;--text:#172033;--muted:#647087;--line:#d9e0ea;--blue:#1268dc;--blue-soft:#eaf3ff;--amber:#d88900;--amber-soft:#fff6e3;--green:#138a62;--red:#c93c46;--violet:#6658d9;--radius:6px;--header:60px}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg);font-size:14px;overflow:hidden}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer}.topbar{height:var(--header);display:grid;grid-template-columns:310px 1fr auto;align-items:center;gap:20px;padding:0 22px;background:var(--surface);border-bottom:1px solid var(--line)}.brand{font-size:20px;font-weight:760;letter-spacing:-.02em}.document-name{min-width:0;font-weight:620;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.header-actions{display:flex;align-items:center;gap:8px}.button{height:38px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:0 14px;font-weight:650}.button:hover,.button:focus-visible{border-color:var(--blue);outline:2px solid #1268dc22}.button.primary{background:var(--blue);border-color:var(--blue);color:#fff}.button.active{background:var(--blue-soft);border-color:#8abaff;color:#0754b5}.workspace{height:calc(100vh - var(--header) - 32px);display:grid;grid-template-columns:310px minmax(420px,1fr) 410px}.sidebar,.inspector{background:var(--surface);min-width:0;overflow:hidden}.sidebar{border-right:1px solid var(--line);display:grid;grid-template-rows:auto auto 1fr}.inspector{border-left:1px solid var(--line);overflow-y:auto}.section{padding:14px 16px;border-bottom:1px solid var(--line)}.section-title{font-weight:730;margin-bottom:10px}.filter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.filter{min-height:34px;padding:4px 7px;background:#fff;border:1px solid var(--line);border-radius:5px;font-size:12px}.filter.active{background:var(--blue);border-color:var(--blue);color:#fff}.filter-count{opacity:.72;margin-left:4px}.claim-list{overflow:auto}.claim-row{width:100%;display:grid;grid-template-columns:32px 1fr 20px;gap:8px;align-items:start;padding:11px 12px;border:0;border-bottom:1px solid #e6ebf2;background:#fff;text-align:left}.claim-row:hover{background:#f7f9fc}.claim-row.active{background:var(--blue-soft);box-shadow:inset 3px 0 var(--blue)}.claim-index{color:var(--muted);font-variant-numeric:tabular-nums}.claim-preview{line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.claim-state{width:15px;height:15px;border:1.5px solid #a9b4c4;border-radius:50%;margin-top:2px}.claim-state.done{border-color:var(--green);background:radial-gradient(circle,var(--green) 0 43%,transparent 47%)}.canvas-area{min-width:0;display:grid;grid-template-rows:48px 1fr;background:#e9edf3}.canvas-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#fff;border-bottom:1px solid var(--line)}.segment-nav{display:flex;align-items:center;gap:8px}.segment-nav button{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:5px}.page-stage{overflow:auto;padding:18px;display:flex;align-items:flex-start;justify-content:center}.page-wrap{position:relative;line-height:0;background:#fff;border:1px solid #c8d0dc;box-shadow:0 2px 8px #17203318;max-width:100%}.page-wrap img{display:block;max-width:100%;max-height:calc(100vh - 142px);width:auto;height:auto}.bbox{position:absolute;border:2px solid var(--blue);background:#1268dc12;pointer-events:none}.bbox.native{border-color:var(--amber);background:#f3a90016;border-width:2px}.bbox-label{position:absolute;top:-19px;left:-2px;padding:2px 5px;color:#fff;background:var(--blue);font-size:10px;line-height:14px;white-space:nowrap}.bbox.native .bbox-label{background:var(--amber)}.inspector-head{position:sticky;top:0;z-index:3;background:#fff;padding:15px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px}.progress{font-weight:720}.type-label{font-size:12px;color:var(--blue);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.field{padding:14px 16px;border-bottom:1px solid var(--line)}.field label,.field-title{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:7px}.text-box{padding:10px 11px;border:1px solid var(--line);border-radius:var(--radius);line-height:1.45;white-space:pre-wrap;max-height:180px;overflow:auto}.text-box.grobid{border-color:#87b9ff;background:#f8fbff}.text-box.native{border-color:#efbc5c;background:#fffaf0}.score-table{width:100%;border-collapse:collapse;font-size:12px}.score-table th,.score-table td{border:1px solid var(--line);padding:7px;text-align:center}.score-table th{font-weight:650;color:var(--muted);background:#f7f9fc}.note{width:100%;min-height:78px;resize:vertical;border:1px solid var(--line);border-radius:var(--radius);padding:9px 10px;line-height:1.4}.note:focus{outline:2px solid #1268dc33;border-color:var(--blue)}.labels{display:grid;gap:6px}.label-choice{display:grid;grid-template-columns:22px 1fr 22px;align-items:center;min-height:40px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;text-align:left}.label-choice.active{border-color:var(--blue);background:var(--blue-soft)}.label-choice .key{color:var(--muted);text-align:right;font-size:12px}.radio{width:16px;height:16px;border:1.5px solid #98a5b6;border-radius:50%}.active .radio{border:5px solid var(--blue)}.review-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px}.statusbar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.save-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:7px}.hidden{display:none!important}.gold-workspace{height:calc(100vh - var(--header) - 32px);overflow:auto;padding:28px;background:#f3f6fa}.gold-shell{max-width:1080px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:var(--radius)}.gold-header{padding:22px 24px;border-bottom:1px solid var(--line)}.gold-header h1{margin:0 0 8px;font-size:22px}.gold-header p{margin:0;color:var(--muted);line-height:1.5}.gold-type{padding:18px 24px;border-bottom:1px solid var(--line)}.gold-type-head{display:flex;justify-content:space-between;gap:16px;align-items:center}.gold-type h2{margin:0;font-size:17px}.gold-status{height:34px;border:1px solid var(--line);border-radius:5px;background:#fff;padding:0 8px}.gold-form{display:grid;grid-template-columns:130px 1fr repeat(4,80px) auto;gap:7px;margin-top:12px}.gold-form input{min-width:0;height:36px;border:1px solid var(--line);border-radius:5px;padding:0 8px}.gold-units{margin-top:10px}.gold-unit{display:grid;grid-template-columns:80px 1fr auto;gap:10px;padding:9px 0;border-top:1px solid #e8edf3}.gold-unit button{border:0;background:none;color:var(--red)}.empty{color:var(--muted);padding:10px 0}@media(max-width:1100px){.workspace{grid-template-columns:250px minmax(360px,1fr) 350px}.topbar{grid-template-columns:250px 1fr auto}.gold-form{grid-template-columns:110px 1fr repeat(2,72px)}.gold-form .add-gold{grid-column:span 2}}@media(max-width:820px){body{overflow:auto}.topbar{position:sticky;top:0;z-index:10;grid-template-columns:1fr auto;height:auto;min-height:60px}.document-name{display:none}.workspace{height:auto;grid-template-columns:1fr}.sidebar{display:none}.canvas-area{min-height:70vh}.inspector{border-left:0;border-top:1px solid var(--line)}.statusbar{position:sticky;bottom:0}.gold-workspace{height:auto;padding:12px}.gold-form{grid-template-columns:1fr 1fr}.gold-form input:nth-child(2){grid-column:span 2}}
 body{display:grid;grid-template-rows:var(--header) minmax(0,1fr) 32px}.topbar{height:auto}.workspace,.gold-workspace{height:auto;min-height:0}.claim-state.done{border:4px solid var(--green);background:none}.statusbar{position:relative;z-index:20;pointer-events:none}.review-nav{position:sticky;bottom:32px;z-index:2;background:#fff;border-top:1px solid var(--line)}.gold-grid{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(620px,1fr) 390px;gap:18px;align-items:start}.gold-shell{max-width:none;margin:0}.gold-preview{position:sticky;top:0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px}.gold-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;font-weight:720}.gold-preview select,.gold-form select{height:36px;border:1px solid var(--line);border-radius:5px;background:#fff;padding:0 8px}.gold-preview img{display:block;width:100%;height:auto;border:1px solid #c8d0dc}@media(max-width:1100px){.gold-grid{grid-template-columns:1fr}.gold-preview{position:static;order:-1;max-width:500px}}
+.gold-form{grid-template-columns:180px 120px minmax(220px,1fr) auto}.gold-form input,.gold-form select{height:38px}.gold-unit{display:block;padding:12px 0}.gold-unit-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.gold-unit-actions{display:flex;gap:10px}.gold-unit-actions button,.gold-fragment button{border:0;background:none;color:var(--red);padding:3px}.gold-unit-actions .merge{color:var(--blue)}.gold-fragments{margin-top:8px;border-left:3px solid var(--blue-soft);padding-left:10px}.gold-fragment{display:grid;grid-template-columns:58px 1fr auto;gap:10px;align-items:start;padding:7px 0;border-top:1px solid #edf1f6;line-height:1.4}.gold-help{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.45}@media(max-width:900px){.gold-form{grid-template-columns:1fr 1fr}.gold-form input[name="text"]{grid-column:span 2}.gold-form .add-gold{grid-column:span 2}}
 </style>
 </head>
 <body>
@@ -331,6 +428,8 @@ const task=__TASK_JSON__;
 const initialResponse=__RESPONSE_JSON__;
 const imageSources=__IMAGE_SOURCES_JSON__;
 const taskHash=__TASK_HASH_JSON__;
+const responseVersion="paperwright-grobid-human-review-v0.2";
+const legacyResponseVersion="paperwright-grobid-human-review-v0.1";
 const labels=["correct","partial","wrong_role","unsupported","uncertain"];
 const labelNames={correct:"Correct",partial:"Partial",wrong_role:"Wrong role",unsupported:"Unsupported",uncertain:"Uncertain"};
 const goldTypes=["title","abstract","section_heading","figure_caption","table_caption","reference"];
@@ -338,7 +437,8 @@ const storageKey=`paperwright-grobid-review:${taskHash}`;
 let response=loadResponse();let current=0;let segmentIndex=0;let activeFilter="all";let mode="claims";
 const $=id=>document.getElementById(id);
 const annotations=()=>new Map(response.claim_annotations.map(item=>[item.claim_id,item]));
-function loadResponse(){try{const saved=localStorage.getItem(storageKey);if(saved){const value=JSON.parse(saved);if(value.task_sha256===taskHash)return value}}catch(error){}return structuredClone(initialResponse)}
+function migrateResponse(value){const migrated=structuredClone(value);if(migrated.contract_version===legacyResponseVersion){goldTypes.forEach(type=>{migrated.gold_enumeration[type].units.forEach(unit=>{unit.segments=[{page_index:unit.page_index,text:unit.text,paperwright_bbox:unit.paperwright_bbox??null}];delete unit.page_index;delete unit.text;delete unit.paperwright_bbox})});migrated.contract_version=responseVersion}if(migrated.contract_version!==responseVersion)throw new Error("Unsupported response contract");const labeled=migrated.claim_annotations.filter(item=>item.label!==null).length;const complete=goldTypes.filter(type=>["complete","not_applicable"].includes(migrated.gold_enumeration[type].status)).length;migrated.completion={claim_count:task.claims.length,claims_labeled:labeled,gold_types_complete:complete,ready_for_scoring:labeled===task.claims.length&&complete===goldTypes.length};return migrated}
+function loadResponse(){try{const saved=localStorage.getItem(storageKey);if(saved){const value=migrateResponse(JSON.parse(saved));if(value.task_sha256===taskHash)return value}}catch(error){}return migrateResponse(initialResponse)}
 function completion(){const labeled=response.claim_annotations.filter(item=>item.label!==null).length;const complete=goldTypes.filter(type=>["complete","not_applicable"].includes(response.gold_enumeration[type].status)).length;return{claim_count:task.claims.length,claims_labeled:labeled,gold_types_complete:complete,ready_for_scoring:labeled===task.claims.length&&complete===goldTypes.length}}
 function save(){response.reviewer=$("reviewer").value;response.completion=completion();localStorage.setItem(storageKey,JSON.stringify(response));$("saveStatus").textContent="Changes are saved locally.";renderCompletion()}
 function uniqueTexts(values){return [...new Set(values.filter(Boolean).map(v=>v.trim()).filter(Boolean))]}
@@ -357,14 +457,14 @@ function selectClaim(index){current=Math.max(0,Math.min(task.claims.length-1,ind
 function setLabel(label){response.claim_annotations[current].label=label;save();renderClaim()}
 function stepClaim(delta){selectClaim(current+delta)}
 function renderCompletion(){const c=completion();$("completionStatus").textContent=`${c.claims_labeled}/${c.claim_count} claims · ${c.gold_types_complete}/${goldTypes.length} gold types${c.ready_for_scoring?" · Ready for validation":""}`}
-function renderGold(){const root=$("goldTypes");root.innerHTML="";goldTypes.forEach(type=>{const record=response.gold_enumeration[type];const section=document.createElement("section");section.className="gold-type";section.innerHTML=`<div class="gold-type-head"><h2>${typeLabel(type)}</h2><select class="gold-status"><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="not_applicable">Not applicable</option></select></div><form class="gold-form"><input name="page" type="number" min="1" placeholder="Page" required><input name="text" placeholder="Visible gold text" required><input name="x" type="number" step="any" placeholder="x"><input name="y" type="number" step="any" placeholder="y"><input name="width" type="number" step="any" placeholder="width"><input name="height" type="number" step="any" placeholder="height"><button class="button add-gold" type="submit">Add unit</button></form><div class="gold-units"></div>`;const select=section.querySelector("select");select.value=record.status;select.onchange=()=>{record.status=select.value;if(select.value==="not_applicable")record.units=[];save();renderGold()};section.querySelector("form").onsubmit=event=>{event.preventDefault();const form=new FormData(event.currentTarget);const pageIndex=Number(form.get("page"))-1;const boxValues=["x","y","width","height"].map(key=>String(form.get(key)||"").trim());const bbox=boxValues.every(Boolean)?Object.fromEntries(["x","y","width","height"].map((key,index)=>[key,Number(boxValues[index])])):null;const sequence=record.units.length+1;record.units.push({gold_unit_id:`${task.document_id}:${type}:${String(sequence).padStart(4,"0")}`,claim_type:type,page_index:pageIndex,text:String(form.get("text")).trim(),paperwright_bbox:bbox,note:""});record.status="in_progress";save();renderGold()};const units=section.querySelector(".gold-units");if(!record.units.length)units.innerHTML='<div class="empty">No units recorded.</div>';record.units.forEach((unit,index)=>{const row=document.createElement("div");row.className="gold-unit";row.innerHTML=`<strong>p. ${unit.page_index+1}</strong><span></span><button type="button">Remove</button>`;row.querySelector("span").textContent=unit.text;row.querySelector("button").onclick=()=>{record.units.splice(index,1);record.status="in_progress";save();renderGold()};units.append(row)});root.append(section)})}
 function pageOptions(selected){return task.page_images.map(page=>`<option value="${page.page_index}" ${page.page_index===selected?"selected":""}>Page ${page.page_index+1}</option>`).join("")}
 function renderGoldPreview(pageIndex){const page=pageRecord(Number(pageIndex));if(!page)return;$("goldPageSelect").value=String(page.page_index);$("goldPageImage").src=imageSources[String(page.page_index)]}
 function nextGoldSequence(units){const values=units.map(unit=>Number(unit.gold_unit_id.split(":").at(-1))).filter(Number.isFinite);return(values.length?Math.max(...values):0)+1}
-function renderGoldV2(){const root=$("goldTypes");root.innerHTML="";if(!$("goldPageSelect").options.length){$("goldPageSelect").innerHTML=pageOptions(task.page_images[0].page_index);$("goldPageSelect").onchange=event=>renderGoldPreview(event.target.value)}renderGoldPreview($("goldPageSelect").value||task.page_images[0].page_index);goldTypes.forEach(type=>{const record=response.gold_enumeration[type];const section=document.createElement("section");section.className="gold-type";section.innerHTML=`<div class="gold-type-head"><h2>${typeLabel(type)}</h2><select class="gold-status"><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="not_applicable">Not applicable</option></select></div><form class="gold-form"><select name="page" required>${pageOptions(Number($("goldPageSelect").value)||task.page_images[0].page_index)}</select><input name="text" placeholder="Visible gold text" required><input name="x" type="number" step="any" placeholder="x"><input name="y" type="number" step="any" placeholder="y"><input name="width" type="number" step="any" placeholder="width"><input name="height" type="number" step="any" placeholder="height"><button class="button add-gold" type="submit">Add unit</button></form><div class="gold-units"></div>`;const status=section.querySelector("select.gold-status");status.value=record.status;status.onchange=()=>{record.status=status.value;if(status.value==="not_applicable")record.units=[];save();renderGoldV2()};const pageSelect=section.querySelector('select[name="page"]');pageSelect.onchange=()=>renderGoldPreview(pageSelect.value);section.querySelector("form").onsubmit=event=>{event.preventDefault();const form=new FormData(event.currentTarget);const pageIndex=Number(form.get("page"));const boxValues=["x","y","width","height"].map(key=>String(form.get(key)||"").trim());const bbox=boxValues.every(Boolean)?Object.fromEntries(["x","y","width","height"].map((key,index)=>[key,Number(boxValues[index])])):null;const sequence=nextGoldSequence(record.units);record.units.push({gold_unit_id:`${task.document_id}:${type}:${String(sequence).padStart(4,"0")}`,claim_type:type,page_index:pageIndex,text:String(form.get("text")).trim(),paperwright_bbox:bbox,note:""});record.status="in_progress";save();renderGoldV2()};const units=section.querySelector(".gold-units");if(!record.units.length)units.innerHTML='<div class="empty">No units recorded.</div>';record.units.forEach((unit,index)=>{const row=document.createElement("div");row.className="gold-unit";row.innerHTML=`<strong>p. ${unit.page_index+1}</strong><span></span><button type="button">Remove</button>`;row.querySelector("span").textContent=unit.text;row.querySelector("button").onclick=()=>{record.units.splice(index,1);record.status="in_progress";save();renderGoldV2()};units.append(row)});root.append(section)})}
-function setMode(value){mode=value;$("claimsWorkspace").classList.toggle("hidden",value!=="claims");$("goldWorkspace").classList.toggle("hidden",value!=="gold");$("claimsMode").classList.toggle("active",value==="claims");$("goldMode").classList.toggle("active",value==="gold");if(value==="gold")renderGoldV2()}
+function goldUnitPages(unit){return[...new Set(unit.segments.map(segment=>segment.page_index+1))]}
+function renderGold(){const root=$("goldTypes");root.innerHTML="";if(!$("goldPageSelect").options.length){$("goldPageSelect").innerHTML=pageOptions(task.page_images[0].page_index);$("goldPageSelect").onchange=event=>renderGoldPreview(event.target.value)}renderGoldPreview($("goldPageSelect").value||task.page_images[0].page_index);goldTypes.forEach(type=>{const record=response.gold_enumeration[type];const section=document.createElement("section");section.className="gold-type";section.innerHTML=`<div class="gold-type-head"><h2>${typeLabel(type)}</h2><select class="gold-status"><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="not_applicable">Not applicable</option></select></div><p class="gold-help">Each row is one semantic unit. If it continues on another page, choose that existing unit under “Attach to” and add another fragment.</p><form class="gold-form"><select name="target" aria-label="Attach fragment to a semantic unit"></select><select name="page" required>${pageOptions(Number($("goldPageSelect").value)||task.page_images[0].page_index)}</select><input name="text" placeholder="Visible text on this page" required><button class="button add-gold" type="submit">Add fragment</button></form><div class="gold-units"></div>`;const status=section.querySelector("select.gold-status");status.value=record.status;status.onchange=()=>{record.status=status.value;if(status.value==="not_applicable")record.units=[];save();renderGold()};const target=section.querySelector('select[name="target"]');target.innerHTML='<option value="__new__">New semantic unit</option>'+record.units.map((unit,index)=>`<option value="${unit.gold_unit_id}">Attach to unit ${index+1} · p. ${goldUnitPages(unit).join(", ")}</option>`).join("");const pageSelect=section.querySelector('select[name="page"]');pageSelect.onchange=()=>renderGoldPreview(pageSelect.value);section.querySelector("form").onsubmit=event=>{event.preventDefault();const form=new FormData(event.currentTarget);const segment={page_index:Number(form.get("page")),text:String(form.get("text")).trim(),paperwright_bbox:null};const targetId=String(form.get("target"));if(targetId==="__new__"){const sequence=nextGoldSequence(record.units);record.units.push({gold_unit_id:`${task.document_id}:${type}:${String(sequence).padStart(4,"0")}`,claim_type:type,segments:[segment],note:""})}else{const unit=record.units.find(item=>item.gold_unit_id===targetId);if(!unit)return;unit.segments.push(segment)}record.status="in_progress";save();renderGold()};const units=section.querySelector(".gold-units");if(!record.units.length)units.innerHTML='<div class="empty">No semantic units recorded.</div>';record.units.forEach((unit,index)=>{const row=document.createElement("div");row.className="gold-unit";row.innerHTML='<div class="gold-unit-head"><strong></strong><div class="gold-unit-actions"></div></div><div class="gold-fragments"></div>';row.querySelector("strong").textContent=`Unit ${index+1} · ${unit.segments.length} fragment${unit.segments.length===1?"":"s"} · p. ${goldUnitPages(unit).join(", ")}`;const actions=row.querySelector(".gold-unit-actions");if(index>0){const merge=document.createElement("button");merge.type="button";merge.className="merge";merge.textContent="Merge into previous";merge.onclick=()=>{record.units[index-1].segments.push(...unit.segments);record.units.splice(index,1);record.status="in_progress";save();renderGold()};actions.append(merge)}const remove=document.createElement("button");remove.type="button";remove.textContent="Remove unit";remove.onclick=()=>{record.units.splice(index,1);record.status="in_progress";save();renderGold()};actions.append(remove);const fragments=row.querySelector(".gold-fragments");unit.segments.forEach((segment,segmentPosition)=>{const fragment=document.createElement("div");fragment.className="gold-fragment";fragment.innerHTML='<strong></strong><span></span><button type="button">Remove</button>';fragment.querySelector("strong").textContent=`p. ${segment.page_index+1}`;fragment.querySelector("span").textContent=segment.text;fragment.querySelector("button").onclick=()=>{if(unit.segments.length===1)record.units.splice(index,1);else unit.segments.splice(segmentPosition,1);record.status="in_progress";save();renderGold()};fragments.append(fragment)});units.append(row)});root.append(section)})}
+function setMode(value){mode=value;$("claimsWorkspace").classList.toggle("hidden",value!=="claims");$("goldWorkspace").classList.toggle("hidden",value!=="gold");$("claimsMode").classList.toggle("active",value==="claims");$("goldMode").classList.toggle("active",value==="gold");if(value==="gold")renderGold()}
 function exportResponse(){save();const blob=new Blob([JSON.stringify(response,null,2)+"\n"],{type:"application/json"});const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=`${task.document_id}.human-review.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
-function importResponse(file){const reader=new FileReader();reader.onload=()=>{try{const value=JSON.parse(reader.result);if(value.task_sha256!==taskHash||value.document_id!==task.document_id)throw new Error("Response is bound to another task");const ids=value.claim_annotations.map(item=>item.claim_id);if(ids.join("\n")!==task.claims.map(item=>item.claim_id).join("\n"))throw new Error("Claim IDs do not match");response=value;localStorage.setItem(storageKey,JSON.stringify(response));$("reviewer").value=response.reviewer||"";renderClaim();renderCompletion();alert("Review imported.")}catch(error){alert(`Import failed: ${error.message}`)}};reader.readAsText(file)}
+function importResponse(file){const reader=new FileReader();reader.onload=()=>{try{const value=migrateResponse(JSON.parse(reader.result));if(value.task_sha256!==taskHash||value.document_id!==task.document_id)throw new Error("Response is bound to another task");const ids=value.claim_annotations.map(item=>item.claim_id);if(ids.join("\n")!==task.claims.map(item=>item.claim_id).join("\n"))throw new Error("Claim IDs do not match");response=value;localStorage.setItem(storageKey,JSON.stringify(response));$("reviewer").value=response.reviewer||"";renderClaim();renderCompletion();if(mode==="gold")renderGold();alert("Review imported and migrated when needed.")}catch(error){alert(`Import failed: ${error.message}`)}};reader.readAsText(file)}
 $("documentName").textContent=task.document_id;$("reviewer").value=response.reviewer||"";$("reviewer").oninput=save;$("reviewNote").oninput=()=>{response.claim_annotations[current].note=$("reviewNote").value;save()};$("previousClaim").onclick=()=>stepClaim(-1);$("nextClaim").onclick=()=>stepClaim(1);$("previousSegment").onclick=()=>{segmentIndex--;renderClaim()};$("nextSegment").onclick=()=>{segmentIndex++;renderClaim()};$("claimsMode").onclick=()=>setMode("claims");$("goldMode").onclick=()=>setMode("gold");$("exportButton").onclick=exportResponse;$("importButton").onclick=()=>$("importFile").click();$("importFile").onchange=event=>event.target.files[0]&&importResponse(event.target.files[0]);document.addEventListener("keydown",event=>{if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName))return;if(event.key>="1"&&event.key<="5")setLabel(labels[Number(event.key)-1]);if(event.key==="ArrowLeft")stepClaim(-1);if(event.key==="ArrowRight")stepClaim(1)});setMode("claims");renderClaim();renderCompletion();
 </script>
 </body>
@@ -426,6 +526,7 @@ def render_grobid_human_review_index(
 
 
 __all__ = [
+    "GROBID_HUMAN_REVIEW_LEGACY_VERSION",
     "GROBID_HUMAN_REVIEW_MANIFEST_VERSION",
     "GROBID_HUMAN_REVIEW_VERSION",
     "GOLD_STATUSES",
@@ -433,6 +534,8 @@ __all__ = [
     "REVIEW_LABELS",
     "build_grobid_human_review_template",
     "grobid_audit_task_sha256",
+    "merge_grobid_gold_units",
+    "migrate_grobid_human_review_v01",
     "render_grobid_human_review_html",
     "render_grobid_human_review_index",
     "validate_grobid_audit_task",

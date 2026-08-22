@@ -1,5 +1,8 @@
 # GROBID 人工 Gold 审计 v0.1
 
+> 此版本不能表达跨页语义单元，已由
+> [GROBID 人工 Gold 审计 v0.2](GROBID_HUMAN_REVIEW_V0.2.md) 取代。v0.1 仅用于保留原始记录。
+
 ## 目的
 
 该工具把 GROBID 独立评估的原始 JSON 转为可直接在本地浏览器填写的盲化审阅工作台。

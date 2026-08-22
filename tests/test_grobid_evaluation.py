@@ -19,8 +19,11 @@ from paperwright.grobid_evaluation import (
     validate_grobid_evaluation_corpus,
 )
 from paperwright.grobid_human_review import (
+    GROBID_HUMAN_REVIEW_LEGACY_VERSION,
     RECALL_GOLD_TYPES,
     build_grobid_human_review_template,
+    merge_grobid_gold_units,
+    migrate_grobid_human_review_v01,
     render_grobid_human_review_html,
     validate_grobid_audit_task,
     validate_grobid_human_review,
@@ -293,7 +296,63 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
             )
             self.assertIn("GROBID Gold Review", rendered)
             self.assertIn("Aligned native text", rendered)
+            self.assertIn("Attach to", rendered)
             self.assertNotIn("paper-recipe", rendered)
+
+    def test_migrates_and_merges_multi_page_gold_unit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            task = build_grobid_audit_task(
+                self._review(Path(temp)),
+                document_id="fixture",
+                source_sha256="a" * 64,
+            )
+            legacy = build_grobid_human_review_template(task)
+            legacy["contract_version"] = GROBID_HUMAN_REVIEW_LEGACY_VERSION
+            legacy["gold_enumeration"]["abstract"] = {
+                "status": "complete",
+                "units": [
+                    {
+                        "gold_unit_id": "fixture:abstract:0001",
+                        "claim_type": "abstract",
+                        "page_index": 0,
+                        "text": "First-page abstract text",
+                        "paperwright_bbox": None,
+                        "note": "",
+                    },
+                    {
+                        "gold_unit_id": "fixture:abstract:0002",
+                        "claim_type": "abstract",
+                        "page_index": 1,
+                        "text": "Second-page continuation",
+                        "paperwright_bbox": None,
+                        "note": "continued",
+                    },
+                ],
+            }
+            migrated = migrate_grobid_human_review_v01(task, legacy)
+            units = migrated["gold_enumeration"]["abstract"]["units"]
+            self.assertEqual(len(units), 2)
+            self.assertEqual(units[1]["segments"][0]["page_index"], 1)
+            self.assertNotIn("page_index", units[1])
+
+            merged = merge_grobid_gold_units(
+                task,
+                migrated,
+                source_unit_id="fixture:abstract:0002",
+                target_unit_id="fixture:abstract:0001",
+            )
+            units = merged["gold_enumeration"]["abstract"]["units"]
+            self.assertEqual(len(units), 1)
+            self.assertEqual(
+                [segment["page_index"] for segment in units[0]["segments"]],
+                [0, 1],
+            )
+            self.assertEqual(units[0]["note"], "continued")
+            validate_grobid_human_review(task, merged)
+
+            units[0]["segments"][1]["page_index"] = 99
+            with self.assertRaisesRegex(ContractValidationError, "segment"):
+                validate_grobid_human_review(task, merged)
 
     def test_complete_human_review_requires_reviewer_and_gold_statuses(self):
         with tempfile.TemporaryDirectory() as temp:

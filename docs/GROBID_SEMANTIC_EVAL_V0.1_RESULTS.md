@@ -80,7 +80,7 @@ observations 中有 436 个字符越过页面右边界，分布在 PDF 页 2、4
 GROBID 改善了 Markdown，也不能将任何 claim type 升级为确定性采用规则。
 
 盲化人工审计工具和 7 份 task-bound 空白 response 已生成，见
-[GROBID 人工 Gold 审计 v0.1](GROBID_HUMAN_REVIEW_V0.1.md)。下一步由人工逐 claim 标注
-`correct/partial/wrong_role/unsupported/uncertain`，并从 PDF 全文独立枚举 title、abstract、
-section heading、Figure/Table caption 和 reference gold 单元。得到严格 precision/recall
-后，再决定哪些 GROBID claims 只用于路由、哪些能进入受限 Recipe 动作。
+[GROBID 人工 Gold 审计 v0.2](GROBID_HUMAN_REVIEW_V0.2.md)。v0.2 将跨页语义单元表示为
+一个 unit 下的多个 page segments，避免错误增大 recall 分母。`g07` 已完成逐 claim 标注和
+全文 gold 枚举，其余 6 篇尚待处理。建立可审计的 claim↔gold 匹配并得到严格
+precision/recall 后，再决定哪些 GROBID claims 只用于路由、哪些能进入受限 Recipe 动作。

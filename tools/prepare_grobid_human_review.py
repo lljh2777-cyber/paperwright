@@ -67,7 +67,9 @@ Then open `http://127.0.0.1:8765/{relative}/index.html`.
    move between claims.
 3. In **Gold units**, independently enumerate title, abstract, section heading,
    Figure/Table caption and reference units from the PDF. Do not infer missing
-   units from the GROBID claim list.
+   units from the GROBID claim list. One semantic unit may contain multiple page
+   fragments; append a continuation to the existing unit instead of creating a
+   second unit.
 4. Mark a gold type `complete` only after checking the whole paper, or
    `not_applicable` only when the paper truly contains none.
 5. Export JSON after every session. Browser autosave is only a convenience;
@@ -96,7 +98,7 @@ def main() -> int:
     output = (
         args.output.resolve()
         if args.output is not None
-        else run_root / "human-review-v0.1"
+        else run_root / "human-review-v0.2"
     )
     if output.exists():
         raise SystemExit(f"human review output 已存在，拒绝覆盖: {output}")
