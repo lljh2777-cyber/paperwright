@@ -18,6 +18,13 @@ from paperwright.grobid_evaluation import (
     summarize_grobid_review,
     validate_grobid_evaluation_corpus,
 )
+from paperwright.grobid_human_review import (
+    RECALL_GOLD_TYPES,
+    build_grobid_human_review_template,
+    render_grobid_human_review_html,
+    validate_grobid_audit_task,
+    validate_grobid_human_review,
+)
 from pdf_fixture_factory import create_born_digital_fixture
 
 
@@ -84,6 +91,8 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
             "pages": [
                 {
                     "page_index": 0,
+                    "width": 200,
+                    "height": 300,
                     "observations": [
                         {
                             "observation_id": "grobid-scholarly:n000000:s000",
@@ -106,7 +115,42 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
                             },
                         },
                     ],
-                }
+                },
+                {
+                    "page_index": 1,
+                    "width": 200,
+                    "height": 300,
+                    "observations": [],
+                },
+            ],
+        }
+        native_provider = {
+            "provider_id": "pdfium-native",
+            "pages": [
+                {
+                    "page_index": 0,
+                    "width": 200,
+                    "height": 300,
+                    "observations": [
+                        {
+                            "observation_id": "pdfium-native:p0000-text-00000",
+                            "physical_element_id": "p0000-text-00000",
+                            "text": "Fixture Title",
+                            "paperwright_bbox": {
+                                "x": 10,
+                                "y": 10,
+                                "width": 100,
+                                "height": 20,
+                            },
+                        }
+                    ],
+                },
+                {
+                    "page_index": 1,
+                    "width": 200,
+                    "height": 300,
+                    "observations": [],
+                },
             ],
         }
         claims = {
@@ -167,6 +211,7 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
             ]
         }
         _write_json(evidence / "providers" / "grobid-scholarly.json", provider)
+        _write_json(evidence / "providers" / "pdfium-native.json", native_provider)
         _write_json(evidence / "claims.json", claims)
         _write_json(evidence / "alignments.json", alignments)
         _write_json(evidence / "conflicts.json", conflicts)
@@ -175,6 +220,9 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
         page_image = review / "page-0001" / "page.png"
         page_image.parent.mkdir()
         page_image.write_bytes(b"fixture-page-image")
+        second_page_image = review / "page-0002" / "page.png"
+        second_page_image.parent.mkdir()
+        second_page_image.write_bytes(b"fixture-second-page-image")
         return review
 
     def test_summarizes_alignment_and_downstream_use_by_claim_type(self):
@@ -213,7 +261,73 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
             self.assertEqual(task["claims"][0]["segments"][0]["page_index"], 0)
             self.assertEqual(task["page_images"][0]["page_index"], 0)
             self.assertEqual(task["page_images"][0]["path"], "page-0001/page.png")
+            self.assertEqual(task["page_images"][0]["width"], 200)
+            self.assertEqual(len(task["page_images"]), 2)
+            self.assertEqual(task["page_images"][1]["page_index"], 1)
+            alignment = task["claims"][0]["segments"][0]["alignments"][0]
+            self.assertEqual(alignment["native_text"], "Fixture Title")
+            self.assertEqual(
+                alignment["native_observation_id"],
+                "pdfium-native:p0000-text-00000",
+            )
             self.assertNotIn("recipe", json.dumps(task))
+
+    def test_human_review_template_renders_and_validates_partial_work(self):
+        with tempfile.TemporaryDirectory() as temp:
+            task = build_grobid_audit_task(
+                self._review(Path(temp)),
+                document_id="fixture",
+                source_sha256="a" * 64,
+            )
+            validate_grobid_audit_task(task)
+            response = build_grobid_human_review_template(task)
+            completion = validate_grobid_human_review(task, response)
+            self.assertFalse(completion["ready_for_scoring"])
+            rendered = render_grobid_human_review_html(
+                task,
+                response,
+                image_sources={
+                    "0": "../review/page-0001/page.png",
+                    "1": "../review/page-0002/page.png",
+                },
+            )
+            self.assertIn("GROBID Gold Review", rendered)
+            self.assertIn("Aligned native text", rendered)
+            self.assertNotIn("paper-recipe", rendered)
+
+    def test_complete_human_review_requires_reviewer_and_gold_statuses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            task = build_grobid_audit_task(
+                self._review(Path(temp)),
+                document_id="fixture",
+                source_sha256="a" * 64,
+            )
+            response = build_grobid_human_review_template(task)
+            for annotation in response["claim_annotations"]:
+                annotation["label"] = "correct"
+            for claim_type in RECALL_GOLD_TYPES:
+                response["gold_enumeration"][claim_type]["status"] = (
+                    "not_applicable"
+                )
+            response["completion"] = {
+                "claim_count": 2,
+                "claims_labeled": 2,
+                "gold_types_complete": len(RECALL_GOLD_TYPES),
+                "ready_for_scoring": True,
+            }
+            with self.assertRaisesRegex(ContractValidationError, "reviewer"):
+                validate_grobid_human_review(
+                    task,
+                    response,
+                    require_complete=True,
+                )
+            response["reviewer"] = "Liao Li"
+            completion = validate_grobid_human_review(
+                task,
+                response,
+                require_complete=True,
+            )
+            self.assertTrue(completion["ready_for_scoring"])
 
     def test_comparison_reports_deltas_without_claiming_quality(self):
         native = {

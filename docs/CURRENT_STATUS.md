@@ -155,6 +155,10 @@ Docling 只处理局部冲突；各 provider 的观察、主张和最终决定�
     7 对完整并生成 1,944 个 claims 与 7 份盲化审计任务；1 对因两分支共有的 436 个
     pdfplumber 越界字符而失败，按协议保留失败且不换样。逐类型 micro/document-macro
     alignment、字符覆盖和文本相似度加权覆盖已固化；这些指标不等于语义正确率。
+39. GROBID 人工 gold 工作台：audit task 升级到 v0.2，补齐 PDFium 原生文字/bbox 和成功
+    论文全部 143 页；新增无外部前端依赖的浏览器审阅器、localStorage 恢复、JSON 导入/
+    导出、六类 recall gold 全文枚举及 task-bound response 完整性验证。规范空白包覆盖
+    7 篇、1,944 个 claims；尚未填写人工标签，不能报告语义 precision/recall。
 
 ## 当前主链
 
@@ -226,8 +230,9 @@ final ArticleTree v0.2 的规范上游迁移均已完成。GROBID HTTP 集成已
 [8 篇/151 页独立语料](GROBID_SEMANTIC_EVAL_V0.1_CORPUS.md)。语料沿既有 PMC OA 随机
 顺序取位置 65–72，冻结前没有运行 PaperWright/GROBID 或查看页面标签。冻结批次现已完成
 7/8 对；机器结果见
-[GROBID 科研语义证据评估 v0.1 机器结果](GROBID_SEMANTIC_EVAL_V0.1_RESULTS.md)。下一步
-完成 7 份盲化 audit task，逐类测量 front matter、摘要、章节、caption、引用和参考文献
+[GROBID 科研语义证据评估 v0.1 机器结果](GROBID_SEMANTIC_EVAL_V0.1_RESULTS.md)。盲化
+[人工 gold 工作台](GROBID_HUMAN_REVIEW_V0.1.md)也已生成；下一步完成 7 份 response，逐类
+测量 front matter、摘要、章节、caption、引用和参考文献
 的严格 precision/recall 与 ArticleTree 决策贡献。同时测量首页家具排除、Table
 图片回退和原生 Figure 补全的误伤/漏召回，据此决定哪些 E5 baseline 动作可以保留、收紧
 或必须回到局部 resolver。Docling 本地模型仍受可选依赖缺失限制，不能把离线适配测试

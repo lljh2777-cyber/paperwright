@@ -16,7 +16,7 @@ from .grobid_provider import GROBID_PROVIDER_ID
 
 GROBID_EVAL_CORPUS_VERSION = "paperwright-grobid-semantic-corpus-v0.1"
 GROBID_EVAL_REPORT_VERSION = "paperwright-grobid-semantic-report-v0.1"
-GROBID_AUDIT_TASK_VERSION = "paperwright-grobid-claim-audit-task-v0.1"
+GROBID_AUDIT_TASK_VERSION = "paperwright-grobid-claim-audit-task-v0.2"
 
 
 def canonical_grobid_evaluation_json(value: Mapping[str, Any]) -> str:
@@ -379,9 +379,24 @@ def build_grobid_audit_task(
 
     evidence = review_root / "source-evidence"
     provider = _load_object(evidence / "providers" / "grobid-scholarly.json")
+    native_provider = _load_object(evidence / "providers" / "pdfium-native.json")
     claims_value = _load_object(evidence / "claims.json")
     alignments_value = _load_object(evidence / "alignments.json")
     observations = _observation_map(provider)
+    native_by_physical_id = {
+        observation.get("physical_element_id"): observation
+        for page in native_provider.get("pages", [])
+        for observation in page.get("observations", [])
+        if isinstance(observation.get("physical_element_id"), str)
+    }
+    page_geometry = {
+        page.get("page_index"): {
+            "width": page.get("width"),
+            "height": page.get("height"),
+        }
+        for page in provider.get("pages", [])
+        if isinstance(page.get("page_index"), int)
+    }
     alignment_by_observation: dict[str, list[dict[str, Any]]] = {}
     for alignment in alignments_value.get("alignments", []):
         if alignment.get("provider_id") == GROBID_PROVIDER_ID:
@@ -389,7 +404,6 @@ def build_grobid_audit_task(
                 alignment.get("observation_id"), []
             ).append(alignment)
     items = []
-    used_pages: set[int] = set()
     for claim in claims_value.get("claims", []):
         if claim.get("provider_id") != GROBID_PROVIDER_ID:
             continue
@@ -400,8 +414,6 @@ def build_grobid_audit_task(
                 continue
             matches = alignment_by_observation.get(observation_id, [])
             page_index = observation.get("_page_index")
-            if isinstance(page_index, int):
-                used_pages.add(page_index)
             segments.append(
                 {
                     "observation_id": observation_id,
@@ -411,6 +423,24 @@ def build_grobid_audit_task(
                     "alignments": [
                         {
                             "physical_element_id": item.get("physical_element_id"),
+                            "native_observation_id": (
+                                native_by_physical_id.get(
+                                    item.get("physical_element_id"),
+                                    {},
+                                ).get("observation_id")
+                            ),
+                            "native_text": (
+                                native_by_physical_id.get(
+                                    item.get("physical_element_id"),
+                                    {},
+                                ).get("text")
+                            ),
+                            "native_bbox": (
+                                native_by_physical_id.get(
+                                    item.get("physical_element_id"),
+                                    {},
+                                ).get("paperwright_bbox")
+                            ),
                             "text_score": item.get("text_score"),
                             "geometry_score": item.get("geometry_score"),
                         }
@@ -426,7 +456,7 @@ def build_grobid_audit_task(
             }
         )
     page_images = []
-    for page_index in sorted(used_pages):
+    for page_index in sorted(page_geometry):
         relative = Path(f"page-{page_index + 1:04d}") / "page.png"
         image_path = review_root / relative
         if not image_path.is_file():
@@ -441,6 +471,7 @@ def build_grobid_audit_task(
                 "page_index": page_index,
                 "path": exposed_path.as_posix(),
                 "sha256": _sha256(image_path),
+                **page_geometry.get(page_index, {}),
             }
         )
     return {

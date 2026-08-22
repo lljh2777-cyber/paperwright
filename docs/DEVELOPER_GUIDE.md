@@ -142,7 +142,8 @@ python tools/run_install_checks.py --repo . --output-root /tmp/pw-install-check 
 - `paperwright.grobid_evaluation`：冻结 corpus 校验、GROBID claim 分类型证据统计和盲化
   人工 audit task；`tools/run_grobid_semantic_eval.py` 负责成对 native/CRF 采集，
   `tools/summarize_grobid_semantic_eval.py` 可从不可变 run 重算 micro/document-macro 汇总且
-  拒绝覆盖
+  拒绝覆盖；`tools/prepare_grobid_human_review.py` 生成无依赖盲审页面，
+  `tools/validate_grobid_human_review.py` 校验 task-bound 人工 response
 
 未完成：
 
