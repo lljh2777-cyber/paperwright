@@ -16,6 +16,7 @@ from urllib import request
 
 from paperwright.grobid_evaluation import (
     GROBID_EVAL_REPORT_VERSION,
+    aggregate_grobid_evidence_summaries,
     build_grobid_audit_task,
     canonical_grobid_evaluation_json,
     compare_grobid_review_summaries,
@@ -123,6 +124,11 @@ def _aggregate(documents: list[dict[str, Any]]) -> dict[str, Any]:
         "failed_pair_count": failures,
         "grobid_provider_statuses": dict(sorted(provider_statuses.items())),
         "grobid_claim_counts_by_type": dict(sorted(claims.items())),
+        "by_claim_type": aggregate_grobid_evidence_summaries([
+            document["grobid_crf"]["evidence_summary"]
+            for document in documents
+            if document["status"] == "complete"
+        ]),
     }
 
 

@@ -236,6 +236,7 @@ def summarize_grobid_review(review_root: Path) -> dict[str, Any]:
             ),
             "observed_character_count": observed_chars,
             "aligned_character_count": aligned_chars,
+            "alignment_weighted_character_count": round(weighted_chars, 6),
             "aligned_character_coverage": (
                 round(aligned_chars / observed_chars, 6)
                 if observed_chars
@@ -284,6 +285,87 @@ def summarize_grobid_review(review_root: Path) -> dict[str, Any]:
             item.get("role", "none") for item in related_actions
         ).items())),
     }
+
+
+def aggregate_grobid_evidence_summaries(
+    summaries: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Aggregate fixed per-document metrics as micro and document-macro views."""
+
+    claim_types = sorted({
+        claim_type
+        for summary in summaries
+        for claim_type in summary.get("by_claim_type", {})
+    })
+    result: dict[str, Any] = {}
+    for claim_type in claim_types:
+        rows = [
+            summary["by_claim_type"][claim_type]
+            for summary in summaries
+            if claim_type in summary.get("by_claim_type", {})
+        ]
+        observations = sum(int(row["observation_count"]) for row in rows)
+        aligned = sum(int(row["aligned_observation_count"]) for row in rows)
+        observed_chars = sum(int(row["observed_character_count"]) for row in rows)
+        aligned_chars = sum(int(row["aligned_character_count"]) for row in rows)
+        weighted_chars = sum(
+            float(row["alignment_weighted_character_count"]) for row in rows
+        )
+        support_values = [
+            float(row["native_alignment_support"])
+            for row in rows
+            if isinstance(row["native_alignment_support"], (int, float))
+        ]
+        aligned_character_values = [
+            float(row["aligned_character_coverage"])
+            for row in rows
+            if isinstance(row["aligned_character_coverage"], (int, float))
+        ]
+        weighted_values = [
+            float(row["alignment_weighted_text_coverage"])
+            for row in rows
+            if isinstance(row["alignment_weighted_text_coverage"], (int, float))
+        ]
+        result[claim_type] = {
+            "document_count": len(rows),
+            "claim_count": sum(int(row["claim_count"]) for row in rows),
+            "observation_count": observations,
+            "aligned_observation_count": aligned,
+            "native_alignment_support_micro": (
+                round(aligned / observations, 6)
+                if observations
+                else "not_applicable"
+            ),
+            "native_alignment_support_document_macro": (
+                round(sum(support_values) / len(support_values), 6)
+                if support_values
+                else "not_applicable"
+            ),
+            "observed_character_count": observed_chars,
+            "aligned_character_count": aligned_chars,
+            "aligned_character_coverage_micro": (
+                round(aligned_chars / observed_chars, 6)
+                if observed_chars
+                else "not_applicable"
+            ),
+            "aligned_character_coverage_document_macro": (
+                round(sum(aligned_character_values) / len(aligned_character_values), 6)
+                if aligned_character_values
+                else "not_applicable"
+            ),
+            "alignment_weighted_character_count": round(weighted_chars, 6),
+            "alignment_weighted_text_coverage_micro": (
+                round(weighted_chars / observed_chars, 6)
+                if observed_chars
+                else "not_applicable"
+            ),
+            "alignment_weighted_text_coverage_document_macro": (
+                round(sum(weighted_values) / len(weighted_values), 6)
+                if weighted_values
+                else "not_applicable"
+            ),
+        }
+    return result
 
 
 def build_grobid_audit_task(
@@ -407,6 +489,7 @@ __all__ = [
     "GROBID_AUDIT_TASK_VERSION",
     "GROBID_EVAL_CORPUS_VERSION",
     "GROBID_EVAL_REPORT_VERSION",
+    "aggregate_grobid_evidence_summaries",
     "build_grobid_audit_task",
     "canonical_grobid_evaluation_json",
     "compare_grobid_review_summaries",

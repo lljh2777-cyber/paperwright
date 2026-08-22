@@ -400,6 +400,7 @@ python -m paperwright convert input.pdf output-dir
 - [GROBID CRF 本地侧车](docs/GROBID_LOCAL.md)
 - [GROBID 科研语义证据评估 v0.1 协议](docs/GROBID_SEMANTIC_EVAL_V0.1_PROTOCOL.md)
 - [GROBID 科研语义证据评估 v0.1 冻结语料](docs/GROBID_SEMANTIC_EVAL_V0.1_CORPUS.md)
+- [GROBID 科研语义证据评估 v0.1 机器结果](docs/GROBID_SEMANTIC_EVAL_V0.1_RESULTS.md)
 - [架构](docs/ARCHITECTURE.md)
 - [粗提取多证据架构 v0.1](docs/EXTRACTION_ENSEMBLE_V0.1.md)
 - [PaperRecipe 与 ArticleTree v0.1](docs/PAPER_RECIPE_ARTICLE_TREE_V0.1.md)

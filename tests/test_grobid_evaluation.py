@@ -12,6 +12,7 @@ from paperwright.exceptions import ContractValidationError
 from paperwright.grobid_evaluation import (
     GROBID_AUDIT_TASK_VERSION,
     GROBID_EVAL_CORPUS_VERSION,
+    aggregate_grobid_evidence_summaries,
     build_grobid_audit_task,
     compare_grobid_review_summaries,
     summarize_grobid_review,
@@ -233,6 +234,19 @@ class GrobidEvaluationEvidenceTests(unittest.TestCase):
             2,
         )
         self.assertFalse(result["quality_improvement_inferred"])
+
+    def test_aggregate_separates_micro_and_document_macro(self):
+        with tempfile.TemporaryDirectory() as temp:
+            summary = summarize_grobid_review(self._review(Path(temp)))
+            aggregated = aggregate_grobid_evidence_summaries([summary])
+            title = aggregated["title"]
+            self.assertEqual(title["document_count"], 1)
+            self.assertEqual(title["native_alignment_support_micro"], 1.0)
+            self.assertEqual(
+                title["native_alignment_support_document_macro"], 1.0
+            )
+            paragraph = aggregated["paragraph"]
+            self.assertEqual(paragraph["native_alignment_support_micro"], 0.0)
 
 
 if __name__ == "__main__":

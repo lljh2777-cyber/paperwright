@@ -42,6 +42,7 @@ paperwright = ["schemas/*.json"]
   "tools/run_cross_page_caption_review.py",
   "tools/run_routing_plan.py",
   "tools/run_grobid_semantic_eval.py",
+  "tools/summarize_grobid_semantic_eval.py",
   "tools/run_text_review.py",
   "tools/run_text_synthesize.py",
   "tools/run_visual_review.py",
